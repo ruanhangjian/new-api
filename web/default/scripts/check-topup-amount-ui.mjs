@@ -7,7 +7,9 @@ const filePath = resolve(
   __dirname,
   '../src/features/wallet/components/recharge-form-card.tsx'
 )
+const zhLocalePath = resolve(__dirname, '../src/i18n/locales/zh.json')
 const source = readFileSync(filePath, 'utf8')
+const zhLocale = readFileSync(zhLocalePath, 'utf8')
 
 const expectations = [
   [
@@ -34,11 +36,31 @@ const expectations = [
     'amount-to-pay value is highlighted in red',
     /text-red-500/,
   ],
+  [
+    'discount badge stays on one line in preset cards',
+    /whitespace-nowrap[\s\S]*getDiscountLabel\(discount\)/,
+  ],
+  [
+    'preset payment summary uses compact no-wrap fragments',
+    /className='[^']*flex-wrap[\s\S]*className='[^']*whitespace-nowrap[\s\S]*\{t\('Pay'\)\} \{formatPaymentAmount\(actualPrice\)\}/,
+  ],
+  [
+    'preset discount savings use contextual instant-save copy',
+    /\{t\('Instant save'\)\} \{formatPaymentAmount\(savedAmount\)\}/,
+  ],
 ]
 
 const failures = expectations
   .filter(([, pattern]) => !pattern.test(source))
   .map(([description]) => description)
+
+if (/\{t\('Save'\)\} \{formatPaymentAmount\(savedAmount\)\}/.test(source)) {
+  failures.push('preset discount savings must not use the generic Save label')
+}
+
+if (!/"Instant save":\s*"立省"/.test(zhLocale)) {
+  failures.push('Chinese instant-save translation uses 立省')
+}
 
 if (failures.length > 0) {
   throw new Error(

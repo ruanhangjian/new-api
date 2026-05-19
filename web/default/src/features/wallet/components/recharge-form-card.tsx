@@ -250,29 +250,30 @@ export function RechargeFormCard({
                           key={index}
                           variant='outline'
                           className={cn(
-                            'hover:border-foreground flex min-h-16 flex-col items-start rounded-lg px-3 py-2.5 text-left whitespace-normal sm:min-h-[72px] sm:p-4',
+                            'hover:border-foreground flex min-h-[76px] flex-col items-start justify-start rounded-lg px-3 py-2.5 text-left whitespace-normal sm:min-h-[78px] sm:p-4',
                             selectedPreset === preset.value
                               ? 'border-foreground bg-foreground/5 dark:border-foreground dark:bg-foreground/10'
                               : 'border-muted'
                           )}
                           onClick={() => onSelectPreset(preset)}
                         >
-                          <div className='flex w-full items-center justify-between'>
-                            <div className='text-base font-semibold sm:text-lg'>
+                          <div className='flex w-full min-w-0 items-start justify-between gap-1.5 sm:gap-2'>
+                            <div className='min-w-0 truncate text-base leading-tight font-semibold sm:text-lg'>
                               {formatTopupAmount(displayValue)}
                             </div>
                             {hasDiscount && (
-                              <div className='text-xs font-medium text-green-600'>
+                              <div className='shrink-0 whitespace-nowrap rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] leading-none font-medium text-green-600 sm:text-xs'>
                                 {getDiscountLabel(discount)}
                               </div>
                             )}
                           </div>
-                          <div className='text-muted-foreground mt-1.5 w-full text-xs sm:mt-2'>
-                            {t('Pay')} {formatPaymentAmount(actualPrice)}
+                          <div className='text-muted-foreground mt-2 flex w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs leading-tight'>
+                            <span className='whitespace-nowrap'>
+                              {t('Pay')} {formatPaymentAmount(actualPrice)}
+                            </span>
                             {hasDiscount && savedAmount > 0 && (
-                              <span className='text-green-600'>
-                                {' '}
-                                • {t('Save')} {formatPaymentAmount(savedAmount)}
+                              <span className='whitespace-nowrap text-green-600'>
+                                • {t('Instant save')} {formatPaymentAmount(savedAmount)}
                               </span>
                             )}
                           </div>
