@@ -62,14 +62,18 @@ export function formatCurrency(amount: number | string): string {
 }
 
 /**
- * Get discount label for display (e.g., "20% OFF")
+ * Get discount label for display (e.g., "95折")
  */
 export function getDiscountLabel(discount: number): string {
   if (discount >= DEFAULT_DISCOUNT_RATE) {
     return ''
   }
-  const off = Math.round((1 - discount) * 100)
-  return `${off}% OFF`
+  const discountPercent = discount * 100
+  const label =
+    Number.isInteger(discountPercent) || discountPercent >= 10
+      ? Number.parseFloat(discountPercent.toFixed(1)).toString()
+      : discountPercent.toFixed(1)
+  return `${label}折`
 }
 
 /**

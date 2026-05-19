@@ -7,8 +7,10 @@ const filePath = resolve(
   __dirname,
   '../src/features/wallet/components/recharge-form-card.tsx'
 )
+const formatPath = resolve(__dirname, '../src/features/wallet/lib/format.ts')
 const zhLocalePath = resolve(__dirname, '../src/i18n/locales/zh.json')
 const source = readFileSync(filePath, 'utf8')
+const formatSource = readFileSync(formatPath, 'utf8')
 const zhLocale = readFileSync(zhLocalePath, 'utf8')
 
 const expectations = [
@@ -37,25 +39,46 @@ const expectations = [
     /text-red-500/,
   ],
   [
-    'discount badge stays on one line in preset cards',
-    /whitespace-nowrap[\s\S]*getDiscountLabel\(discount\)/,
+    'discount badge is positioned as a top-right corner badge',
+    /absolute right-1\.5 top-1\.5[\s\S]*getDiscountLabel\(discount\)/,
   ],
   [
-    'preset payment summary uses compact no-wrap fragments',
-    /className='[^']*flex-wrap[\s\S]*className='[^']*whitespace-nowrap[\s\S]*\{t\('Pay'\)\} \{formatPaymentAmount\(actualPrice\)\}/,
+    'preset amount text is not truncated by the discount badge',
+    /className='text-base leading-tight font-semibold sm:text-lg'[\s\S]*\{formatTopupAmount\(displayValue\)\}/,
+  ],
+  [
+    'preset payment summary stays on one compact line',
+    /className='[^']*flex-nowrap[\s\S]*className='[^']*whitespace-nowrap[\s\S]*\{t\('Pay'\)\} \{formatPaymentAmount\(actualPrice\)\}/,
   ],
   [
     'preset discount savings use contextual instant-save copy',
     /\{t\('Instant save'\)\} \{formatPaymentAmount\(savedAmount\)\}/,
   ],
+  [
+    'discount label uses Chinese fold wording instead of OFF',
+    /return `\$\{label\}折`/,
+  ],
 ]
 
 const failures = expectations
-  .filter(([, pattern]) => !pattern.test(source))
+  .filter(([description, pattern]) => {
+    const targetSource = description.includes('discount label')
+      ? formatSource
+      : source
+    return !pattern.test(targetSource)
+  })
   .map(([description]) => description)
 
 if (/\{t\('Save'\)\} \{formatPaymentAmount\(savedAmount\)\}/.test(source)) {
   failures.push('preset discount savings must not use the generic Save label')
+}
+
+if (/•\s*\{t\('Instant save'\)\}/.test(source)) {
+  failures.push('preset discount savings must not include a leading bullet')
+}
+
+if (/return `\$\{off\}% OFF`/.test(formatSource)) {
+  failures.push('discount label must not use OFF wording')
 }
 
 if (!/"Instant save":\s*"立省"/.test(zhLocale)) {
