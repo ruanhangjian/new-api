@@ -11,12 +11,12 @@ const source = readFileSync(filePath, 'utf8')
 
 const expectations = [
   [
-    'purchase dialog imports quota display formatter',
-    /import \{ formatQuota \} from '@\/lib\/format'/,
+    'purchase dialog imports subscription quota display formatter',
+    /formatPlanDisplayTotalQuota/,
   ],
   [
-    'purchase dialog formats total quota instead of rendering raw units',
-    /totalAmount > 0 \? formatQuota\(totalAmount\) : t\('Unlimited'\)/,
+    'purchase dialog uses subscription quota display helper instead of raw units',
+    /formatPlanDisplayTotalQuota\(plan, t\)/,
   ],
 ]
 

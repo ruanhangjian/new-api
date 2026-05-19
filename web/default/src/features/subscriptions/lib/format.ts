@@ -18,7 +18,25 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import type { TFunction } from 'i18next'
 import dayjs from '@/lib/dayjs'
+import { formatQuotaWithCurrency } from '@/lib/currency'
 import type { SubscriptionPlan } from '../types'
+
+function getDurationDays(plan: Partial<SubscriptionPlan>): number {
+  const unit = plan?.duration_unit || 'month'
+  const value = Number(plan?.duration_value || 0)
+  if (value <= 0 && unit !== 'custom') return 0
+
+  if (unit === 'year') return value * 365
+  if (unit === 'month') return value * 30
+  if (unit === 'day') return value
+  if (unit === 'hour') return Math.ceil(value / 24)
+  if (unit === 'custom') {
+    const seconds = Number(plan?.custom_seconds || 0)
+    return seconds > 0 ? Math.ceil(seconds / 86400) : 0
+  }
+
+  return 0
+}
 
 export function formatDuration(
   plan: Partial<SubscriptionPlan>,
@@ -40,6 +58,32 @@ export function formatDuration(
     return `${seconds} ${t('seconds')}`
   }
   return `${value} ${unitLabels[unit] || unit}`
+}
+
+export function formatPlanDisplayTotalQuota(
+  plan: Partial<SubscriptionPlan>,
+  t: TFunction
+): string {
+  const totalAmount = Number(plan?.total_amount || 0)
+  if (totalAmount <= 0) return t('Unlimited')
+
+  const formatPlanQuota = (quota: number) =>
+    formatQuotaWithCurrency(quota, {
+      digitsLarge: 2,
+      digitsSmall: 4,
+      abbreviate: false,
+    })
+
+  if (plan?.quota_reset_period === 'daily') {
+    const durationDays = getDurationDays(plan)
+    if (durationDays > 1) {
+      const periodAmount = formatPlanQuota(totalAmount)
+      const displayTotal = formatPlanQuota(totalAmount * durationDays)
+      return `${periodAmount}*${durationDays}${t('days')}=${displayTotal}`
+    }
+  }
+
+  return formatPlanQuota(totalAmount)
 }
 
 export function formatResetPeriod(
