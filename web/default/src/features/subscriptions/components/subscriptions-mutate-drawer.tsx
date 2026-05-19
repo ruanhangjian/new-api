@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FocusEvent } from 'react'
 import { useForm, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { CalendarClock, CreditCard, RefreshCw, Settings2 } from 'lucide-react'
@@ -62,6 +62,10 @@ import {
 } from '../lib'
 import type { PlanRecord } from '../types'
 import { useSubscriptions } from './subscriptions-provider'
+
+function selectNumberOnFocus(event: FocusEvent<HTMLInputElement>) {
+  event.currentTarget.select()
+}
 
 interface Props {
   open: boolean
@@ -213,8 +217,13 @@ export function SubscriptionsMutateDrawer({
                           type='number'
                           step='0.01'
                           min={0}
+                          onFocus={selectNumberOnFocus}
                           onChange={(e) =>
-                            field.onChange(parseFloat(e.target.value) || 0)
+                            field.onChange(
+                              e.target.value === ''
+                                ? ''
+                                : Number(e.target.value)
+                            )
                           }
                         />
                       </FormControl>
@@ -230,18 +239,28 @@ export function SubscriptionsMutateDrawer({
                     <FormItem>
                       <FormLabel>{t('Total Quota')}</FormLabel>
                       <FormControl>
-                        <Input
-                          {...field}
-                          type='number'
-                          min={0}
-                          onChange={(e) =>
-                            field.onChange(parseFloat(e.target.value) || 0)
-                          }
-                        />
+                        <div className='relative'>
+                          <span className='text-muted-foreground pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-base sm:text-sm'>
+                            $
+                          </span>
+                          <Input
+                            {...field}
+                            type='number'
+                            step='0.01'
+                            min={1}
+                            value={field.value ?? ''}
+                            onFocus={selectNumberOnFocus}
+                            onChange={(e) =>
+                              field.onChange(
+                                e.target.value === ''
+                                  ? ''
+                                  : Number(e.target.value)
+                              )
+                            }
+                            className='pl-7'
+                          />
+                        </div>
                       </FormControl>
-                      <FormDescription>
-                        {t('0 means unlimited')}
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -299,8 +318,13 @@ export function SubscriptionsMutateDrawer({
                           {...field}
                           type='number'
                           min={0}
+                          onFocus={selectNumberOnFocus}
                           onChange={(e) =>
-                            field.onChange(parseInt(e.target.value, 10) || 0)
+                            field.onChange(
+                              e.target.value === ''
+                                ? ''
+                                : Number.parseInt(e.target.value, 10)
+                            )
                           }
                         />
                       </FormControl>
@@ -324,8 +348,13 @@ export function SubscriptionsMutateDrawer({
                         <Input
                           {...field}
                           type='number'
+                          onFocus={selectNumberOnFocus}
                           onChange={(e) =>
-                            field.onChange(parseInt(e.target.value, 10) || 0)
+                            field.onChange(
+                              e.target.value === ''
+                                ? ''
+                                : Number.parseInt(e.target.value, 10)
+                            )
                           }
                         />
                       </FormControl>
@@ -410,8 +439,13 @@ export function SubscriptionsMutateDrawer({
                             {...field}
                             type='number'
                             min={1}
+                            onFocus={selectNumberOnFocus}
                             onChange={(e) =>
-                              field.onChange(parseInt(e.target.value, 10) || 0)
+                              field.onChange(
+                                e.target.value === ''
+                                  ? ''
+                                  : Number.parseInt(e.target.value, 10)
+                              )
                             }
                           />
                         </FormControl>
@@ -431,8 +465,13 @@ export function SubscriptionsMutateDrawer({
                             {...field}
                             type='number'
                             min={1}
+                            onFocus={selectNumberOnFocus}
                             onChange={(e) =>
-                              field.onChange(parseInt(e.target.value, 10) || 0)
+                              field.onChange(
+                                e.target.value === ''
+                                  ? ''
+                                  : Number.parseInt(e.target.value, 10)
+                              )
                             }
                           />
                         </FormControl>
@@ -500,8 +539,13 @@ export function SubscriptionsMutateDrawer({
                           type='number'
                           min={0}
                           disabled={resetPeriod !== 'custom'}
+                          onFocus={selectNumberOnFocus}
                           onChange={(e) =>
-                            field.onChange(parseInt(e.target.value, 10) || 0)
+                            field.onChange(
+                              e.target.value === ''
+                                ? ''
+                                : Number.parseInt(e.target.value, 10)
+                            )
                           }
                         />
                       </FormControl>
