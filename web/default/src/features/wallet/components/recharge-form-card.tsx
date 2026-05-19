@@ -50,6 +50,18 @@ import type {
 } from '../types'
 import { CreemProductsSection } from './creem-products-section'
 
+function formatTopupAmount(amount: number): string {
+  return `$${formatNumber(amount)}`
+}
+
+function formatPaymentAmount(amount: number): string {
+  return `¥${formatCurrency(amount)}`
+}
+
+function formatYuanAmount(amount: number): string {
+  return `${formatCurrency(amount)}元`
+}
+
 interface RechargeFormCardProps {
   topupInfo: TopupInfo | null
   presetAmounts: PresetAmount[]
@@ -247,7 +259,7 @@ export function RechargeFormCard({
                         >
                           <div className='flex w-full items-center justify-between'>
                             <div className='text-base font-semibold sm:text-lg'>
-                              {formatNumber(displayValue)}
+                              {formatTopupAmount(displayValue)}
                             </div>
                             {hasDiscount && (
                               <div className='text-xs font-medium text-green-600'>
@@ -256,11 +268,11 @@ export function RechargeFormCard({
                             )}
                           </div>
                           <div className='text-muted-foreground mt-1.5 w-full text-xs sm:mt-2'>
-                            Pay {formatCurrency(actualPrice)}
+                            {t('Pay')} {formatPaymentAmount(actualPrice)}
                             {hasDiscount && savedAmount > 0 && (
                               <span className='text-green-600'>
                                 {' '}
-                                • Save {formatCurrency(savedAmount)}
+                                • {t('Save')} {formatPaymentAmount(savedAmount)}
                               </span>
                             )}
                           </div>
@@ -276,18 +288,23 @@ export function RechargeFormCard({
                   htmlFor='topup-amount'
                   className='text-muted-foreground text-xs font-medium tracking-wider uppercase'
                 >
-                  {t('Custom Amount')}
+                  {t('Custom Amount ($)')}
                 </Label>
                 <div className='grid grid-cols-[minmax(0,1fr)_minmax(110px,0.55fr)] gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
-                  <Input
-                    id='topup-amount'
-                    type='number'
-                    value={localAmount}
-                    onChange={(e) => handleAmountChange(e.target.value)}
-                    min={minTopup}
-                    placeholder={`Minimum ${minTopup}`}
-                    className='h-9 text-base sm:h-10 sm:text-lg'
-                  />
+                  <div className='relative'>
+                    <span className='text-muted-foreground pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-base sm:text-lg'>
+                      $
+                    </span>
+                    <Input
+                      id='topup-amount'
+                      type='number'
+                      value={localAmount}
+                      onChange={(e) => handleAmountChange(e.target.value)}
+                      min={minTopup}
+                      placeholder={`Minimum ${minTopup}`}
+                      className='h-9 pl-7 text-base sm:h-10 sm:text-lg'
+                    />
+                  </div>
                   <div className='bg-muted/30 flex min-h-9 items-center justify-between gap-2 rounded-md border px-3 lg:min-w-52'>
                     <span className='text-muted-foreground truncate text-xs'>
                       {t('Amount to pay:')}
@@ -295,8 +312,8 @@ export function RechargeFormCard({
                     {calculating ? (
                       <Skeleton className='h-5 w-16' />
                     ) : (
-                      <span className='text-sm font-semibold'>
-                        {formatCurrency(paymentAmount)}
+                      <span className='text-sm font-semibold text-red-500'>
+                        {formatYuanAmount(paymentAmount)}
                       </span>
                     )}
                   </div>
