@@ -20,6 +20,7 @@ import { useState, useEffect } from 'react'
 import { Crown, CalendarClock, Package } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { formatQuota } from '@/lib/format'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -230,7 +231,7 @@ export function SubscriptionPurchaseDialog(props: Props) {
               </span>
               <span className='flex items-center gap-1 text-sm'>
                 <Package className='h-3.5 w-3.5' />
-                {totalAmount > 0 ? totalAmount : t('Unlimited')}
+                {totalAmount > 0 ? formatQuota(totalAmount) : t('Unlimited')}
               </span>
             </div>
             {plan.upgrade_group && (
