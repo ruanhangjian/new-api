@@ -25,6 +25,7 @@ export function getPlanFormSchema(t: TFunction) {
   return z.object({
     title: z.string().min(1, t('Please enter plan title')),
     subtitle: z.string().optional(),
+    selling_points: z.string().optional(),
     price_amount: z.coerce.number().min(0, t('Please enter amount')),
     duration_unit: z.enum(['year', 'month', 'day', 'hour', 'custom']),
     duration_value: z.coerce.number().min(1),
@@ -52,6 +53,7 @@ export type PlanFormValues = z.infer<ReturnType<typeof getPlanFormSchema>>
 export const PLAN_FORM_DEFAULTS: PlanFormValues = {
   title: '',
   subtitle: '',
+  selling_points: '',
   price_amount: 0,
   duration_unit: 'month',
   duration_value: 1,
@@ -71,6 +73,7 @@ export function planToFormValues(plan: SubscriptionPlan): PlanFormValues {
   return {
     title: plan.title || '',
     subtitle: plan.subtitle || '',
+    selling_points: plan.selling_points || '',
     price_amount: Number(plan.price_amount || 0),
     duration_unit: plan.duration_unit || 'month',
     duration_value: Number(plan.duration_value || 1),
@@ -104,6 +107,7 @@ export function formValuesToPlanPayload(values: PlanFormValues): PlanPayload {
       max_purchase_per_user: Number(values.max_purchase_per_user || 0),
       total_amount: parseQuotaFromDollars(Number(values.total_amount || 0)),
       upgrade_group: values.upgrade_group || '',
+      selling_points: values.selling_points || '',
     },
   }
 }

@@ -17,11 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { Gift, Receipt, ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { getSelf } from '@/lib/api'
 import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { SectionPageLayout } from '@/components/layout'
+import { Card, CardContent } from '@/components/ui/card'
 import { AffiliateRewardsCard } from './components/affiliate-rewards-card'
 import { BillingHistoryDialog } from './components/dialogs/billing-history-dialog'
 import { CreemConfirmDialog } from './components/dialogs/creem-confirm-dialog'
@@ -90,6 +92,7 @@ export function Wallet(props: WalletProps) {
     processing,
     calculatePaymentAmount,
     processPayment,
+    setAmount: setPaymentAmount,
   } = usePayment()
   const {
     affiliateLink,
@@ -130,18 +133,6 @@ export function Wallet(props: WalletProps) {
     }
   }, [props.initialShowHistory])
 
-  // Initialize topup amount when topup info is loaded
-  useEffect(() => {
-    if (topupInfo && topupAmount === 0) {
-      const minTopup = getMinTopupAmount(topupInfo)
-      setTopupAmount(minTopup)
-
-      // Calculate initial payment amount with default payment type
-      const defaultPaymentType = getDefaultPaymentType(topupInfo)
-      calculatePaymentAmount(minTopup, defaultPaymentType)
-    }
-  }, [topupInfo, topupAmount, calculatePaymentAmount])
-
   // Get current payment type (selected or default)
   const getCurrentPaymentType = useCallback(() => {
     return selectedPaymentMethod?.type || getDefaultPaymentType(topupInfo)
@@ -158,6 +149,10 @@ export function Wallet(props: WalletProps) {
   const handleTopupAmountChange = (amount: number) => {
     setTopupAmount(amount)
     setSelectedPreset(null)
+    if (amount <= 0) {
+      setPaymentAmount(0)
+      return
+    }
     calculatePaymentAmount(amount, getCurrentPaymentType())
   }
 
@@ -169,12 +164,18 @@ export function Wallet(props: WalletProps) {
     try {
       // Validate minimum topup
       const minTopup = getMinTopupAmount(topupInfo)
-      if (topupAmount < minTopup) {
-        return
+      const validatedAmount =
+        topupAmount > 0 && topupAmount < minTopup ? minTopup : topupAmount
+
+      if (validatedAmount <= 0) return
+
+      if (validatedAmount !== topupAmount) {
+        setTopupAmount(validatedAmount)
+        setSelectedPreset(null)
       }
 
       // Calculate payment amount and show confirmation dialog
-      await calculatePaymentAmount(topupAmount, method.type)
+      await calculatePaymentAmount(validatedAmount, method.type)
       setConfirmDialogOpen(true)
     } finally {
       setPaymentLoading(null)
@@ -257,6 +258,116 @@ export function Wallet(props: WalletProps) {
     []
   )
 
+  const quickRechargeProps = {
+    title: t('Quick Recharge'),
+    description: t('Quick top-up, ready to use anytime'),
+    topupInfo,
+    presetAmounts,
+    selectedPreset,
+    onSelectPreset: handleSelectPreset,
+    topupAmount,
+    onTopupAmountChange: handleTopupAmountChange,
+    paymentAmount,
+    calculating,
+    onPaymentMethodSelect: handlePaymentMethodSelect,
+    paymentLoading,
+    redemptionCode,
+    onRedemptionCodeChange: setRedemptionCode,
+    onRedeem: handleRedeem,
+    redeeming,
+    topupLink: topupInfo?.topup_link,
+    loading: topupLoading,
+    priceRatio: (status?.price as number) || 1,
+    usdExchangeRate: effectiveUsdExchangeRate,
+    onOpenBilling: () => setBillingDialogOpen(true),
+    creemProducts: topupInfo?.creem_products,
+    enableCreemTopup: topupInfo?.enable_creem_topup,
+    onCreemProductSelect: handleCreemProductSelect,
+    enableWaffoTopup: topupInfo?.enable_waffo_topup,
+    waffoPayMethods: topupInfo?.waffo_pay_methods,
+    waffoMinTopup: topupInfo?.waffo_min_topup,
+    onWaffoMethodSelect: handleWaffoMethodSelect,
+    enableWaffoPancakeTopup: topupInfo?.enable_waffo_pancake_topup,
+    showBillingAction: false,
+    showRedemptionSection: false,
+    compact: true,
+  }
+
+  const moreServices = (
+    <div className='space-y-2'>
+      <h3 className='text-muted-foreground px-1 text-sm font-medium'>
+        {t('More Services')}
+      </h3>
+      <div className='grid gap-3 sm:grid-cols-2'>
+        <Card
+          role='button'
+          tabIndex={0}
+          className='hover:bg-muted/30 cursor-pointer py-0 transition'
+          onClick={() => setBillingDialogOpen(true)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              setBillingDialogOpen(true)
+            }
+          }}
+        >
+          <CardContent className='flex items-center gap-3 p-4'>
+            <div className='bg-muted flex size-10 shrink-0 items-center justify-center rounded-lg border'>
+              <Receipt className='text-muted-foreground h-5 w-5' />
+            </div>
+            <div className='min-w-0 flex-1'>
+              <div className='font-semibold'>{t('Order History')}</div>
+              <div className='text-muted-foreground truncate text-sm'>
+                {t('View subscription and recharge records')}
+              </div>
+            </div>
+            <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' />
+          </CardContent>
+        </Card>
+
+        <Card
+          className='py-0'
+          aria-disabled={topupInfo?.enable_redemption === false}
+        >
+          <CardContent className='space-y-3 p-4'>
+            <div className='flex items-center gap-3'>
+              <div className='bg-muted flex size-10 shrink-0 items-center justify-center rounded-lg border'>
+                <Gift className='text-muted-foreground h-5 w-5' />
+              </div>
+              <div className='min-w-0 flex-1'>
+                <div className='font-semibold'>{t('Redeem')}</div>
+                <div className='text-muted-foreground truncate text-sm'>
+                  {t('Use redemption code to redeem quota')}
+                </div>
+              </div>
+            </div>
+            <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-2'>
+              <input
+                value={redemptionCode}
+                onChange={(event) => setRedemptionCode(event.target.value)}
+                placeholder={t('Enter your redemption code')}
+                className='border-input bg-background h-9 min-w-0 rounded-lg border px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50'
+                disabled={topupInfo?.enable_redemption === false}
+              />
+              <button
+                type='button'
+                onClick={handleRedeem}
+                disabled={
+                  redeeming ||
+                  !redemptionCode ||
+                  topupInfo?.enable_redemption === false
+                }
+                className='bg-primary text-primary-foreground hover:bg-primary/90 h-9 rounded-lg px-4 text-sm font-medium disabled:pointer-events-none disabled:opacity-50'
+              >
+                {redeeming ? t('Redeeming...') : t('Redeem')}
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+
   return (
     <>
       <SectionPageLayout>
@@ -266,64 +377,65 @@ export function Wallet(props: WalletProps) {
         </SectionPageLayout.Description>
         <SectionPageLayout.Content>
           <div className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-5'>
-            <WalletStatsCard user={user} loading={userLoading} />
-
             <div
               className={
                 showSubscriptionPanel
-                  ? 'grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] xl:items-start'
+                  ? 'grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.42fr)] xl:items-start'
                   : 'grid gap-4'
               }
             >
-              <div id='wallet-add-funds' className='scroll-mt-4'>
-                <RechargeFormCard
+              <div className='flex min-w-0 flex-col gap-4 sm:gap-5'>
+                <WalletStatsCard user={user} loading={userLoading} />
+
+                {showSubscriptionPanel && (
+                  <div className='xl:hidden'>
+                    <SubscriptionPlansCard
+                      topupInfo={topupInfo}
+                      mode='summary'
+                    />
+                  </div>
+                )}
+
+                <SubscriptionPlansCard
                   topupInfo={topupInfo}
-                  presetAmounts={presetAmounts}
-                  selectedPreset={selectedPreset}
-                  onSelectPreset={handleSelectPreset}
-                  topupAmount={topupAmount}
-                  onTopupAmountChange={handleTopupAmountChange}
-                  paymentAmount={paymentAmount}
-                  calculating={calculating}
-                  onPaymentMethodSelect={handlePaymentMethodSelect}
-                  paymentLoading={paymentLoading}
-                  redemptionCode={redemptionCode}
-                  onRedemptionCodeChange={setRedemptionCode}
-                  onRedeem={handleRedeem}
-                  redeeming={redeeming}
-                  topupLink={topupInfo?.topup_link}
-                  loading={topupLoading}
-                  priceRatio={(status?.price as number) || 1}
-                  usdExchangeRate={effectiveUsdExchangeRate}
-                  onOpenBilling={() => setBillingDialogOpen(true)}
-                  creemProducts={topupInfo?.creem_products}
-                  enableCreemTopup={topupInfo?.enable_creem_topup}
-                  onCreemProductSelect={handleCreemProductSelect}
-                  enableWaffoTopup={topupInfo?.enable_waffo_topup}
-                  waffoPayMethods={topupInfo?.waffo_pay_methods}
-                  waffoMinTopup={topupInfo?.waffo_min_topup}
-                  onWaffoMethodSelect={handleWaffoMethodSelect}
-                  enableWaffoPancakeTopup={
-                    topupInfo?.enable_waffo_pancake_topup
+                  onAvailabilityChange={handleSubscriptionAvailabilityChange}
+                />
+
+                <div className='xl:hidden' id='wallet-add-funds-mobile'>
+                  <RechargeFormCard {...quickRechargeProps} />
+                </div>
+
+                {moreServices}
+
+                <AffiliateRewardsCard
+                  user={user}
+                  affiliateLink={affiliateLink}
+                  onTransfer={() => setTransferDialogOpen(true)}
+                  complianceConfirmed={
+                    topupInfo?.payment_compliance_confirmed !== false
                   }
+                  loading={affiliateLoading}
                 />
               </div>
 
-              <SubscriptionPlansCard
-                topupInfo={topupInfo}
-                onAvailabilityChange={handleSubscriptionAvailabilityChange}
-              />
-            </div>
+              {showSubscriptionPanel && (
+                <div className='hidden min-w-0 flex-col gap-4 xl:flex'>
+                  <SubscriptionPlansCard
+                    topupInfo={topupInfo}
+                    mode='summary'
+                  />
+                  <div id='wallet-add-funds' className='scroll-mt-4'>
+                    <RechargeFormCard {...quickRechargeProps} />
+                  </div>
+                </div>
+              )}
 
-            <AffiliateRewardsCard
-              user={user}
-              affiliateLink={affiliateLink}
-              onTransfer={() => setTransferDialogOpen(true)}
-              complianceConfirmed={
-                topupInfo?.payment_compliance_confirmed !== false
-              }
-              loading={affiliateLoading}
-            />
+              {!showSubscriptionPanel && (
+                <div id='wallet-add-funds' className='scroll-mt-4'>
+                  <RechargeFormCard {...quickRechargeProps} />
+                </div>
+              )}
+            </div>
           </div>
         </SectionPageLayout.Content>
       </SectionPageLayout>

@@ -26,6 +26,7 @@ export const subscriptionPlanSchema = z.object({
   id: z.number(),
   title: z.string(),
   subtitle: z.string().optional(),
+  selling_points: z.string().optional(),
   price_amount: z.number(),
   currency: z.string().default('USD'),
   duration_unit: z.enum(['year', 'month', 'day', 'hour', 'custom']),
@@ -63,6 +64,8 @@ export const userSubscriptionSchema = z.object({
   amount_total: z.number(),
   amount_used: z.number(),
   next_reset_time: z.number().optional(),
+  created_at: z.number().optional(),
+  updated_at: z.number().optional(),
 })
 
 export type UserSubscription = z.infer<typeof userSubscriptionSchema>

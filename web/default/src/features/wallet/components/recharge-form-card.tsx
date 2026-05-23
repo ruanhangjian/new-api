@@ -17,8 +17,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useState, useEffect } from 'react'
-import { Gift, ExternalLink, Loader2, Receipt, WalletCards } from 'lucide-react'
+import {
+  Gift,
+  ExternalLink,
+  Loader2,
+  LockKeyhole,
+  Receipt,
+  WalletCards,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import type { ChangeEvent, ClipboardEvent, FocusEvent, KeyboardEvent } from 'react'
 import { formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -90,6 +98,11 @@ interface RechargeFormCardProps {
   waffoMinTopup?: number
   onWaffoMethodSelect?: (method: WaffoPayMethod, index: number) => void
   enableWaffoPancakeTopup?: boolean
+  title?: string
+  description?: string
+  showBillingAction?: boolean
+  showRedemptionSection?: boolean
+  compact?: boolean
 }
 
 export function RechargeFormCard({
@@ -120,19 +133,71 @@ export function RechargeFormCard({
   waffoMinTopup,
   onWaffoMethodSelect,
   enableWaffoPancakeTopup,
+  title,
+  description,
+  showBillingAction = true,
+  showRedemptionSection = true,
+  compact = false,
 }: RechargeFormCardProps) {
   const { t } = useTranslation()
-  const [localAmount, setLocalAmount] = useState(topupAmount.toString())
+  const [localAmount, setLocalAmount] = useState(
+    topupAmount > 0 ? topupAmount.toString() : ''
+  )
+  const [replaceAmountOnInput, setReplaceAmountOnInput] = useState(false)
 
   useEffect(() => {
-    setLocalAmount(topupAmount.toString())
+    setLocalAmount(topupAmount > 0 ? topupAmount.toString() : '')
   }, [topupAmount])
 
   const handleAmountChange = (value: string) => {
-    setLocalAmount(value)
-    const numValue = parseInt(value) || 0
+    const normalized = value.replace(/\D/g, '')
+    setLocalAmount(normalized)
+    const numValue = parseInt(normalized) || 0
     if (numValue >= 0) {
       onTopupAmountChange(numValue)
+    }
+  }
+
+  const handleAmountInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setReplaceAmountOnInput(false)
+    handleAmountChange(event.target.value)
+  }
+
+  const handleAmountInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (!replaceAmountOnInput) return
+    if (event.key === 'Backspace' || event.key === 'Delete') {
+      event.preventDefault()
+      setReplaceAmountOnInput(false)
+      handleAmountChange('')
+      return
+    }
+    if (event.key.length !== 1) return
+    if (!/^\d$/.test(event.key)) return
+    event.preventDefault()
+    setReplaceAmountOnInput(false)
+    handleAmountChange(event.key)
+  }
+
+  const handleAmountInputPaste = (event: ClipboardEvent<HTMLInputElement>) => {
+    if (!replaceAmountOnInput) return
+    const text = event.clipboardData.getData('text')
+    if (!text) return
+    event.preventDefault()
+    setReplaceAmountOnInput(false)
+    handleAmountChange(text)
+  }
+
+  const handleAmountInputFocus = (event: FocusEvent<HTMLInputElement>) => {
+    setReplaceAmountOnInput(true)
+    event.target.select()
+  }
+
+  const handleAmountInputBlur = (event: FocusEvent<HTMLInputElement>) => {
+    setReplaceAmountOnInput(false)
+    const value = event.currentTarget.value
+    const amount = parseInt(value) || 0
+    if (value !== '' && amount < minTopup) {
+      handleAmountChange(minTopup.toString())
     }
   }
 
@@ -200,11 +265,15 @@ export function RechargeFormCard({
 
   return (
     <TitledCard
-      title={t('Add Funds')}
-      description={t('Choose an amount and payment method')}
+      title={title || t('Add Funds')}
+      description={description || t('Choose an amount and payment method')}
       icon={<WalletCards className='h-4 w-4' />}
+      headerClassName={cn(compact && 'p-3 !pb-3 sm:px-4 sm:py-2.5 sm:!pb-2.5')}
+      contentClassName={cn(
+        compact ? 'space-y-2.5 p-3 sm:px-4 sm:py-3' : 'space-y-4 sm:space-y-6'
+      )}
       action={
-        onOpenBilling ? (
+        showBillingAction && onOpenBilling ? (
           <Button
             variant='outline'
             size='sm'
@@ -216,19 +285,25 @@ export function RechargeFormCard({
           </Button>
         ) : null
       }
-      contentClassName='space-y-4 sm:space-y-6'
     >
       {/* Online Topup Section */}
       {hasAnyTopup ? (
-        <div className='space-y-4 sm:space-y-6'>
+        <div className={cn(compact ? 'space-y-2.5' : 'space-y-4 sm:space-y-6')}>
           {hasConfigurableTopup && (
             <>
               {presetAmounts.length > 0 && (
-                <div className='space-y-2.5 sm:space-y-3'>
+                <div className={cn(compact ? 'space-y-2' : 'space-y-2.5 sm:space-y-3')}>
                   <Label className='text-muted-foreground text-xs font-medium tracking-wider uppercase'>
                     {t('Amount')}
                   </Label>
-                  <div className='grid grid-cols-2 gap-1.5 sm:gap-3 md:grid-cols-4'>
+                  <div
+                    className={cn(
+                      'grid grid-cols-2',
+                      compact
+                        ? 'gap-2 sm:grid-cols-4'
+                        : 'gap-1.5 sm:gap-3 md:grid-cols-4'
+                    )}
+                  >
                     {presetAmounts.map((preset, index) => {
                       const discount =
                         preset.discount ||
@@ -237,7 +312,6 @@ export function RechargeFormCard({
                       const {
                         displayValue,
                         actualPrice,
-                        savedAmount,
                         hasDiscount,
                       } = calculatePresetPricing(
                         preset.value,
@@ -250,7 +324,10 @@ export function RechargeFormCard({
                           key={index}
                           variant='outline'
                           className={cn(
-                            'hover:border-foreground relative flex min-h-[76px] flex-col items-start justify-start rounded-lg px-2.5 py-2.5 text-left whitespace-normal sm:min-h-[78px] sm:p-4',
+                            'hover:border-foreground relative flex flex-col overflow-hidden rounded-lg text-left whitespace-normal',
+                            compact
+                              ? 'min-h-[84px] items-center justify-start gap-1.5 px-1.5 pt-5 pb-3'
+                              : 'min-h-[76px] items-start justify-start px-2.5 py-2.5 sm:min-h-[78px] sm:p-4',
                             selectedPreset === preset.value
                               ? 'border-foreground bg-foreground/5 dark:border-foreground dark:bg-foreground/10'
                               : 'border-muted'
@@ -258,24 +335,41 @@ export function RechargeFormCard({
                           onClick={() => onSelectPreset(preset)}
                         >
                           {hasDiscount && (
-                            <div className='absolute right-1.5 top-1.5 whitespace-nowrap rounded-bl-md rounded-tr-md bg-green-500/15 px-2 py-1 text-[10px] leading-none font-semibold text-green-600 sm:right-2 sm:top-2 sm:text-xs'>
+                            <div
+                              className={cn(
+                                'absolute whitespace-nowrap bg-green-500/15 font-semibold text-green-600',
+                                compact
+                                  ? 'top-0 right-0 rounded-tr-lg rounded-bl-md px-1.5 py-0.5 text-[10px] leading-none'
+                                  : 'top-1.5 right-1.5 rounded-bl-md rounded-tr-md px-2 py-1 text-[10px] leading-none sm:top-2 sm:right-2 sm:text-xs'
+                              )}
+                            >
                               {getDiscountLabel(discount)}
                             </div>
                           )}
-                          <div className='flex w-full min-w-0 items-start'>
-                            <div className='text-base leading-tight font-semibold sm:text-lg'>
+                          <div
+                            className={cn(
+                              'flex w-full min-w-0',
+                              compact ? 'justify-center' : 'items-start'
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                'leading-tight font-semibold',
+                                compact ? 'text-lg' : 'text-base sm:text-lg'
+                              )}
+                            >
                               {formatTopupAmount(displayValue)}
                             </div>
                           </div>
-                          <div className='text-muted-foreground mt-2 flex w-full flex-nowrap items-center gap-x-1 text-xs leading-tight'>
+                          <div
+                            className={cn(
+                              'text-muted-foreground flex w-full flex-nowrap items-center justify-center gap-x-1 text-xs leading-tight',
+                              !compact && 'mt-2'
+                            )}
+                          >
                             <span className='whitespace-nowrap'>
                               {t('Pay')} {formatPaymentAmount(actualPrice)}
                             </span>
-                            {hasDiscount && savedAmount > 0 && (
-                              <span className='whitespace-nowrap text-green-600'>
-                                {t('Instant save')} {formatPaymentAmount(savedAmount)}
-                              </span>
-                            )}
                           </div>
                         </Button>
                       )
@@ -284,33 +378,69 @@ export function RechargeFormCard({
                 </div>
               )}
 
-              <div className='space-y-2.5 sm:space-y-3'>
+              <div className={cn(compact ? 'space-y-2' : 'space-y-2.5 sm:space-y-3')}>
                 <Label
                   htmlFor='topup-amount'
                   className='text-muted-foreground text-xs font-medium tracking-wider uppercase'
                 >
                   {t('Custom Amount ($)')}
                 </Label>
-                <div className='grid grid-cols-[minmax(0,1fr)_minmax(110px,0.55fr)] gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
+                <div
+                  className={cn(
+                    'grid gap-2',
+                    compact
+                      ? 'grid-cols-1'
+                      : 'grid-cols-[minmax(0,1fr)_minmax(110px,0.55fr)] lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'
+                  )}
+                >
                   <div className='relative'>
-                    <span className='text-muted-foreground pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-base sm:text-lg'>
+                    <span
+                      className={cn(
+                        'text-muted-foreground pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-base sm:text-lg',
+                        localAmount === '' && 'hidden'
+                      )}
+                    >
                       $
                     </span>
                     <Input
                       id='topup-amount'
-                      type='number'
+                      type='text'
+                      inputMode='numeric'
+                      pattern='[0-9]*'
                       value={localAmount}
-                      onChange={(e) => handleAmountChange(e.target.value)}
+                      onKeyDown={handleAmountInputKeyDown}
+                      onPaste={handleAmountInputPaste}
+                      onChange={handleAmountInputChange}
+                      onFocus={handleAmountInputFocus}
+                      onClick={(e) => {
+                        setReplaceAmountOnInput(true)
+                        e.currentTarget.select()
+                      }}
+                      onBlur={handleAmountInputBlur}
                       min={minTopup}
-                      placeholder={`Minimum ${minTopup}`}
-                      className='h-9 pl-7 text-base sm:h-10 sm:text-lg'
+                      placeholder={t('Minimum recharge {{amount}}', {
+                        amount: formatTopupAmount(minTopup),
+                      })}
+                      className={cn(
+                        'h-9 text-base sm:h-10 sm:text-lg',
+                        localAmount === '' ? 'pl-3' : 'pl-7'
+                      )}
                     />
                   </div>
-                  <div className='bg-muted/30 flex min-h-9 items-center justify-between gap-2 rounded-md border px-3 lg:min-w-52'>
+                  <div
+                    className={cn(
+                      'bg-muted/30 flex min-h-9 items-center justify-between gap-2 rounded-md border px-3',
+                      !compact && 'lg:min-w-52'
+                    )}
+                  >
                     <span className='text-muted-foreground truncate text-xs'>
                       {t('Amount to pay:')}
                     </span>
-                    {calculating ? (
+                    {topupAmount <= 0 ? (
+                      <span className='text-muted-foreground text-sm font-medium'>
+                        --
+                      </span>
+                    ) : calculating ? (
                       <Skeleton className='h-5 w-16' />
                     ) : (
                       <span className='text-sm font-semibold text-red-500'>
@@ -321,12 +451,17 @@ export function RechargeFormCard({
                 </div>
               </div>
 
-              <div className='space-y-2.5 sm:space-y-3'>
+              <div className={cn(compact ? 'space-y-2' : 'space-y-2.5 sm:space-y-3')}>
                 <Label className='text-muted-foreground text-xs font-medium tracking-wider uppercase'>
                   {t('Payment Method')}
                 </Label>
                 {hasStandardPaymentMethods ? (
-                  <div className='grid grid-cols-2 gap-1.5 sm:gap-3 lg:grid-cols-3'>
+                  <div
+                    className={cn(
+                      'grid grid-cols-2',
+                      compact ? 'gap-2' : 'gap-1.5 sm:gap-3 lg:grid-cols-3'
+                    )}
+                  >
                     {topupInfo?.pay_methods?.map((method) => {
                       const minTopup = method.min_topup || 0
                       const disabled = minTopup > topupAmount
@@ -377,6 +512,12 @@ export function RechargeFormCard({
                       )}
                     </AlertDescription>
                   </Alert>
+                )}
+                {compact && (
+                  <p className='text-muted-foreground flex items-center gap-1.5 text-xs'>
+                    <LockKeyhole className='h-3.5 w-3.5' />
+                    {t('Secure payment, funds arrive instantly')}
+                  </p>
                 )}
               </div>
 
@@ -464,7 +605,7 @@ export function RechargeFormCard({
         )}
 
       {/* Redemption Code Section */}
-      {redemptionEnabled ? (
+      {showRedemptionSection && redemptionEnabled ? (
         <div className='space-y-2.5 border-t pt-4 sm:space-y-3 sm:pt-6'>
           <div className='flex items-center gap-2'>
             <Gift className='text-muted-foreground h-4 w-4' />
@@ -508,7 +649,7 @@ export function RechargeFormCard({
             </p>
           )}
         </div>
-      ) : (
+      ) : showRedemptionSection ? (
         <Alert className='border-t'>
           <AlertDescription>
             {t(
@@ -516,7 +657,7 @@ export function RechargeFormCard({
             )}
           </AlertDescription>
         </Alert>
-      )}
+      ) : null}
     </TitledCard>
   )
 }

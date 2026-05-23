@@ -17,11 +17,40 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { TFunction } from 'i18next'
-import dayjs from '@/lib/dayjs'
 import { formatQuotaWithCurrency } from '@/lib/currency'
+import dayjs from '@/lib/dayjs'
 import type { SubscriptionPlan } from '../types'
 
-function getDurationDays(plan: Partial<SubscriptionPlan>): number {
+const SECONDS_PER_HOUR = 3600
+const SECONDS_PER_DAY = 86400
+const SECONDS_PER_WEEK = 7 * SECONDS_PER_DAY
+const SECONDS_PER_MONTH = 30 * SECONDS_PER_DAY
+const SECONDS_PER_YEAR = 365 * SECONDS_PER_DAY
+
+function getPlanDurationSeconds(plan: Partial<SubscriptionPlan>): number {
+  const unit = plan?.duration_unit || 'month'
+  const value = Number(plan?.duration_value || 0)
+  if (value <= 0 && unit !== 'custom') return 0
+
+  if (unit === 'year') return value * SECONDS_PER_YEAR
+  if (unit === 'month') return value * SECONDS_PER_MONTH
+  if (unit === 'day') return value * SECONDS_PER_DAY
+  if (unit === 'hour') return value * SECONDS_PER_HOUR
+  if (unit === 'custom') return Number(plan?.custom_seconds || 0)
+
+  return 0
+}
+
+function getQuotaResetSeconds(plan: Partial<SubscriptionPlan>): number {
+  const period = plan?.quota_reset_period || 'never'
+  if (period === 'daily') return SECONDS_PER_DAY
+  if (period === 'weekly') return SECONDS_PER_WEEK
+  if (period === 'monthly') return SECONDS_PER_MONTH
+  if (period === 'custom') return Number(plan?.quota_reset_custom_seconds || 0)
+  return 0
+}
+
+export function getPlanDurationDays(plan: Partial<SubscriptionPlan>): number {
   const unit = plan?.duration_unit || 'month'
   const value = Number(plan?.duration_value || 0)
   if (value <= 0 && unit !== 'custom') return 0
@@ -74,16 +103,7 @@ export function formatPlanDisplayTotalQuota(
       abbreviate: false,
     })
 
-  if (plan?.quota_reset_period === 'daily') {
-    const durationDays = getDurationDays(plan)
-    if (durationDays > 1) {
-      const periodAmount = formatPlanQuota(totalAmount)
-      const displayTotal = formatPlanQuota(totalAmount * durationDays)
-      return `${periodAmount}*${durationDays}${t('days')}=${displayTotal}`
-    }
-  }
-
-  return formatPlanQuota(totalAmount)
+  return formatPlanQuota(calculatePlanSubscriptionTotalQuota(plan))
 }
 
 export function formatResetPeriod(
@@ -102,6 +122,58 @@ export function formatResetPeriod(
     return `${seconds} ${t('seconds')}`
   }
   return t('No Reset')
+}
+
+export function splitSellingPoints(
+  value: string | undefined,
+  fallback: string
+): string[] {
+  const points = (value || '')
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean)
+  return points.length > 0 ? points : [fallback]
+}
+
+export function formatPlanDailyQuota(
+  plan: Partial<SubscriptionPlan>,
+  t: TFunction
+): string {
+  const totalAmount = Number(plan?.total_amount || 0)
+  if (totalAmount <= 0) return t('Unlimited')
+  return formatQuotaWithCurrency(totalAmount, {
+    digitsLarge: 2,
+    digitsSmall: 4,
+    abbreviate: false,
+  })
+}
+
+export function calculatePlanSubscriptionTotalQuota(
+  plan: Partial<SubscriptionPlan>
+): number {
+  const totalAmount = Number(plan?.total_amount || 0)
+  if (totalAmount <= 0) return 0
+
+  const durationSeconds = getPlanDurationSeconds(plan)
+  const resetSeconds = getQuotaResetSeconds(plan)
+  if (durationSeconds <= 0 || resetSeconds <= 0) return totalAmount
+  if (durationSeconds <= resetSeconds) return totalAmount
+
+  return totalAmount * Math.ceil(durationSeconds / resetSeconds)
+}
+
+export function formatPlanSubscriptionTotalQuota(
+  plan: Partial<SubscriptionPlan>,
+  t: TFunction
+): string {
+  const totalAmount = Number(plan?.total_amount || 0)
+  if (totalAmount <= 0) return t('Unlimited')
+
+  return formatQuotaWithCurrency(calculatePlanSubscriptionTotalQuota(plan), {
+    digitsLarge: 2,
+    digitsSmall: 4,
+    abbreviate: false,
+  })
 }
 
 export function formatTimestamp(ts: number): string {

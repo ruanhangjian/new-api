@@ -51,6 +51,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 import { createPlan, updatePlan, getGroups } from '../api'
 import { getDurationUnitOptions, getResetPeriodOptions } from '../constants'
 import {
@@ -199,6 +200,29 @@ export function SubscriptionsMutateDrawer({
                         placeholder={t('e.g. Suitable for light usage')}
                       />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name='selling_points'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('Selling Points')}</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        {...field}
+                        placeholder={t('One selling point per line')}
+                        className='min-h-24'
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {t(
+                        'Shown on wallet subscription cards. Leave empty to use the default selling point.'
+                      )}
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

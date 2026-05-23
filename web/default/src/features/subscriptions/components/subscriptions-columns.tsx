@@ -80,6 +80,26 @@ export function useSubscriptionsColumns(): ColumnDef<PlanRecord>[] {
         size: 100,
       },
       {
+        accessorFn: (row) => row.plan.selling_points,
+        id: 'selling_points',
+        meta: { label: t('Selling Points'), mobileHidden: true },
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} title={t('Selling Points')} />
+        ),
+        cell: ({ row }) => {
+          const points = (row.original.plan.selling_points || '')
+            .split('\n')
+            .map((item) => item.trim())
+            .filter(Boolean)
+          return (
+            <span className='text-muted-foreground line-clamp-2 max-w-[180px] text-xs'>
+              {points.length > 0 ? points.join(' / ') : t('Default')}
+            </span>
+          )
+        },
+        size: 180,
+      },
+      {
         id: 'duration',
         meta: { label: t('Validity') },
         header: ({ column }) => (

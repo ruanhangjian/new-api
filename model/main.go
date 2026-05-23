@@ -390,6 +390,7 @@ func ensureSubscriptionPlanTableSQLite() error {
 ` + "`id`" + ` integer,
 ` + "`title`" + ` varchar(128) NOT NULL,
 ` + "`subtitle`" + ` varchar(255) DEFAULT '',
+` + "`selling_points`" + ` text,
 ` + "`price_amount`" + ` decimal(10,6) NOT NULL,
 ` + "`currency`" + ` varchar(8) NOT NULL DEFAULT 'USD',
 ` + "`duration_unit`" + ` varchar(16) NOT NULL DEFAULT 'month',
@@ -423,6 +424,7 @@ PRIMARY KEY (` + "`id`" + `)
 	required := []sqliteColumnDef{
 		{Name: "title", DDL: "`title` varchar(128) NOT NULL"},
 		{Name: "subtitle", DDL: "`subtitle` varchar(255) DEFAULT ''"},
+		{Name: "selling_points", DDL: "`selling_points` text"},
 		{Name: "price_amount", DDL: "`price_amount` decimal(10,6) NOT NULL"},
 		{Name: "currency", DDL: "`currency` varchar(8) NOT NULL DEFAULT 'USD'"},
 		{Name: "duration_unit", DDL: "`duration_unit` varchar(16) NOT NULL DEFAULT 'month'"},
