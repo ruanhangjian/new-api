@@ -441,6 +441,79 @@ For commercial licensing, please contact support@quantumnous.com
   animation: landing-fade-right 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+@keyframes hero-endpoint-scroll {
+  0%,
+  5.6% {
+    transform: translateY(0);
+  }
+  7.69%,
+  13.29% {
+    transform: translateY(-32px);
+  }
+  15.38%,
+  20.98% {
+    transform: translateY(-64px);
+  }
+  23.08%,
+  28.68% {
+    transform: translateY(-96px);
+  }
+  30.77%,
+  36.37% {
+    transform: translateY(-128px);
+  }
+  38.46%,
+  44.06% {
+    transform: translateY(-160px);
+  }
+  46.15%,
+  51.75% {
+    transform: translateY(-192px);
+  }
+  53.85%,
+  59.45% {
+    transform: translateY(-224px);
+  }
+  61.54%,
+  67.14% {
+    transform: translateY(-256px);
+  }
+  69.23%,
+  74.83% {
+    transform: translateY(-288px);
+  }
+  76.92%,
+  82.52% {
+    transform: translateY(-320px);
+  }
+  84.62%,
+  90.22% {
+    transform: translateY(-352px);
+  }
+  92.31%,
+  97.9% {
+    transform: translateY(-384px);
+  }
+  100% {
+    transform: translateY(-416px);
+  }
+}
+
+.hero-endpoint-track {
+  display: flex;
+  min-width: max-content;
+  flex-direction: column;
+  animation: hero-endpoint-scroll 18s cubic-bezier(0.33, 1, 0.68, 1) infinite;
+  will-change: transform;
+}
+
+.hero-endpoint-track > span {
+  display: flex;
+  height: 32px;
+  align-items: center;
+  white-space: nowrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .landing-animate-fade-up,
   .landing-animate-fade-in,
@@ -450,6 +523,11 @@ For commercial licensing, please contact support@quantumnous.com
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
+  }
+
+  .hero-endpoint-track {
+    animation: none !important;
+    transform: translateY(0) !important;
   }
 }
 

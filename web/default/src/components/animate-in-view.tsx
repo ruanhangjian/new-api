@@ -16,8 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useRef, useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
+
+function getPrefersReducedMotion() {
+  if (typeof window === 'undefined') return false
+  if (typeof window.matchMedia !== 'function') return false
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
 
 interface AnimateInViewProps {
   children: ReactNode
@@ -39,6 +45,9 @@ export function AnimateInView(props: AnimateInViewProps) {
   } = props
 
   const ref = useRef<HTMLDivElement>(null)
+  const [isVisible, setIsVisible] = useState(() => getPrefersReducedMotion())
+  const [isAnimating, setIsAnimating] = useState(false)
+  const hasEnteredRef = useRef(isVisible)
 
   useEffect(() => {
     const el = ref.current
@@ -46,20 +55,22 @@ export function AnimateInView(props: AnimateInViewProps) {
 
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
     if (mq.matches) {
-      el.classList.remove('opacity-0')
-      el.classList.add(`landing-animate-${animation}`)
+      hasEnteredRef.current = true
       return
     }
 
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          el.classList.remove('opacity-0')
-          el.classList.add(`landing-animate-${animation}`)
+          if (once && hasEnteredRef.current) return
+          hasEnteredRef.current = true
+          setIsVisible(true)
+          setIsAnimating(true)
           if (once) observer.unobserve(el)
         } else if (!once) {
-          el.classList.add('opacity-0')
-          el.classList.remove(`landing-animate-${animation}`)
+          setIsVisible(false)
+          setIsAnimating(false)
+          hasEnteredRef.current = false
         }
       },
       { threshold, rootMargin: '0px 0px -40px 0px' }
@@ -73,9 +84,15 @@ export function AnimateInView(props: AnimateInViewProps) {
     <Tag
       ref={ref as never}
       className={cn(
-        'opacity-0 will-change-[transform,opacity]',
+        'will-change-[transform,opacity]',
+        isVisible ? 'opacity-100' : 'opacity-0',
+        isAnimating ? `landing-animate-${animation}` : undefined,
         props.className
       )}
+      onAnimationEnd={(event) => {
+        if (event.target !== event.currentTarget) return
+        setIsAnimating(false)
+      }}
       style={{ animationDelay: delay ? `${delay}ms` : undefined }}
     >
       {props.children}

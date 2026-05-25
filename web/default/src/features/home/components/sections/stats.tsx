@@ -16,113 +16,123 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useRef, useEffect, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-
-interface CounterProps {
-  end: number
-  suffix?: string
-  prefix?: string
-  duration?: number
-  decimals?: number
-}
-
-function Counter(props: CounterProps) {
-  const { end, suffix = '', prefix = '', duration = 1600, decimals = 0 } = props
-  const ref = useRef<HTMLSpanElement>(null)
-  const startedRef = useRef(false)
-
-  const formatValue = useCallback(
-    (v: number) =>
-      decimals > 0 ? v.toFixed(decimals) : Math.round(v).toLocaleString(),
-    [decimals]
-  )
-
-  const animate = useCallback(() => {
-    const el = ref.current
-    if (!el) return
-    const start = performance.now()
-    const step = (now: number) => {
-      const progress = Math.min((now - start) / duration, 1)
-      const eased = 1 - Math.pow(1 - progress, 3)
-      el.textContent = `${prefix}${formatValue(eased * end)}${suffix}`
-      if (progress < 1) requestAnimationFrame(step)
-    }
-    requestAnimationFrame(step)
-  }, [end, duration, prefix, suffix, formatValue])
-
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
-    if (mq.matches) {
-      el.textContent = `${prefix}${formatValue(end)}${suffix}`
-      return
-    }
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !startedRef.current) {
-          startedRef.current = true
-          animate()
-          observer.unobserve(el)
-        }
-      },
-      { threshold: 0.5 }
-    )
-
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [animate, end, prefix, suffix, formatValue])
-
-  return (
-    <span ref={ref} className='tabular-nums'>
-      {prefix}0{suffix}
-    </span>
-  )
-}
+import { AnimateInView } from '@/components/animate-in-view'
+import { cn } from '@/lib/utils'
+import { API_SERVICE_STATS } from '../../constants'
 
 interface StatsProps {
   className?: string
 }
 
-interface StatItem {
-  end: number
-  suffix: string
-  label: string
-  decimals?: number
+interface AnimatedStatValueProps {
+  value: string
+}
+
+function parseStatValue(input: string): { target: number; suffix: string } {
+  const suffixMatch = input.match(/[^\d.,]+$/)
+  const suffix = suffixMatch ? suffixMatch[0] : ''
+  const numericPart = input.replace(/[^\d.,]/g, '').replace(/,/g, '')
+
+  const target = Number.parseFloat(numericPart)
+  return {
+    target: Number.isFinite(target) ? target : 0,
+    suffix,
+  }
+}
+
+function AnimatedStatValue({ value }: AnimatedStatValueProps) {
+  const prefersReducedMotion = useMemo(
+    () =>
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+    []
+  )
+  const [displayState, setDisplayState] = useState<{
+    value: string
+    text: string
+  } | null>(null)
+  const animatedValueRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (prefersReducedMotion || animatedValueRef.current === value) {
+      return
+    }
+
+    const { target, suffix } = parseStatValue(value)
+    if (!target) {
+      animatedValueRef.current = value
+      return
+    }
+
+    const durationMs = 900
+    const start = performance.now()
+    let rafId = 0
+
+    const tick = (now: number) => {
+      const progress = Math.min((now - start) / durationMs, 1)
+      const eased = 1 - (1 - progress) ** 3
+      const current = target * eased
+      const decimals = target % 1 !== 0 ? 1 : 0
+      const formatted = current.toLocaleString('en-US', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      })
+
+      setDisplayState({ value, text: `${formatted}${suffix}` })
+
+      if (progress < 1) {
+        rafId = requestAnimationFrame(tick)
+      } else {
+        setDisplayState({ value, text: value })
+        animatedValueRef.current = value
+      }
+    }
+
+    rafId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(rafId)
+  }, [prefersReducedMotion, value])
+
+  const display = displayState?.value === value ? displayState.text : value
+
+  return <>{display}</>
 }
 
 export function Stats(_props: StatsProps) {
   const { t } = useTranslation()
 
-  const stats: StatItem[] = [
-    { end: 50, suffix: '+', label: t('upstream services integrated') },
-    { end: 100, suffix: '+', label: t('model billing support') },
-    { end: 50, suffix: '+', label: t('compatible API routes') },
-    { end: 10, suffix: '+', label: t('scheduling controls') },
-  ]
-
   return (
-    <div className='border-border/40 bg-muted/10 relative z-10 border-y'>
-      <div className='mx-auto max-w-6xl px-6 py-10 md:py-12'>
-        <div className='grid grid-cols-2 gap-8 md:grid-cols-4 md:gap-12'>
-          {stats.map((s) => (
+    <div className='relative z-10 px-4 md:px-6'>
+      <AnimateInView
+        animation='scale-in'
+        className='border-border bg-border mx-auto grid max-w-[1180px] grid-cols-2 gap-px overflow-hidden rounded-3xl border shadow-[0_18px_50px_rgba(15,23,42,0.06)] md:grid-cols-4'
+      >
+        {API_SERVICE_STATS.map((stat) => {
+          const isLongValue = stat.value.length > 10
+
+          return (
             <div
-              key={s.label}
-              className='flex flex-col items-center text-center'
+              key={stat.description}
+              className='bg-card/85 px-5 py-6 text-center backdrop-blur-sm md:py-7'
             >
-              <span className='text-2xl font-bold tracking-tight md:text-3xl'>
-                <Counter end={s.end} suffix={s.suffix} decimals={s.decimals} />
+              <span
+                className={cn(
+                  'block leading-none font-bold tracking-tight',
+                  isLongValue
+                    ? 'text-2xl md:text-[28px]'
+                    : 'text-3xl md:text-[34px]'
+                )}
+              >
+                <AnimatedStatValue value={stat.value} />
               </span>
-              <span className='text-muted-foreground mt-1.5 text-xs'>
-                {s.label}
+              <span className='text-muted-foreground mt-2 block text-sm font-medium'>
+                {t(stat.description)}
               </span>
             </div>
-          ))}
-        </div>
-      </div>
+          )
+        })}
+      </AnimateInView>
     </div>
   )
 }
