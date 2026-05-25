@@ -1,8 +1,10 @@
 package relay
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -216,6 +218,10 @@ func (s *responsesWSSession) handleResponseCreate(create responsesWSCreateReques
 		)
 	}
 
+	if err := setResponsesWSCreateRequestBodyForAffinity(s.c, create); err != nil {
+		return types.NewError(err, types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
+	}
+
 	commitRate, apiErr := middleware.CheckModelRequestRateLimit(s.c)
 	if apiErr != nil {
 		return apiErr
@@ -249,6 +255,24 @@ func (s *responsesWSSession) handleResponseCreate(create responsesWSCreateReques
 func (s *responsesWSSession) handleControlEventWriteFailure(err error) *types.NewAPIError {
 	apiErr := s.handleTargetWriteFailure(err)
 	s.sendError("", apiErr)
+	return nil
+}
+
+func setResponsesWSCreateRequestBodyForAffinity(c *gin.Context, create responsesWSCreateRequest) error {
+	if c == nil {
+		return nil
+	}
+	body, err := common.Marshal(create.Request)
+	if err != nil {
+		return err
+	}
+	common.CleanupBodyStorage(c)
+	c.Set(common.KeyRequestBody, body)
+	if c.Request != nil {
+		c.Request.Body = io.NopCloser(bytes.NewReader(body))
+		c.Request.ContentLength = int64(len(body))
+		c.Request.Header.Set("Content-Type", "application/json")
+	}
 	return nil
 }
 
@@ -392,6 +416,7 @@ func (s *responsesWSSession) prepareCall(create responsesWSCreateRequest, commit
 	req := create.Request
 	common.SetContextKey(s.c, appconstant.ContextKeyRequestStartTime, time.Now())
 	relayInfo := relaycommon.GenRelayInfoResponses(s.c, &req)
+	relayInfo.Transport = relaycommon.RelayTransportWebSocket
 	relayInfo.RequestId = fmt.Sprintf("%s-ws-%d", relayInfo.RequestId, s.nextEventIndex)
 	s.nextEventIndex++
 

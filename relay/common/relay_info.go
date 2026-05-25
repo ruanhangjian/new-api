@@ -34,6 +34,10 @@ const (
 	LastMessageTypeThinking = "thinking"
 )
 
+const (
+	RelayTransportWebSocket = "websocket"
+)
+
 type ClaudeConvertInfo struct {
 	LastMessagesType string
 	Index            int
@@ -105,6 +109,7 @@ type RelayInfo struct {
 	OriginModelName        string
 	RequestURLPath         string
 	RequestHeaders         map[string]string
+	Transport              string
 	ShouldIncludeUsage     bool
 	DisablePing            bool // 是否禁止向下游发送自定义 Ping
 	ClientWs               *websocket.Conn
@@ -254,6 +259,9 @@ func (info *RelayInfo) ToString() string {
 	fmt.Fprintf(b, "IsStream: %t, ", info.IsStream)
 	fmt.Fprintf(b, "IsPlayground: %t, ", info.IsPlayground)
 	fmt.Fprintf(b, "RequestURLPath: %q, ", info.RequestURLPath)
+	if info.Transport != "" {
+		fmt.Fprintf(b, "Transport: %q, ", info.Transport)
+	}
 	fmt.Fprintf(b, "OriginModelName: %q, ", info.OriginModelName)
 	fmt.Fprintf(b, "EstimatePromptTokens: %d, ", info.estimatePromptTokens)
 	fmt.Fprintf(b, "ShouldIncludeUsage: %t, ", info.ShouldIncludeUsage)

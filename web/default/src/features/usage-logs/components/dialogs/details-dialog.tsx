@@ -416,6 +416,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
     !isViolation &&
     other?.billing_mode === 'tiered_expr' &&
     !!other?.expr_b64
+  const isWebSocketTransport = other?.transport === 'websocket'
   const hasAudioTokens = other?.ws || other?.audio
   const showTiming = isTimingLogType(props.log.type)
   const showAdminIp =
@@ -597,7 +598,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
                       )}
                     >
                       {formatUseTime(props.log.use_time)}
-                      {props.log.is_stream &&
+                      {(props.log.is_stream || isWebSocketTransport) &&
                         other?.frt != null &&
                         other.frt > 0 && (
                           <span

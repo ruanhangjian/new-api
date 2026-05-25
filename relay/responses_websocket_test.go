@@ -14,6 +14,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/types"
 
+	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
 
@@ -140,6 +141,44 @@ func TestHTTPResponsesRequestDoesNotMarshalGenerate(t *testing.T) {
 	}
 	if _, ok := data["generate"]; ok {
 		t.Fatalf("generate leaked into HTTP request JSON: %s", got)
+	}
+}
+
+func TestSetResponsesWSCreateRequestBodyForAffinity(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(rec)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/v1/responses", nil)
+
+	create := responsesWSCreateRequest{
+		Request: dto.OpenAIResponsesRequest{
+			Model:          "gpt-5.5",
+			PromptCacheKey: json.RawMessage(`"trace-123"`),
+		},
+	}
+
+	if err := setResponsesWSCreateRequestBodyForAffinity(ctx, create); err != nil {
+		t.Fatalf("setResponsesWSCreateRequestBodyForAffinity() error = %v", err)
+	}
+
+	storage, err := common.GetBodyStorage(ctx)
+	if err != nil {
+		t.Fatalf("GetBodyStorage() error = %v", err)
+	}
+	body, err := storage.Bytes()
+	if err != nil {
+		t.Fatalf("BodyStorage.Bytes() error = %v", err)
+	}
+
+	var data map[string]any
+	if err := common.Unmarshal(body, &data); err != nil {
+		t.Fatalf("unmarshal cached body: %v", err)
+	}
+	if data["prompt_cache_key"] != "trace-123" {
+		t.Fatalf("prompt_cache_key = %#v, want trace-123; body=%s", data["prompt_cache_key"], body)
+	}
+	if ctx.Request.Method != http.MethodGet || ctx.Request.Header.Get("Content-Type") != "application/json" {
+		t.Fatalf("request not prepared as JSON body request: method=%s content-type=%s", ctx.Request.Method, ctx.Request.Header.Get("Content-Type"))
 	}
 }
 

@@ -553,6 +553,8 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         const useTime = row.getValue('use_time') as number
         const other = parseLogOther(log.other)
         const frt = other?.frt
+        const isWebSocketTransport = other?.transport === 'websocket'
+        const showFirstResponseTime = log.is_stream || isWebSocketTransport
         const tokensPerSecond =
           useTime > 0 && log.completion_tokens > 0
             ? log.completion_tokens / useTime
@@ -598,7 +600,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                 />
                 {formatUseTime(useTime)}
               </span>
-              {log.is_stream &&
+              {showFirstResponseTime &&
                 (frt != null && frt > 0 ? (
                   <span
                     className={cn(
@@ -617,7 +619,11 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
             </div>
             <div className='flex items-center gap-1 text-[11px]'>
               <span className='text-muted-foreground/60'>
-                {log.is_stream ? t('Stream') : t('Non-stream')}
+                {isWebSocketTransport
+                  ? 'WS'
+                  : log.is_stream
+                    ? t('Stream')
+                    : t('Non-stream')}
                 {tokensPerSecond != null && (
                   <>
                     {' · '}
