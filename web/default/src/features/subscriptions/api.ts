@@ -158,6 +158,13 @@ export async function listWaffoPancakeSubscriptionProductOptions(): Promise<
   return res.data
 }
 
+export async function paySubscriptionBalance(
+  data: SubscriptionPayRequest
+): Promise<ApiResponse> {
+  const res = await api.post('/api/subscription/balance/pay', data)
+  return res.data
+}
+
 export async function paySubscriptionEpay(
   data: SubscriptionPayRequest & { payment_method: string }
 ): Promise<SubscriptionPayResponse & { url?: string }> {
