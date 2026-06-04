@@ -21,7 +21,7 @@ func TestValidateAnnouncementsCountsUnicodeCharacters(t *testing.T) {
 
 感谢大家一直以来对智链AI的支持与理解！
 
-智链AI  
+智链AI
 2026年6月5`
 	if got := len([]rune(content)); got >= 500 {
 		t.Fatalf("test content must be under 500 characters, got %d", got)
