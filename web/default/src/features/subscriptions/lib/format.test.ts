@@ -3,6 +3,7 @@ import { describe, test } from 'node:test'
 import { formatQuotaWithCurrency } from '@/lib/currency'
 import {
   calculatePlanSubscriptionTotalQuota,
+  getPlanResetQuotaLabel,
   formatPlanDisplayTotalQuota,
 } from './format'
 
@@ -109,5 +110,20 @@ describe('formatPlanDisplayTotalQuota', () => {
         abbreviate: false,
       })
     )
+  })
+})
+
+describe('getPlanResetQuotaLabel', () => {
+  const t = ((key: string) => key) as never
+
+  test('uses period-specific quota labels for reset plans', () => {
+    assert.equal(getPlanResetQuotaLabel({ quota_reset_period: 'daily' }, t), 'Daily Quota')
+    assert.equal(getPlanResetQuotaLabel({ quota_reset_period: 'weekly' }, t), 'Weekly Quota')
+    assert.equal(getPlanResetQuotaLabel({ quota_reset_period: 'monthly' }, t), 'Monthly Quota')
+  })
+
+  test('falls back to generic quota label for non-periodic plans', () => {
+    assert.equal(getPlanResetQuotaLabel({ quota_reset_period: 'never' }, t), 'Quota')
+    assert.equal(getPlanResetQuotaLabel({ quota_reset_period: 'custom' }, t), 'Quota')
   })
 })

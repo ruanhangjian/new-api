@@ -70,6 +70,7 @@ import {
   formatPlanDailyQuota,
   formatPlanSubscriptionTotalQuota,
   formatTimestamp,
+  getPlanResetQuotaLabel,
   splitSellingPoints,
 } from '@/features/subscriptions/lib'
 import type {
@@ -727,7 +728,7 @@ export function SubscriptionPlansCard({
                           </p>
                           <div className='pt-2.5'>
                             <span className='text-foreground text-2xl leading-none font-bold tracking-normal sm:text-3xl'>
-                              ${price}
+                              ￥{price}
                             </span>
                           </div>
                         </div>
@@ -735,7 +736,7 @@ export function SubscriptionPlansCard({
                         <div className='mt-5 space-y-2'>
                           <div className='bg-muted/35 border-border/70 flex min-h-11 items-center justify-between gap-2 rounded-xl border px-2.5 py-2'>
                             <span className='text-muted-foreground shrink-0 text-[11px] font-medium'>
-                              {t('Daily Quota')}
+                              {getPlanResetQuotaLabel(plan, t)}
                             </span>
                             <span className='text-foreground min-w-0 text-right text-xs font-semibold break-words'>
                               {formatPlanDailyQuota(plan, t)}

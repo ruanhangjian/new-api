@@ -135,6 +135,17 @@ export function splitSellingPoints(
   return points.length > 0 ? points : [fallback]
 }
 
+export function getPlanResetQuotaLabel(
+  plan: Partial<SubscriptionPlan>,
+  t: TFunction
+): string {
+  const period = plan?.quota_reset_period || 'never'
+  if (period === 'daily') return t('Daily Quota')
+  if (period === 'weekly') return t('Weekly Quota')
+  if (period === 'monthly') return t('Monthly Quota')
+  return t('Quota')
+}
+
 export function formatPlanDailyQuota(
   plan: Partial<SubscriptionPlan>,
   t: TFunction

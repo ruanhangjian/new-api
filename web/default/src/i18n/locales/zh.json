@@ -4534,6 +4534,8 @@
     "Quick top-up, ready to use anytime": "快速充值，随充随用",
     "Minimum recharge {{amount}}": "最少充值 {{amount}}",
     "Daily Quota": "每日额度",
+    "Weekly Quota": "每周额度",
+    "Monthly Quota": "每月额度",
     "Subscription Total Quota": "订阅总额度",
     "Valid for {{duration}}": "{{duration}}有效期",
     "Selling Points": "卖点配置",

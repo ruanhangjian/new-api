@@ -24,6 +24,7 @@ export {
   formatResetPeriod,
   formatTimestamp,
   getPlanDurationDays,
+  getPlanResetQuotaLabel,
   splitSellingPoints,
 } from './format'
 export {
