@@ -270,6 +270,8 @@ export const STATIC_I18N_KEYS = [
   'Quick top-up, ready to use anytime',
   'Minimum recharge {{amount}}',
   'Daily Quota',
+  'Weekly Quota',
+  'Monthly Quota',
   'Subscription Total Quota',
   'Selling Points',
   'No daily reset',
