@@ -252,6 +252,9 @@ export function RatioSettingsCard({
     BillingMode: normalizeJsonString(modelDefaults.BillingMode),
     BillingExpr: normalizeJsonString(modelDefaults.BillingExpr),
   })
+  const [savedModelValues, setSavedModelValues] = useState(
+    modelNormalizedDefaults.current
+  )
 
   const groupNormalizedDefaults = useRef({
     GroupRatio: normalizeJsonString(groupDefaults.GroupRatio),
@@ -317,6 +320,7 @@ export function RatioSettingsCard({
       BillingMode: normalizeJsonString(modelDefaults.BillingMode),
       BillingExpr: normalizeJsonString(modelDefaults.BillingExpr),
     }
+    setSavedModelValues(modelNormalizedDefaults.current)
 
     modelForm.reset({
       ...modelDefaults,
@@ -392,6 +396,9 @@ export function RatioSettingsCard({
         const apiKey = apiKeyMap[key as string] || (key as string)
         await updateOption.mutateAsync({ key: apiKey, value: normalized[key] })
       }
+
+      modelNormalizedDefaults.current = normalized
+      setSavedModelValues(normalized)
     },
     [updateOption]
   )
@@ -459,6 +466,7 @@ export function RatioSettingsCard({
       return (
         <ModelRatioForm
           form={modelForm}
+          savedValues={savedModelValues}
           onSave={saveModelRatios}
           onReset={handleResetRatios}
           isSaving={updateOption.isPending}
