@@ -54,12 +54,12 @@ export function useAuthRedirect() {
    * @param redirectTo - Redirect path after login
    */
   const handleLoginSuccess = async (
-    userData?: { id?: number } | null,
+    userData?: { id?: number; public_id?: string } | null,
     redirectTo?: string
   ) => {
     // Save user ID if available
-    if (userData?.id) {
-      saveUserId(userData.id)
+    if (userData?.public_id || userData?.id) {
+      saveUserId(userData.public_id || userData.id!)
     }
 
     // Fetch and set user data
@@ -69,9 +69,9 @@ export function useAuthRedirect() {
         const user = self.data as User
         auth.setUser(user)
 
-        // Update user ID if not already set
-        if (user.id) {
-          saveUserId(user.id)
+        // Store public ID for New-Api-User when available.
+        if (user.public_id || user.id) {
+          saveUserId(user.public_id || user.id)
         }
 
         // Restore saved language preference

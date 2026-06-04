@@ -1,10 +1,12 @@
 package model
 
 import (
+	crand "crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"strconv"
 	"strings"
 
@@ -18,11 +20,13 @@ import (
 )
 
 const UserNameMaxLength = 20
+const UserPublicIdLength = 10
 
 // User if you add sensitive fields, don't forget to clean them in setupLogin function.
 // Otherwise, the sensitive information will be saved on local storage in plain text!
 type User struct {
 	Id               int            `json:"id"`
+	PublicId         string         `json:"public_id" gorm:"type:varchar(16);column:public_id;uniqueIndex"`
 	Username         string         `json:"username" gorm:"unique;index" validate:"max=20"`
 	Password         string         `json:"password" gorm:"not null;" validate:"min=8,max=20"`
 	OriginalPassword string         `json:"original_password" gorm:"-:all"` // this field is only for Password change verification, don't save it to database!
@@ -306,6 +310,82 @@ func GetUserById(id int, selectAll bool) (*User, error) {
 	return &user, err
 }
 
+func (user *User) BeforeCreate(tx *gorm.DB) error {
+	return ensureUserPublicIdWithDB(tx, user)
+}
+
+func GenerateUserPublicId() (string, error) {
+	const digits = "0123456789"
+	b := make([]byte, UserPublicIdLength)
+	for i := range b {
+		availableDigits := digits
+		if i == 0 {
+			availableDigits = digits[1:]
+		}
+		n, err := crand.Int(crand.Reader, big.NewInt(int64(len(availableDigits))))
+		if err != nil {
+			return "", err
+		}
+		b[i] = availableDigits[n.Int64()]
+	}
+	return string(b), nil
+}
+
+func ensureUserPublicIdWithDB(db *gorm.DB, user *User) error {
+	if user.PublicId != "" {
+		return nil
+	}
+	for i := 0; i < 20; i++ {
+		publicId, err := GenerateUserPublicId()
+		if err != nil {
+			return err
+		}
+		var count int64
+		if err := db.Model(&User{}).Where("public_id = ?", publicId).Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			user.PublicId = publicId
+			return nil
+		}
+	}
+	return errors.New("failed to generate unique public user id")
+}
+
+func EnsureUserPublicId(user *User) error {
+	return ensureUserPublicIdWithDB(DB, user)
+}
+
+func EnsureAllUserPublicIds() error {
+	var users []User
+	if err := DB.Unscoped().Where("public_id = '' OR public_id IS NULL").Find(&users).Error; err != nil {
+		return err
+	}
+	for i := range users {
+		if err := EnsureUserPublicId(&users[i]); err != nil {
+			return err
+		}
+		if err := DB.Unscoped().Model(&User{}).Where("id = ?", users[i].Id).Update("public_id", users[i].PublicId).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func GetUserByPublicId(publicId string, selectAll bool) (*User, error) {
+	if publicId == "" {
+		return nil, errors.New("public_id 为空！")
+	}
+	user := User{}
+	var err error
+	if selectAll {
+		err = DB.First(&user, "public_id = ?", publicId).Error
+	} else {
+		err = DB.Omit("password").First(&user, "public_id = ?", publicId).Error
+	}
+	return &user, err
+}
+
 func GetUserIdByAffCode(affCode string) (int, error) {
 	if affCode == "" {
 		return 0, errors.New("affCode 为空！")
@@ -390,6 +470,9 @@ func (user *User) Insert(inviterId int) error {
 	user.Quota = common.QuotaForNewUser
 	//user.SetAccessToken(common.GetUUID())
 	user.AffCode = common.GetRandomString(4)
+	if err := EnsureUserPublicId(user); err != nil {
+		return err
+	}
 
 	// 初始化用户设置，包括默认的边栏配置
 	if user.Setting == "" {
@@ -448,6 +531,9 @@ func (user *User) InsertWithTx(tx *gorm.DB, inviterId int) error {
 	}
 	user.Quota = common.QuotaForNewUser
 	user.AffCode = common.GetRandomString(4)
+	if err := ensureUserPublicIdWithDB(tx, user); err != nil {
+		return err
+	}
 
 	// 初始化用户设置
 	if user.Setting == "" {

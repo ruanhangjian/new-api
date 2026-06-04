@@ -109,6 +109,7 @@ func setupLogin(user *model.User, c *gin.Context) {
 		"success": true,
 		"data": map[string]any{
 			"id":           user.Id,
+			"public_id":    user.PublicId,
 			"username":     user.Username,
 			"display_name": user.DisplayName,
 			"role":         user.Role,
@@ -400,6 +401,7 @@ func GetSelf(c *gin.Context) {
 	// 构建响应数据，包含用户信息和权限
 	responseData := map[string]interface{}{
 		"id":                user.Id,
+		"public_id":         user.PublicId,
 		"username":          user.Username,
 		"display_name":      user.DisplayName,
 		"role":              user.Role,

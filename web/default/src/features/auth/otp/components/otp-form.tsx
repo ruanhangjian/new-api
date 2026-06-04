@@ -109,9 +109,9 @@ export function OtpForm({ className, ...props }: OtpFormProps) {
       // Update auth store
       auth.setUser(userData as User)
 
-      // Store user ID in localStorage for compatibility
-      if (userData.id) {
-        saveUserId(userData.id)
+      // Store public ID for New-Api-User when available.
+      if (userData.public_id || userData.id) {
+        saveUserId(userData.public_id || userData.id)
       }
 
       toast.success(t('Signed in'))

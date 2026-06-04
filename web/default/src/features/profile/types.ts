@@ -35,6 +35,8 @@ export interface ApiResponse<T = unknown> {
 export interface UserProfile {
   /** User ID */
   id: number
+  /** Public user ID for external usage queries */
+  public_id?: string
   /** Username */
   username: string
   /** Display name */

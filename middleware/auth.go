@@ -40,6 +40,7 @@ func authHelper(c *gin.Context, minRole int) {
 	id := session.Get("id")
 	status := session.Get("status")
 	useAccessToken := false
+	var authenticatedUser *model.User
 	if username == nil {
 		// Check access token
 		accessToken := c.Request.Header.Get("Authorization")
@@ -82,6 +83,7 @@ func authHelper(c *gin.Context, minRole int) {
 			role = user.Role
 			id = user.Id
 			status = user.Status
+			authenticatedUser = user
 			useAccessToken = true
 		} else {
 			c.JSON(http.StatusOK, gin.H{
@@ -102,17 +104,17 @@ func authHelper(c *gin.Context, minRole int) {
 		c.Abort()
 		return
 	}
-	apiUserId, err := strconv.Atoi(apiUserIdStr)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"success": false,
-			"message": common.TranslateMessage(c, i18n.MsgAuthUserIdFormatError),
-		})
-		c.Abort()
-		return
-
-	}
-	if id != apiUserId {
+	if !newApiUserHeaderMatches(apiUserIdStr, id, authenticatedUser) {
+		if _, err := strconv.Atoi(apiUserIdStr); err != nil {
+			if authenticatedUser != nil && authenticatedUser.PublicId == "" {
+				c.JSON(http.StatusUnauthorized, gin.H{
+					"success": false,
+					"message": common.TranslateMessage(c, i18n.MsgAuthUserIdFormatError),
+				})
+				c.Abort()
+				return
+			}
+		}
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
 			"message": common.TranslateMessage(c, i18n.MsgAuthUserIdMismatch),
@@ -154,6 +156,24 @@ func authHelper(c *gin.Context, minRole int) {
 	c.Set("use_access_token", useAccessToken)
 
 	c.Next()
+}
+
+func newApiUserHeaderMatches(headerValue string, id any, authenticatedUser *model.User) bool {
+	userId, ok := id.(int)
+	if !ok {
+		return false
+	}
+	if headerValue == strconv.Itoa(userId) {
+		return true
+	}
+	if authenticatedUser == nil || authenticatedUser.Id != userId {
+		user, err := model.GetUserById(userId, false)
+		if err != nil {
+			return false
+		}
+		authenticatedUser = user
+	}
+	return authenticatedUser.PublicId != "" && headerValue == authenticatedUser.PublicId
 }
 
 func TryUserAuth() func(c *gin.Context) {
