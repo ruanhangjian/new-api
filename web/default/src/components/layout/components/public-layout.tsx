@@ -28,6 +28,7 @@ type PublicLayoutProps = {
   showThemeSwitch?: boolean
   showAuthButtons?: boolean
   showNotifications?: boolean
+  autoOpenNotifications?: boolean
   logo?: React.ReactNode
   siteName?: string
 }
@@ -41,6 +42,7 @@ export function PublicLayout(props: PublicLayoutProps) {
         showThemeSwitch={props.showThemeSwitch}
         showAuthButtons={props.showAuthButtons}
         showNotifications={props.showNotifications}
+        autoOpenNotifications={props.autoOpenNotifications}
         logo={props.logo}
         siteName={props.siteName}
         {...props.headerProps}
