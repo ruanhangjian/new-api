@@ -20,6 +20,7 @@ import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNotificationStore } from '@/stores/notification-store'
 import { getNotice } from '@/lib/api'
+import { getAnnouncementKeysToMarkReadOnOpen } from './notification-auto-open'
 import { useStatus } from '@/hooks/use-status'
 
 function hashString(input: string): string {
@@ -127,7 +128,19 @@ export function useNotifications() {
       markNoticeRead(noticeContent)
     }
 
-    setActiveTab(tab || 'notice')
+    const nextTab = tab || 'notice'
+    const announcementKeysToMarkRead = getAnnouncementKeysToMarkReadOnOpen({
+      tab: nextTab,
+      announcementKeys: announcements.map((item: Record<string, unknown>) =>
+        getAnnouncementKey(item)
+      ),
+    })
+
+    if (announcementKeysToMarkRead.length > 0) {
+      markAnnouncementsRead(announcementKeysToMarkRead)
+    }
+
+    setActiveTab(nextTab)
     setDialogOpen(true)
   }
 
