@@ -29,6 +29,29 @@ export type Option = {
   value: string
 }
 
+export function filterSelectableOptions(
+  options: Option[],
+  selected: string[],
+  inputValue: string
+) {
+  const query = inputValue.trim().toLowerCase()
+
+  return options.filter((option) => {
+    if (selected.includes(option.value)) {
+      return false
+    }
+
+    if (!query) {
+      return true
+    }
+
+    return (
+      option.label.toLowerCase().includes(query) ||
+      option.value.toLowerCase().includes(query)
+    )
+  })
+}
+
 interface MultiSelectProps {
   options: Option[]
   selected: string[]
@@ -68,9 +91,7 @@ export function MultiSelect({
     }
   }
 
-  const selectables = options.filter(
-    (option) => !selected.includes(option.value)
-  )
+  const selectables = filterSelectableOptions(options, selected, inputValue)
 
   return (
     <Command
