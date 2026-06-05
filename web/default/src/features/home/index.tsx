@@ -40,7 +40,7 @@ export function Home() {
 
   if (!isLoaded) {
     return (
-      <PublicLayout showMainContainer={false}>
+      <PublicLayout showMainContainer={false} autoOpenNotifications>
         <main className='flex min-h-screen items-center justify-center'>
           <div className='text-muted-foreground'>{t('Loading...')}</div>
         </main>
@@ -50,7 +50,7 @@ export function Home() {
 
   if (content) {
     return (
-      <PublicLayout showMainContainer={false}>
+      <PublicLayout showMainContainer={false} autoOpenNotifications>
         <main className='overflow-x-hidden'>
           {isUrl ? (
             <iframe
@@ -69,7 +69,7 @@ export function Home() {
   }
 
   return (
-    <PublicLayout showMainContainer={false}>
+    <PublicLayout showMainContainer={false} autoOpenNotifications>
       <main className='bg-background text-foreground overflow-x-hidden'>
         <Hero isAuthenticated={isAuthenticated} />
         <Stats />

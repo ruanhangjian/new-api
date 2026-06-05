@@ -16,11 +16,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
 import { cn } from '@/lib/utils'
+import {
+  getAutoOpenNotificationTab,
+  shouldAutoOpenNotifications,
+} from '@/hooks/notification-auto-open'
 import { useNotifications } from '@/hooks/use-notifications'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
@@ -64,6 +68,7 @@ export interface PublicHeaderProps {
   showNavigation?: boolean
   showAuthButtons?: boolean
   showNotifications?: boolean
+  autoOpenNotifications?: boolean
   className?: string
 }
 
@@ -77,6 +82,7 @@ export function PublicHeader(props: PublicHeaderProps) {
     homeUrl = '/',
     showAuthButtons = true,
     showNotifications = true,
+    autoOpenNotifications = false,
   } = props
 
   const { t } = useTranslation()
@@ -96,6 +102,7 @@ export function PublicHeader(props: PublicHeaderProps) {
   } = useSystemConfig()
   const dynamicLinks = useTopNavLinks()
   const notifications = useNotifications()
+  const autoOpenedNotificationsRef = useRef(false)
   const routerState = useRouterState()
   const pathname = routerState.location.pathname
 
@@ -117,6 +124,33 @@ export function PublicHeader(props: PublicHeaderProps) {
       document.body.style.overflow = ''
     }
   }, [mobileOpen])
+
+  useEffect(() => {
+    if (
+      !shouldAutoOpenNotifications({
+        enabled: showNotifications && autoOpenNotifications,
+        loading: notifications.loading,
+        unreadCount: notifications.unreadCount,
+        closedToday: notifications.isNoticeClosed,
+        alreadyOpened: autoOpenedNotificationsRef.current,
+        dialogOpen: notifications.dialogOpen,
+      })
+    ) {
+      return
+    }
+
+    autoOpenedNotificationsRef.current = true
+    notifications.openDialog(
+      getAutoOpenNotificationTab({
+        unreadNoticeCount: notifications.unreadNoticeCount,
+        unreadAnnouncementsCount: notifications.unreadAnnouncementsCount,
+      })
+    )
+  }, [
+    autoOpenNotifications,
+    notifications,
+    showNotifications,
+  ])
 
   useEffect(() => {
     if (!authPromptTarget) return
