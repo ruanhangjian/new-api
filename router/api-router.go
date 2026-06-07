@@ -266,6 +266,17 @@ func SetApiRouter(router *gin.Engine) {
 			channelRoute.POST("/upstream_updates/detect", controller.DetectChannelUpstreamModelUpdates)
 			channelRoute.POST("/upstream_updates/detect_all", controller.DetectAllChannelUpstreamModelUpdates)
 		}
+		channelBalanceRoute := apiRouter.Group("/channel_balance")
+		channelBalanceRoute.Use(middleware.AdminAuth())
+		{
+			channelBalanceRoute.GET("/overview", controller.GetChannelBalanceOverview)
+			channelBalanceRoute.PUT("/settings", controller.UpdateChannelBalanceSettings)
+			channelBalanceRoute.POST("/accounts", controller.CreateChannelBalanceAccount)
+			channelBalanceRoute.POST("/accounts/refresh", controller.RefreshAllChannelBalanceAccounts)
+			channelBalanceRoute.POST("/accounts/:id/refresh", controller.RefreshChannelBalanceAccount)
+			channelBalanceRoute.PUT("/accounts/:id", controller.UpdateChannelBalanceAccount)
+			channelBalanceRoute.DELETE("/accounts/:id", controller.DeleteChannelBalanceAccount)
+		}
 		tokenRoute := apiRouter.Group("/token")
 		tokenRoute.Use(middleware.UserAuth())
 		{
