@@ -904,7 +904,7 @@ function GroupPricingTable({
                         <Input
                           type='number'
                           min={0}
-                          step={0.1}
+                          step={0.01}
                           value={String(row.ratio)}
                           onChange={(event) =>
                             updateRow(
