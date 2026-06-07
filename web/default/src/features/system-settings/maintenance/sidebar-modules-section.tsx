@@ -124,6 +124,10 @@ export function SidebarModulesSection({
         title: t('Channels'),
         description: t('Configure upstream providers and routing.'),
       },
+      channel_balance: {
+        title: t('Channel Balances'),
+        description: t('Monitor upstream account balances and alerts.'),
+      },
       models: {
         title: t('Models'),
         description: t('Manage catalog visibility and pricing.'),
