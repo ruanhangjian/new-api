@@ -103,7 +103,7 @@ export function StatusBadge({
   variant,
   size = 'sm',
   pulse = false,
-  showDot = true,
+  showDot = false,
   copyable = true,
   copyText,
   autoColor,
@@ -130,6 +130,7 @@ export function StatusBadge({
 
   return (
     <span
+      data-slot='status-badge'
       className={cn(
         'inline-flex w-fit shrink-0 items-center font-medium whitespace-nowrap',
         sizeMap[size ?? 'sm'],
