@@ -83,6 +83,8 @@ interface SubscriptionPlansCardProps {
   topupInfo: TopupInfo | null
   onAvailabilityChange?: (available: boolean) => void
   mode?: 'plans' | 'summary'
+  userQuota?: number
+  onPurchaseSuccess?: () => void | Promise<void>
 }
 
 function getEpayMethods(payMethods: PaymentMethod[] = []): PaymentMethod[] {
@@ -255,6 +257,8 @@ export function SubscriptionPlansCard({
   topupInfo,
   onAvailabilityChange,
   mode = 'plans',
+  userQuota,
+  onPurchaseSuccess,
 }: SubscriptionPlansCardProps) {
   const { t, i18n } = useTranslation()
 
@@ -410,7 +414,7 @@ export function SubscriptionPlansCard({
 
   if (loading) {
     return (
-      <Card className='gap-0 overflow-hidden py-0'>
+      <Card data-card-hover='false' className='gap-0 overflow-hidden py-0'>
         <CardContent className='space-y-4 p-3 sm:p-5'>
           <Skeleton className='h-24 w-full' />
           <Skeleton className='h-48 w-full' />
@@ -429,6 +433,7 @@ export function SubscriptionPlansCard({
         title={t('My Subscriptions')}
         icon={<Crown className='h-4 w-4' />}
         headerClassName='p-3 !pb-3 sm:p-4 sm:!pb-3'
+        disableHoverEffect
         action={
           hasAny ? (
             <Button
@@ -838,6 +843,8 @@ export function SubscriptionPlansCard({
         enableWaffoPancake={enableWaffoPancake}
         enableOnlineTopUp={enableOnlineTopUp}
         epayMethods={epayMethods}
+        userQuota={userQuota}
+        onPurchaseSuccess={onPurchaseSuccess}
         purchaseLimit={
           selectedPlan?.plan?.max_purchase_per_user
             ? Number(selectedPlan.plan.max_purchase_per_user)

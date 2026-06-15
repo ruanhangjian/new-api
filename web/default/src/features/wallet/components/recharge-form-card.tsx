@@ -216,7 +216,7 @@ export function RechargeFormCard({
 
   if (loading) {
     return (
-      <Card className='gap-0 overflow-hidden py-0'>
+      <Card data-card-hover='false' className='gap-0 overflow-hidden py-0'>
         <CardHeader className='border-b p-3 !pb-3 sm:p-5 sm:!pb-5'>
           <Skeleton className='h-6 w-32' />
           <Skeleton className='mt-2 h-4 w-48' />
@@ -272,6 +272,7 @@ export function RechargeFormCard({
       contentClassName={cn(
         compact ? 'space-y-2.5 p-3 sm:px-4 sm:py-3' : 'space-y-4 sm:space-y-6'
       )}
+      disableHoverEffect
       action={
         showBillingAction && onOpenBilling ? (
           <Button
