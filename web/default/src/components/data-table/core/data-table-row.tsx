@@ -35,18 +35,23 @@ type DataTableRowProps<TData> = {
   cellRenderColumns?: TanstackTable<TData>['options']['columns']
 } & Omit<React.ComponentProps<typeof TableRow>, 'children'>
 
+type DataTableRowInnerProps<TData> = DataTableRowProps<TData> & {
+  isSelected: boolean
+}
+
 function DataTableRowInner<TData>({
   row,
+  isSelected,
   className,
   getColumnClassName,
   cellRenderColumns,
   ...rowProps
-}: DataTableRowProps<TData>) {
+}: DataTableRowInnerProps<TData>) {
   void cellRenderColumns
 
   return (
     <TableRow
-      data-state={row.getIsSelected() ? 'selected' : undefined}
+      data-state={isSelected ? 'selected' : undefined}
       className={className}
       {...rowProps}
     >
@@ -65,19 +70,27 @@ function DataTableRowInner<TData>({
   )
 }
 
-export const DataTableRow = React.memo(DataTableRowInner, (prev, next) => {
+const MemoizedDataTableRow = React.memo(DataTableRowInner, (prev, next) => {
   // Skip re-render when only the getColumnClassName reference changed but the
-  // row identity and selection state are the same — callers rarely stabilize
-  // this callback, so excluding it from comparison avoids unnecessary renders.
+  // row identity and captured selection state are the same. Callers rarely
+  // stabilize this callback, so excluding it from comparison avoids unnecessary
+  // renders. Do not read row.getIsSelected() here: TanStack row objects may keep
+  // a stable reference while their selection state changes.
   // Column cell renderers can close over external state while the row stays
   // stable, so column definitions are part of the render identity.
   return (
     prev.row === next.row &&
     prev.className === next.className &&
-    prev.row.getIsSelected() === next.row.getIsSelected() &&
+    prev.isSelected === next.isSelected &&
     prev.cellRenderColumns === next.cellRenderColumns
   )
 }) as typeof DataTableRowInner
+
+export function DataTableRow<TData>(props: DataTableRowProps<TData>) {
+  return (
+    <MemoizedDataTableRow {...props} isSelected={props.row.getIsSelected()} />
+  )
+}
 
 function renderCellContent<TData>(cell: Cell<TData, unknown>) {
   const content = flexRender(cell.column.columnDef.cell, cell.getContext())
