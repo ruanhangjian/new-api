@@ -355,6 +355,11 @@ export function SubscriptionsMutateDrawer({
                           }
                         />
                       </FormControl>
+                      <FormDescription>
+                        {t(
+                          'Amount the user pays to purchase this plan; the actual currency depends on the payment gateway.'
+                        )}
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
