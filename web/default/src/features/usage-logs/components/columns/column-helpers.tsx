@@ -162,7 +162,6 @@ export function createDurationColumn<T>(config: {
         return <span className='text-muted-foreground/60 text-xs'>-</span>
       }
 
-      const variant =
         duration.durationSec > warningThresholdSec ? 'red' : 'green'
 
       return (
