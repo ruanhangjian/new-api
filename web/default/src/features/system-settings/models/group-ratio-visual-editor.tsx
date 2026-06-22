@@ -70,7 +70,7 @@ type SimpleGroup = {
 type GroupPricingRow = {
   _id: string
   name: string
-  ratio: number
+  ratio: string
   selectable: boolean
   description: string
 }
@@ -90,12 +90,17 @@ function createGroupPricingId() {
   return `gpr_${groupPricingIdCounter}`
 }
 
-function normalizeRatio(value: unknown): number {
+export function normalizeRatio(value: unknown): string {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? String(value) : '1'
+}
+
+function parseRatio(value: unknown): number {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : 1
 }
 
-function buildGroupPricingRows(
+export function buildGroupPricingRows(
   groupRatio: string,
   userUsableGroups: string
 ): GroupPricingRow[] {
@@ -118,14 +123,14 @@ function buildGroupPricingRows(
   }))
 }
 
-function serializeGroupPricingRows(rows: GroupPricingRow[]) {
+export function serializeGroupPricingRows(rows: GroupPricingRow[]) {
   const groupRatio: Record<string, number> = {}
   const userUsableGroups: Record<string, string> = {}
 
   for (const row of rows) {
     const name = row.name.trim()
     if (!name) continue
-    groupRatio[name] = normalizeRatio(row.ratio)
+    groupRatio[name] = parseRatio(row.ratio)
     if (row.selectable) {
       userUsableGroups[name] = row.description
     }
@@ -815,7 +820,7 @@ function GroupPricingTable({
       {
         _id: createGroupPricingId(),
         name,
-        ratio: 1,
+        ratio: '1',
         selectable: true,
         description: '',
       },
@@ -910,7 +915,7 @@ function GroupPricingTable({
                             updateRow(
                               row._id,
                               'ratio',
-                              normalizeRatio(event.target.value)
+                              event.target.value
                             )
                           }
                         />
