@@ -53,7 +53,7 @@ func AdjustEnterpriseCdkQuota(tx *gorm.DB, userId int, operatorId int, logType s
 
 	var user User
 	query := tx.Select("id", "enterprise_cdk_quota").Where("id = ?", userId)
-	if !common.UsingSQLite {
+	if !common.UsingMainDatabase(common.DatabaseTypeSQLite) {
 		query = query.Clauses(clause.Locking{Strength: "UPDATE"})
 	}
 	if err := query.First(&user).Error; err != nil {

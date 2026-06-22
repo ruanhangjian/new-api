@@ -544,7 +544,7 @@ func AdminDisableEnterpriseCdkCode(c *gin.Context) {
 			common.RedemptionCodeStatusEnabled,
 			common.RedemptionCodeStatusDisabled,
 		})
-		if !common.UsingSQLite {
+		if !common.UsingMainDatabase(common.DatabaseTypeSQLite) {
 			query = query.Clauses(clause.Locking{Strength: "UPDATE"})
 		}
 		if err := query.First(&code).Error; err != nil {

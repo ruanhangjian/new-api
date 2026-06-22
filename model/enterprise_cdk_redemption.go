@@ -143,7 +143,7 @@ func enterpriseCdkKeyColumn() string {
 	if commonKeyCol != "" {
 		return commonKeyCol
 	}
-	if common.UsingPostgreSQL {
+	if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
 		return `"key"`
 	}
 	return "`key`"
@@ -160,7 +160,7 @@ func RecycleEnterpriseCdkCodes(cdkIds []int, operatorId int, remark string) (int
 		now := common.GetTimestamp()
 		eligibleStatuses := []int{common.RedemptionCodeStatusEnabled, common.RedemptionCodeStatusDisabled}
 		query := tx.Where("id IN ? AND batch_id > 0 AND status IN ? AND used_user_id = 0 AND redeemed_time = 0 AND recycled_time = 0 AND quota > 0", cdkIds, eligibleStatuses)
-		if !common.UsingSQLite {
+		if !common.UsingMainDatabase(common.DatabaseTypeSQLite) {
 			query = query.Clauses(clause.Locking{Strength: "UPDATE"})
 		}
 		if err := query.Find(&codes).Error; err != nil {
