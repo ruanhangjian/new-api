@@ -268,6 +268,7 @@ export const STATIC_I18N_KEYS = [
   'Subscribe Now',
   'Purchase Subscription',
   'My Subscriptions',
+  'Subscriptions',
   'Quick Recharge',
   'Quick top-up, ready to use anytime',
   'Minimum recharge {{amount}}',

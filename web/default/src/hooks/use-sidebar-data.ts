@@ -224,7 +224,7 @@ export function useSidebarData(): SidebarData {
             icon: ShieldCheck,
           },
           {
-            title: t('Subscription Management'),
+            title: t('Subscriptions'),
             url: '/subscriptions',
             icon: CreditCard,
           },
