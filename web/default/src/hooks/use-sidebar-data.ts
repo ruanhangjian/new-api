@@ -94,6 +94,11 @@ export function useSidebarData(): SidebarData {
             icon: FileText,
           },
           {
+            title: t('Channel Status'),
+            url: '/channel-status',
+            icon: Activity,
+          },
+          {
             title: t('Task Logs'),
             url: '/usage-logs/task',
             activeUrls: ['/usage-logs/drawing'],
@@ -135,6 +140,11 @@ export function useSidebarData(): SidebarData {
             title: t('Channels'),
             url: '/channels',
             icon: Radio,
+          },
+          {
+            title: t('Channel Monitor'),
+            url: '/channel-monitor',
+            icon: Activity,
           },
           {
             title: t('Channel Balances'),

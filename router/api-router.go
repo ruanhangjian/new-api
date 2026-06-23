@@ -281,6 +281,30 @@ func SetApiRouter(router *gin.Engine) {
 			channelBalanceRoute.PUT("/accounts/:id", controller.UpdateChannelBalanceAccount)
 			channelBalanceRoute.DELETE("/accounts/:id", controller.DeleteChannelBalanceAccount)
 		}
+		channelMonitorRoute := apiRouter.Group("/channel_monitor")
+		channelMonitorRoute.Use(middleware.AdminAuth())
+		{
+			channelMonitorRoute.GET("", controller.ListChannelMonitors)
+			channelMonitorRoute.GET("/", controller.ListChannelMonitors)
+			channelMonitorRoute.GET("/templates", controller.ListChannelMonitorTemplates)
+			channelMonitorRoute.POST("/templates", controller.CreateChannelMonitorTemplate)
+			channelMonitorRoute.PUT("/templates/:id", controller.UpdateChannelMonitorTemplate)
+			channelMonitorRoute.DELETE("/templates/:id", controller.DeleteChannelMonitorTemplate)
+			channelMonitorRoute.POST("", controller.CreateChannelMonitor)
+			channelMonitorRoute.POST("/", controller.CreateChannelMonitor)
+			channelMonitorRoute.GET("/:id", controller.GetChannelMonitor)
+			channelMonitorRoute.PUT("/:id", controller.UpdateChannelMonitor)
+			channelMonitorRoute.DELETE("/:id", controller.DeleteChannelMonitor)
+			channelMonitorRoute.POST("/:id/run", controller.RunChannelMonitor)
+			channelMonitorRoute.GET("/:id/history", controller.GetChannelMonitorHistory)
+		}
+		channelStatusRoute := apiRouter.Group("/channel_status")
+		channelStatusRoute.Use(middleware.UserAuth())
+		{
+			channelStatusRoute.GET("", controller.ListUserChannelStatus)
+			channelStatusRoute.GET("/", controller.ListUserChannelStatus)
+			channelStatusRoute.GET("/:id", controller.GetUserChannelStatusDetail)
+		}
 		tokenRoute := apiRouter.Group("/token")
 		tokenRoute.Use(middleware.UserAuth())
 		{

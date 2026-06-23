@@ -283,6 +283,10 @@ func migrateDB() error {
 		&PerfMetric{},
 		&ChannelBalanceAccount{},
 		&AffiliateRebateSettlement{},
+		&ChannelMonitor{},
+		&ChannelMonitorHistory{},
+		&ChannelMonitorDailyRollup{},
+		&ChannelMonitorTemplate{},
 	)
 	if err != nil {
 		return err
@@ -334,6 +338,10 @@ func migrateDBFast() error {
 		{&PerfMetric{}, "PerfMetric"},
 		{&ChannelBalanceAccount{}, "ChannelBalanceAccount"},
 		{&AffiliateRebateSettlement{}, "AffiliateRebateSettlement"},
+		{&ChannelMonitor{}, "ChannelMonitor"},
+		{&ChannelMonitorHistory{}, "ChannelMonitorHistory"},
+		{&ChannelMonitorDailyRollup{}, "ChannelMonitorDailyRollup"},
+		{&ChannelMonitorTemplate{}, "ChannelMonitorTemplate"},
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大
 	errChan := make(chan error, len(migrations))

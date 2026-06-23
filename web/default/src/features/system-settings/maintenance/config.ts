@@ -66,6 +66,7 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
     log: true,
     midjourney: true,
     task: true,
+    channel_status: true,
   },
   personal: {
     enabled: true,
@@ -75,6 +76,7 @@ export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
   admin: {
     enabled: true,
     channel: true,
+    channel_monitor: true,
     channel_balance: true,
     models: true,
     redemption: true,
