@@ -51,6 +51,24 @@ func mustUnixInLocation(t *testing.T, loc *time.Location, value string) int64 {
 	return parsed.Unix()
 }
 
+func TestCalculateAffiliateRewardFloorsToTwoDecimalPlaces(t *testing.T) {
+	originalQuotaPerUnit := common.QuotaPerUnit
+	t.Cleanup(func() { common.QuotaPerUnit = originalQuotaPerUnit })
+	common.QuotaPerUnit = 500000
+
+	minSettlementQuota := int(0.01 * common.QuotaPerUnit)
+	consumedForOnePointNineSixSevenCentsReward := int(0.9835 * common.QuotaPerUnit)
+
+	reward := calculateAffiliateRewardWithinRemainingCap(
+		consumedForOnePointNineSixSevenCentsReward,
+		0.02,
+		-1,
+		minSettlementQuota,
+	)
+
+	require.Equal(t, int(0.01*common.QuotaPerUnit), reward)
+}
+
 func TestSettleAffiliateRebatesForDateAppliesRatioCapAndMinimum(t *testing.T) {
 	resetAffiliateRebateTables(t)
 	loc := time.FixedZone("CST", 8*60*60)
