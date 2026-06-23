@@ -30,6 +30,8 @@ import {
   Users,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useAuthStore } from '@/stores/auth-store'
+import { getSelf } from '@/lib/api'
 import {
   formatQuota,
   formatTimestampToDate,
@@ -63,9 +65,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getSelf } from '@/lib/api'
 import { generateAffiliateLink } from '@/features/wallet/lib'
-import { useAuthStore } from '@/stores/auth-store'
 import {
   getAffiliateCode,
   getAffiliateRebateOverview,
@@ -235,12 +235,7 @@ export function AffiliateRebate() {
               <div className='mb-2 flex flex-wrap items-center justify-between gap-2'>
                 <div>
                   <p className='text-sm font-medium'>
-                    {t('Today estimated rebate cap progress')}
-                  </p>
-                  <p className='text-muted-foreground text-xs'>
-                    {t('Minimum settlement amount: {{amount}}', {
-                      amount: formatQuota(overview?.min_settlement_quota ?? 0),
-                    })}
+                    {t('Today estimated rebate amount')}
                   </p>
                 </div>
                 <div className='text-right text-sm font-semibold tabular-nums'>
@@ -251,7 +246,7 @@ export function AffiliateRebate() {
               </div>
               <Progress value={progressValue} />
               <p className='text-muted-foreground mt-2 text-xs'>
-                {t('Single-day rebate below {{amount}} will not be settled.', {
+                {t('Single-day rebate below {{amount}} will not be settled', {
                   amount: formatQuota(overview?.min_settlement_quota ?? 0),
                 })}
               </p>
@@ -333,7 +328,7 @@ export function AffiliateRebate() {
               icon={Info}
               title={t('Small amounts are ignored')}
               description={t(
-                'Single-day rebate below {{amount}} will not be settled.',
+                'Single-day rebate below {{amount}} will not be settled',
                 { amount: formatQuota(overview?.min_settlement_quota ?? 0) }
               )}
             />
