@@ -22,6 +22,7 @@ import {
   Key,
   FileText,
   Wallet,
+  HandCoins,
   Box,
   Users,
   Ticket,
@@ -109,6 +110,11 @@ export function useSidebarData(): SidebarData {
             title: t('Wallet'),
             url: '/wallet',
             icon: Wallet,
+          },
+          {
+            title: t('Affiliate Rebate'),
+            url: '/affiliate-rebate',
+            icon: HandCoins,
           },
           {
             title: t('Profile'),

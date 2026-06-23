@@ -443,6 +443,13 @@ export const STATIC_I18N_KEYS = [
   'Has been invalidated',
   'Deleted',
   'Validity',
+
+  // Affiliate rebate dynamic labels
+  'Affiliate Rebate',
+  'Configure continuous invitation rebate settlement',
+  'inactive',
+  'below_minimum',
+  'pending',
   'Actions',
 
   // Sidebar modules

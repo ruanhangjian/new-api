@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { parseCurrencyDisplayType } from '@/lib/currency'
+import { AffiliateRebateSettingsSection } from '../general/affiliate-rebate-settings-section'
 import { CheckinSettingsSection } from '../general/checkin-settings-section'
 import { PricingSection } from '../general/pricing-section'
 import { QuotaSettingsSection } from '../general/quota-settings-section'
@@ -189,6 +190,26 @@ const BILLING_SECTIONS = [
             settings['payment_setting.compliance_terms_version'] ?? '',
           confirmedAt: settings['payment_setting.compliance_confirmed_at'] ?? 0,
           confirmedBy: settings['payment_setting.compliance_confirmed_by'] ?? 0,
+        }}
+      />
+    ),
+  },
+  {
+    id: 'affiliate-rebate',
+    titleKey: 'Affiliate Rebate',
+    descriptionKey: 'Configure continuous invitation rebate settlement',
+    build: (settings: BillingSettings) => (
+      <AffiliateRebateSettingsSection
+        defaultValues={{
+          enabled: settings['affiliate_rebate_setting.enabled'],
+          rate: settings['affiliate_rebate_setting.rate'],
+          dailyCapQuota: settings['affiliate_rebate_setting.daily_cap_quota'],
+          minSettlementQuota:
+            settings['affiliate_rebate_setting.min_settlement_quota'],
+          startTime: settings['affiliate_rebate_setting.start_time'],
+          settlementHour: settings['affiliate_rebate_setting.settlement_hour'],
+          grayEnabled: settings['affiliate_rebate_setting.gray_enabled'],
+          grayUserIds: settings['affiliate_rebate_setting.gray_user_ids'],
         }}
       />
     ),
