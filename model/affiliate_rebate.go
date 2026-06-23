@@ -2,10 +2,10 @@ package model
 
 import (
 	"errors"
-	"math"
 	"sort"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -87,14 +87,25 @@ func calculateAffiliateRewardWithinRemainingCap(consumedQuota int, rate float64,
 	if consumedQuota <= 0 || rate <= 0 {
 		return 0
 	}
-	reward := int(math.Round(float64(consumedQuota) * rate))
+	reward := floorAffiliateRewardToCent(int(float64(consumedQuota) * rate))
 	if remainingCap >= 0 && reward > remainingCap {
-		reward = remainingCap
+		reward = floorAffiliateRewardToCent(remainingCap)
 	}
 	if minSettlementQuota > 0 && reward < minSettlementQuota {
 		return 0
 	}
 	return reward
+}
+
+func floorAffiliateRewardToCent(rewardQuota int) int {
+	if rewardQuota <= 0 {
+		return 0
+	}
+	centQuota := int(common.QuotaPerUnit / 100)
+	if centQuota <= 0 {
+		return rewardQuota
+	}
+	return rewardQuota / centQuota * centQuota
 }
 
 func getInviteeBases(inviterId int) ([]affiliateInviteeBase, error) {
