@@ -104,6 +104,14 @@ const defaultBillingSettings: BillingSettings = {
   'checkin_setting.enabled': false,
   'checkin_setting.min_quota': 1000,
   'checkin_setting.max_quota': 10000,
+  'affiliate_rebate_setting.enabled': false,
+  'affiliate_rebate_setting.rate': 0.02,
+  'affiliate_rebate_setting.daily_cap_quota': 25000000,
+  'affiliate_rebate_setting.min_settlement_quota': 5000,
+  'affiliate_rebate_setting.start_time': 0,
+  'affiliate_rebate_setting.settlement_hour': 2,
+  'affiliate_rebate_setting.gray_enabled': false,
+  'affiliate_rebate_setting.gray_user_ids': '',
 }
 
 export function BillingSettings() {

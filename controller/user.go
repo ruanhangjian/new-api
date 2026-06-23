@@ -332,11 +332,19 @@ type TransferAffQuotaRequest struct {
 }
 
 func TransferAffQuota(c *gin.Context) {
+	id := c.GetInt("id")
+	if !model.CanUseAffiliateRebate(id) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "no permission",
+		})
+		return
+	}
+
 	if !requirePaymentCompliance(c) {
 		return
 	}
 
-	id := c.GetInt("id")
 	user, err := model.GetUserById(id, true)
 	if err != nil {
 		common.ApiError(c, err)
@@ -392,7 +400,7 @@ func GetSelf(c *gin.Context) {
 	user.Remark = ""
 
 	// 计算用户权限信息
-	permissions := calculateUserPermissions(userRole)
+	permissions := calculateUserPermissions(userRole, id)
 
 	// 获取用户设置并提取sidebar_modules
 	userSetting := user.GetSetting()
@@ -435,8 +443,9 @@ func GetSelf(c *gin.Context) {
 }
 
 // 计算用户权限的辅助函数
-func calculateUserPermissions(userRole int) map[string]interface{} {
+func calculateUserPermissions(userRole int, userId int) map[string]interface{} {
 	permissions := map[string]interface{}{}
+	permissions["affiliate_rebate"] = model.CanUseAffiliateRebate(userId)
 
 	// 根据用户角色计算权限
 	if userRole == common.RoleRootUser {
@@ -485,9 +494,10 @@ func generateDefaultSidebarConfig(userRole int) string {
 
 	// 个人中心区域 - 所有用户都可以访问
 	defaultConfig["personal"] = map[string]interface{}{
-		"enabled":  true,
-		"topup":    true,
-		"personal": true,
+		"enabled":          true,
+		"topup":            true,
+		"affiliate_rebate": true,
+		"personal":         true,
 	}
 
 	// 管理员区域 - 根据角色决定

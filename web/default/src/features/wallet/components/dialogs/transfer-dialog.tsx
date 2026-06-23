@@ -39,6 +39,7 @@ interface TransferDialogProps {
   onConfirm: (amount: number) => Promise<boolean>
   availableQuota: number
   transferring: boolean
+  defaultAmount?: number
 }
 
 export function TransferDialog({
@@ -47,16 +48,17 @@ export function TransferDialog({
   onConfirm,
   availableQuota,
   transferring,
+  defaultAmount = QUOTA_PER_DOLLAR,
 }: TransferDialogProps) {
   const { t } = useTranslation()
-  const [amount, setAmount] = useState(QUOTA_PER_DOLLAR)
+  const [amount, setAmount] = useState(defaultAmount)
 
   useEffect(() => {
     if (open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setAmount(QUOTA_PER_DOLLAR)
+      setAmount(defaultAmount)
     }
-  }, [open])
+  }, [defaultAmount, open])
 
   const handleConfirm = async () => {
     const success = await onConfirm(amount)
