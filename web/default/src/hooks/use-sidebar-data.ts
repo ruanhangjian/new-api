@@ -34,6 +34,7 @@ import {
   MessageSquare,
   CreditCard,
   ListTodo,
+  ServerCog,
   Settings,
   WalletCards,
   ShieldCheck,
@@ -43,6 +44,7 @@ import { WORKSPACE_IDS } from '@/components/layout/lib/workspace-registry'
 import { type SidebarData } from '@/components/layout/types'
 import { getAffiliateRebateOverviewSilent } from '@/features/affiliate-rebate/api'
 import { getEnterpriseCdkPermission } from '@/features/enterprise-cdk/api'
+import { ROLE } from '@/lib/roles'
 
 const DEFAULT_AFFILIATE_REBATE_RATE = 0.02
 
@@ -227,6 +229,12 @@ export function useSidebarData(): SidebarData {
             title: t('Subscriptions'),
             url: '/subscriptions',
             icon: CreditCard,
+          },
+          {
+            title: t('System Info'),
+            url: '/system-info',
+            icon: ServerCog,
+            requiredRole: ROLE.SUPER_ADMIN,
           },
           {
             title: t('System Settings'),
