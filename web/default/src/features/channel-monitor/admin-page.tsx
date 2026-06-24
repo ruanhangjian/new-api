@@ -1068,7 +1068,6 @@ export function ChannelMonitorAdminPage() {
             </div>
           </CardContent>
         </Card>
-      </SectionPageLayout.Content>
 
       <MonitorDialog
         monitor={editing}
@@ -1092,6 +1091,7 @@ export function ChannelMonitorAdminPage() {
           if (deleteTarget) deleteMutation.mutate(deleteTarget)
         }}
       />
+      </SectionPageLayout.Content>
     </SectionPageLayout>
   )
 }
