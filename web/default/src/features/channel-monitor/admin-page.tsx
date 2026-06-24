@@ -11,8 +11,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { SectionPageLayout } from '@/components/layout'
-import { ConfirmDialog } from '@/components/confirm-dialog'
+import { formatTimestampToDate } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -49,7 +48,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
-import { formatTimestampToDate } from '@/lib/format'
+import { ConfirmDialog } from '@/components/confirm-dialog'
+import { SectionPageLayout } from '@/components/layout'
 import {
   channelMonitorsQueryKey,
   createChannelMonitor,
@@ -197,7 +197,9 @@ function buildMonitorPayload(
   return payload
 }
 
-function buildTemplateForm(template: ChannelMonitorTemplate | null): TemplateFormState {
+function buildTemplateForm(
+  template: ChannelMonitorTemplate | null
+): TemplateFormState {
   if (!template) return emptyTemplateForm
   return {
     name: template.name,
@@ -258,7 +260,9 @@ function MonitorDialog({
     onSuccess: async (response) => {
       if (response.success) {
         toast.success(t('Saved successfully'))
-        await queryClient.invalidateQueries({ queryKey: channelMonitorsQueryKey })
+        await queryClient.invalidateQueries({
+          queryKey: channelMonitorsQueryKey,
+        })
         onOpenChange(false)
       }
     },
@@ -272,7 +276,9 @@ function MonitorDialog({
             {isEdit ? t('Edit channel monitor') : t('Add channel monitor')}
           </DialogTitle>
           <DialogDescription>
-            {t('Monitor upstream availability, latency, endpoint ping, and model health.')}
+            {t(
+              'Monitor upstream availability, latency, endpoint ping, and model health.'
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -282,7 +288,9 @@ function MonitorDialog({
               <Label>{t('Name')}</Label>
               <Input
                 value={form.name}
-                onChange={(event) => setForm({ ...form, name: event.target.value })}
+                onChange={(event) =>
+                  setForm({ ...form, name: event.target.value })
+                }
                 placeholder='gpt-Pro'
               />
             </div>
@@ -296,7 +304,8 @@ function MonitorDialog({
                   setForm({
                     ...form,
                     provider: value,
-                    api_mode: value === 'openai' ? form.api_mode : 'chat_completions',
+                    api_mode:
+                      value === 'openai' ? form.api_mode : 'chat_completions',
                   })
                 }}
               >
@@ -331,7 +340,11 @@ function MonitorDialog({
               />
             </div>
             <div className='grid gap-2'>
-              <Label>{isEdit ? t('API Key (leave blank to keep unchanged)') : t('API Key')}</Label>
+              <Label>
+                {isEdit
+                  ? t('API Key (leave blank to keep unchanged)')
+                  : t('API Key')}
+              </Label>
               <Input
                 value={form.api_key}
                 onChange={(event) =>
@@ -406,10 +419,12 @@ function MonitorDialog({
                   setForm({
                     ...form,
                     template_id: value,
-                    extra_headers: selected?.extra_headers ?? form.extra_headers,
+                    extra_headers:
+                      selected?.extra_headers ?? form.extra_headers,
                     body_override_mode:
                       selected?.body_override_mode ?? form.body_override_mode,
-                    body_override: selected?.body_override ?? form.body_override,
+                    body_override:
+                      selected?.body_override ?? form.body_override,
                   })
                 }}
               >
@@ -506,7 +521,9 @@ function MonitorDialog({
             </div>
             <Switch
               checked={form.enabled}
-              onCheckedChange={(checked) => setForm({ ...form, enabled: checked })}
+              onCheckedChange={(checked) =>
+                setForm({ ...form, enabled: checked })
+              }
             />
           </div>
         </div>
@@ -585,7 +602,9 @@ function TemplateManagerDialog({
         <DialogHeader>
           <DialogTitle>{t('Template management')}</DialogTitle>
           <DialogDescription>
-            {t('Templates snapshot request headers and body override settings.')}
+            {t(
+              'Templates snapshot request headers and body override settings.'
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -599,7 +618,9 @@ function TemplateManagerDialog({
             <CardContent className='grid gap-3'>
               <Input
                 value={form.name}
-                onChange={(event) => setForm({ ...form, name: event.target.value })}
+                onChange={(event) =>
+                  setForm({ ...form, name: event.target.value })
+                }
                 placeholder={t('Template name')}
               />
               <div className='grid gap-2 sm:grid-cols-2'>
@@ -721,7 +742,9 @@ function TemplateManagerDialog({
               <TableBody>
                 {templates.map((template) => (
                   <TableRow key={template.id}>
-                    <TableCell className='font-medium'>{template.name}</TableCell>
+                    <TableCell className='font-medium'>
+                      {template.name}
+                    </TableCell>
                     <TableCell>
                       <ProviderBadge provider={template.provider} />
                     </TableCell>
@@ -787,11 +810,18 @@ export function ChannelMonitorAdminPage() {
 
   const runMutation = useMutation({
     mutationFn: runChannelMonitor,
+    onMutate: () => {
+      toast.info(t('Check started'))
+    },
     onSuccess: async (response) => {
       if (response.success) {
         toast.success(t('Check completed'))
-        await queryClient.invalidateQueries({ queryKey: channelMonitorsQueryKey })
+      } else {
+        toast.error(response.message || t('Check failed'))
       }
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: channelMonitorsQueryKey })
     },
   })
 
@@ -814,7 +844,9 @@ export function ChannelMonitorAdminPage() {
       }),
     onSuccess: async (response) => {
       if (response.success) {
-        await queryClient.invalidateQueries({ queryKey: channelMonitorsQueryKey })
+        await queryClient.invalidateQueries({
+          queryKey: channelMonitorsQueryKey,
+        })
       }
     },
   })
@@ -824,7 +856,9 @@ export function ChannelMonitorAdminPage() {
     onSuccess: async (response) => {
       if (response.success) {
         toast.success(t('Deleted successfully'))
-        await queryClient.invalidateQueries({ queryKey: channelMonitorsQueryKey })
+        await queryClient.invalidateQueries({
+          queryKey: channelMonitorsQueryKey,
+        })
         setDeleteTarget(null)
       }
     },
@@ -839,7 +873,12 @@ export function ChannelMonitorAdminPage() {
       <SectionPageLayout.Actions>
         <Button
           variant='outline'
-          onClick={() => queryClient.invalidateQueries({ queryKey: channelMonitorsQueryKey })}
+          onClick={async () => {
+            await queryClient.invalidateQueries({
+              queryKey: channelMonitorsQueryKey,
+            })
+            toast.success(t('Refreshed'))
+          }}
         >
           <RefreshCw className='size-4' />
           {t('Refresh')}
@@ -941,67 +980,80 @@ export function ChannelMonitorAdminPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {monitors.map((monitor) => (
-                    <TableRow key={monitor.id}>
-                      <TableCell className='font-medium'>
-                        <div className='flex flex-col'>
-                          <span>{monitor.name}</span>
-                          <span className='text-muted-foreground text-xs'>
-                            {monitor.last_checked_at
-                              ? formatTimestampToDate(monitor.last_checked_at)
-                              : t('Not checked')}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <ProviderBadge provider={monitor.provider} />
-                      </TableCell>
-                      <TableCell>
-                        <div className='flex items-center gap-2'>
-                          <span>{monitor.primary_model}</span>
-                          <StatusBadge status={monitor.primary_status} />
-                        </div>
-                      </TableCell>
-                      <TableCell>{formatAvailability(monitor.availability_7d)}</TableCell>
-                      <TableCell>{monitor.primary_latency_ms || '--'}</TableCell>
-                      <TableCell>
-                        <Switch
-                          checked={monitor.enabled}
-                          onCheckedChange={() => toggleMutation.mutate(monitor)}
-                        />
-                      </TableCell>
-                      <TableCell className='text-right'>
-                        <Button
-                          variant='ghost'
-                          size='icon-sm'
-                          onClick={() => runMutation.mutate(monitor.id)}
-                          disabled={runMutation.isPending}
-                          title={t('Run check now')}
-                        >
-                          <RotateCw className='size-4' />
-                        </Button>
-                        <Button
-                          variant='ghost'
-                          size='icon-sm'
-                          onClick={() => {
-                            setEditing(monitor)
-                            setDialogOpen(true)
-                          }}
-                          title={t('Edit')}
-                        >
-                          <Edit className='size-4' />
-                        </Button>
-                        <Button
-                          variant='ghost'
-                          size='icon-sm'
-                          onClick={() => setDeleteTarget(monitor)}
-                          title={t('Delete')}
-                        >
-                          <Trash2 className='size-4' />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {monitors.map((monitor) => {
+                    const isRunning =
+                      runMutation.isPending &&
+                      runMutation.variables === monitor.id
+                    return (
+                      <TableRow key={monitor.id}>
+                        <TableCell className='font-medium'>
+                          <div className='flex flex-col'>
+                            <span>{monitor.name}</span>
+                            <span className='text-muted-foreground text-xs'>
+                              {monitor.last_checked_at
+                                ? formatTimestampToDate(monitor.last_checked_at)
+                                : t('Not checked')}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <ProviderBadge provider={monitor.provider} />
+                        </TableCell>
+                        <TableCell>
+                          <div className='flex items-center gap-2'>
+                            <span>{monitor.primary_model}</span>
+                            <StatusBadge status={monitor.primary_status} />
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {formatAvailability(monitor.availability_7d)}
+                        </TableCell>
+                        <TableCell>
+                          {monitor.primary_latency_ms || '--'}
+                        </TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={monitor.enabled}
+                            onCheckedChange={() =>
+                              toggleMutation.mutate(monitor)
+                            }
+                          />
+                        </TableCell>
+                        <TableCell className='text-right'>
+                          <Button
+                            variant='ghost'
+                            size='icon-sm'
+                            onClick={() => runMutation.mutate(monitor.id)}
+                            disabled={isRunning}
+                            title={t('Run check now')}
+                          >
+                            <RotateCw
+                              className={`size-4 ${isRunning ? 'animate-spin' : ''}`}
+                            />
+                          </Button>
+                          <Button
+                            variant='ghost'
+                            size='icon-sm'
+                            onClick={() => {
+                              setEditing(monitor)
+                              setDialogOpen(true)
+                            }}
+                            title={t('Edit')}
+                          >
+                            <Edit className='size-4' />
+                          </Button>
+                          <Button
+                            variant='ghost'
+                            size='icon-sm'
+                            onClick={() => setDeleteTarget(monitor)}
+                            title={t('Delete')}
+                          >
+                            <Trash2 className='size-4' />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
                   {!monitors.length && (
                     <TableRow>
                       <TableCell colSpan={7} className='h-24 text-center'>

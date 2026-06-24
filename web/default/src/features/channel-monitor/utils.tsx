@@ -1,8 +1,18 @@
-import { Activity, AlertTriangle, CheckCircle2, CircleSlash, Zap } from 'lucide-react'
+import {
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  CircleSlash,
+  Zap,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { getLobeIcon } from '@/lib/lobe-icon'
 import { cn } from '@/lib/utils'
-import type { ChannelMonitorProvider, ChannelMonitorStatus } from './types'
+import type {
+  ChannelMonitorProvider,
+  ChannelMonitorStatus,
+  ChannelMonitorTimelinePoint,
+} from './types'
 
 export const providerOptions: Array<{
   value: ChannelMonitorProvider
@@ -15,12 +25,15 @@ export const providerOptions: Array<{
 ]
 
 export function getProviderLabel(provider: string) {
-  return providerOptions.find((item) => item.value === provider)?.label || provider
+  return (
+    providerOptions.find((item) => item.value === provider)?.label || provider
+  )
 }
 
 export function getProviderIcon(provider: string, size = 22) {
   const iconName =
-    providerOptions.find((item) => item.value === provider)?.icon || 'OpenAI.Color'
+    providerOptions.find((item) => item.value === provider)?.icon ||
+    'OpenAI.Color'
   return getLobeIcon(iconName, size)
 }
 
@@ -61,12 +74,65 @@ export function getTimelineClassName(status: ChannelMonitorStatus | '') {
     case 'degraded':
       return 'bg-amber-500'
     case 'failed':
-      return 'bg-rose-500'
     case 'error':
       return 'bg-red-500'
     default:
-      return 'bg-muted'
+      return 'bg-muted dark:bg-muted/50'
   }
+}
+
+export type TimelineBar = {
+  status: ChannelMonitorStatus | 'empty'
+  className: string
+  heightPercent: number
+  title: string
+  point: ChannelMonitorTimelinePoint | null
+}
+
+const timelineHeightByStatus: Record<TimelineBar['status'], number> = {
+  operational: 100,
+  degraded: 65,
+  failed: 35,
+  error: 35,
+  empty: 15,
+}
+
+export function buildTimelineBars(
+  points: ChannelMonitorTimelinePoint[],
+  length = 60
+): TimelineBar[] {
+  const normalizedLength = Math.max(1, length)
+  const visible = [...points]
+    .sort((left, right) => left.checked_at - right.checked_at)
+    .slice(-normalizedLength)
+  const missing = Math.max(0, normalizedLength - visible.length)
+  const emptyBars = Array.from(
+    { length: missing },
+    (): TimelineBar => ({
+      status: 'empty',
+      className: getTimelineClassName(''),
+      heightPercent: timelineHeightByStatus.empty,
+      title: '',
+      point: null,
+    })
+  )
+  const dataBars = visible.map(
+    (point): TimelineBar => ({
+      status: point.status,
+      className: getTimelineClassName(point.status),
+      heightPercent:
+        timelineHeightByStatus[point.status] ?? timelineHeightByStatus.empty,
+      title: `${point.status} · ${point.latency_ms}ms`,
+      point,
+    })
+  )
+  return [...emptyBars, ...dataBars]
+}
+
+export function getAvailabilityColor(value: number) {
+  const normalized = Math.max(0, Math.min(100, value || 0))
+  const hue = normalized * 1.2
+  return `hsl(${hue} 72% 42%)`
 }
 
 export function getStatusIcon(status: ChannelMonitorStatus | '') {
@@ -118,9 +184,20 @@ export function StatusBadge({
   )
 }
 
-export function ProviderBadge({ provider }: { provider: string }) {
+export function ProviderBadge({
+  provider,
+  className,
+}: {
+  provider: string
+  className?: string
+}) {
   return (
-    <span className='inline-flex h-5 items-center rounded-md bg-emerald-500/10 px-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-300'>
+    <span
+      className={cn(
+        'inline-flex h-5 items-center rounded-md bg-emerald-500/10 px-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-300',
+        className
+      )}
+    >
       {getProviderLabel(provider)}
     </span>
   )
@@ -128,5 +205,5 @@ export function ProviderBadge({ provider }: { provider: string }) {
 
 export function MetricIcon({ type }: { type: 'latency' | 'ping' }) {
   const Icon = type === 'latency' ? Zap : Activity
-  return <Icon className='size-3.5 text-muted-foreground' />
+  return <Icon className='text-muted-foreground size-3.5' />
 }
