@@ -23,7 +23,6 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
-import dayjs from '@/lib/dayjs'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   AlertDialog,
@@ -750,7 +749,10 @@ export function PerformanceSection(props: Props) {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
-                <AlertDialogAction onClick={clearDiskCache}>
+                <AlertDialogAction
+                  variant='destructive'
+                  onClick={clearDiskCache}
+                >
                   {t('Confirm')}
                 </AlertDialogAction>
               </AlertDialogFooter>

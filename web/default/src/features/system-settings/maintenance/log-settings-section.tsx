@@ -214,14 +214,15 @@ export function LogSettingsSection({
   )
   const logCleanupProcessed = logCleanupState?.processed ?? 0
   const logCleanupTotal = logCleanupState?.total ?? 0
+  const logCleanupTaskId = logCleanupTask?.task_id
 
   useEffect(() => {
-    if (!logCleanupTask || !isActiveLogCleanupTask(logCleanupTask)) return
+    if (!logCleanupTaskId || !logCleanupActive) return
 
     let cancelled = false
     const interval = window.setInterval(async () => {
       try {
-        const res = await getSystemTask(logCleanupTask.task_id)
+        const res = await getSystemTask(logCleanupTaskId)
         if (cancelled || !res.success || !res.data) return
 
         setLogCleanupTask(res.data)
@@ -247,7 +248,7 @@ export function LogSettingsSection({
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [logCleanupTask?.task_id, logCleanupTask?.status, t])
+  }, [logCleanupActive, logCleanupTaskId, t])
 
   const onSubmit = async (values: LogSettingsFormValues) => {
     if (values.LogConsumeEnabled === defaultEnabled) return
@@ -410,6 +411,7 @@ export function LogSettingsSection({
               {t('Cancel')}
             </AlertDialogCancel>
             <AlertDialogAction
+              variant='destructive'
               onClick={handleCleanLogs}
               disabled={isStartingLogCleanup}
             >
