@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth-store'
-import { Markdown } from '@/components/ui/markdown'
+import { RichContent } from '@/components/rich-content'
 import { PublicLayout } from '@/components/layout'
 import { Footer } from '@/components/layout/components/footer'
 import {
@@ -49,20 +49,25 @@ export function Home() {
   }
 
   if (content) {
+    if (isUrl) {
+      return (
+        <PublicLayout showMainContainer={false}>
+          <iframe
+            src={content}
+            className='h-screen w-full border-none'
+            title={t('Custom Home Page')}
+            sandbox='allow-forms allow-popups allow-popups-to-escape-sandbox allow-scripts'
+          />
+        </PublicLayout>
+      )
+    }
+
     return (
       <PublicLayout showMainContainer={false} autoOpenNotifications>
         <main className='overflow-x-hidden'>
-          {isUrl ? (
-            <iframe
-              src={content}
-              className='h-screen w-full border-none'
-              title={t('Custom Home Page')}
-            />
-          ) : (
-            <div className='container mx-auto py-8'>
-              <Markdown className='custom-home-content'>{content}</Markdown>
-            </div>
-          )}
+          <div className='container mx-auto py-8'>
+            <RichContent content={content} className='custom-home-content' />
+          </div>
         </main>
       </PublicLayout>
     )
