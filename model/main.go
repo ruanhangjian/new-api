@@ -297,6 +297,8 @@ func migrateDB() error {
 		&SystemInstance{},
 		&SystemTask{},
 		&SystemTaskLock{},
+		&CasbinRule{},
+		&AuthzRole{},
 		&ChannelBalanceAccount{},
 		&AffiliateRebateSettlement{},
 		&ChannelMonitor{},

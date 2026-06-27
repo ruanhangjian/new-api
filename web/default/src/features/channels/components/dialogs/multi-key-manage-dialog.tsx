@@ -21,6 +21,12 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Loader2, RefreshCw, Trash2, Power, PowerOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import {
+  ADMIN_PERMISSION_ACTIONS,
+  ADMIN_PERMISSION_RESOURCES,
+  hasPermission,
+} from '@/lib/admin-permissions'
+import { useAuthStore } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -69,6 +75,12 @@ export function MultiKeyManageDialog({
   const { t } = useTranslation()
   const { currentRow } = useChannels()
   const queryClient = useQueryClient()
+  const currentUser = useAuthStore((s) => s.auth.user)
+  const canEditSensitive = hasPermission(
+    currentUser,
+    ADMIN_PERMISSION_RESOURCES.CHANNEL,
+    ADMIN_PERMISSION_ACTIONS.SENSITIVE_WRITE
+  )
 
   // Data state
   const [isLoading, setIsLoading] = useState(false)
@@ -146,6 +158,14 @@ export function MultiKeyManageDialog({
 
   const performAction = async () => {
     if (!confirmAction || !currentRow) return
+    if (
+      !canEditSensitive &&
+      (confirmAction.type === 'delete' ||
+        confirmAction.type === 'delete-disabled')
+    ) {
+      setConfirmAction(null)
+      return
+    }
 
     setIsPerformingAction(true)
     try {
@@ -329,7 +349,16 @@ export function MultiKeyManageDialog({
                 <Button
                   variant='destructive'
                   size='sm'
-                  onClick={() => setConfirmAction({ type: 'delete-disabled' })}
+                  onClick={() => {
+                    if (!canEditSensitive) return
+                    setConfirmAction({ type: 'delete-disabled' })
+                  }}
+                  disabled={!canEditSensitive}
+                  title={
+                    canEditSensitive
+                      ? undefined
+                      : t('No permission to perform this action')
+                  }
                 >
                   <Trash2 className='mr-2 h-4 w-4' />
                   {t('Delete Auto-Disabled')}
@@ -337,6 +366,11 @@ export function MultiKeyManageDialog({
               )}
             </div>
           </div>
+          {!canEditSensitive && (
+            <p className='text-muted-foreground text-xs'>
+              {t('No permission to perform this action')}
+            </p>
+          )}
 
           {/* Table */}
           <div className='min-h-0 flex-1 overflow-auto rounded-md border'>
@@ -390,6 +424,7 @@ export function MultiKeyManageDialog({
                       <MultiKeyTableRowActions
                         keyIndex={key.index}
                         status={key.status}
+                        canDelete={canEditSensitive}
                         onAction={setConfirmAction}
                       />
                     ),
