@@ -17,10 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
-import { useAuthStore } from '@/stores/auth-store'
-import { RichContent } from '@/components/rich-content'
+
 import { PublicLayout } from '@/components/layout'
 import { Footer } from '@/components/layout/components/footer'
+import { RichContent } from '@/components/rich-content'
+import { isLikelyHtml } from '@/lib/content-format'
+import { useAuthStore } from '@/stores/auth-store'
+
 import {
   AppIntegrations,
   ContactCTA,
@@ -66,7 +69,11 @@ export function Home() {
       <PublicLayout showMainContainer={false} autoOpenNotifications>
         <main className='overflow-x-hidden'>
           <div className='container mx-auto py-8'>
-            <RichContent content={content} className='custom-home-content' />
+            <RichContent
+              mode={isLikelyHtml(content) ? 'html' : 'markdown'}
+              content={content}
+              className='custom-home-content'
+            />
           </div>
         </main>
       </PublicLayout>
