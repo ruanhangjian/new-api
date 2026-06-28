@@ -21,6 +21,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   ArrowRightLeft,
   CalendarDays,
+  ChevronRight,
   Copy,
   Gift,
   Info,
@@ -28,8 +29,10 @@ import {
   Share2,
   TrendingUp,
   Users,
+  Wallet,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
 import { getSelf } from '@/lib/api'
 import {
@@ -48,6 +51,13 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import {
   Sheet,
@@ -68,6 +78,7 @@ import {
 import { generateAffiliateLink } from '@/features/wallet/lib'
 import {
   getAffiliateCode,
+  getAffiliateRebateDailySettlements,
   getAffiliateRebateOverview,
   getAffiliateRebateSettlements,
   transferAffiliateQuota,
@@ -76,12 +87,28 @@ import {
   canTransferAffiliateReward,
   getDefaultAffiliateTransferAmount,
 } from './transfer'
+import {
+  buildAffiliateRebateTrend,
+  getAffiliateRebateTrendBarHeight,
+} from './trend'
 import type {
   AffiliateInviteeSummary,
+  AffiliateRebateDailySettlement,
   AffiliateRebateSettlement,
 } from './types'
 
 type InviteeFilter = 'all' | 'active'
+
+const SHARE_COPY_KEYS = [
+  'I use ZhiLian AI for stable multi-model API access, transparent quota, and no inflated usage. Register with my invite link: {{link}}',
+  'Recommended: ZhiLian AI supports multiple models, stable API forwarding, and clear quota billing. My invite link: {{link}}',
+  'ZhiLian AI has been stable for my model API usage, with practical quota and support for mainstream models. Register here: {{link}}',
+  'If you need a stable AI API platform with clear quota and multiple model options, try ZhiLian AI: {{link}}',
+  'ZhiLian AI supports GPT, Claude, and other models. The API is stable and the quota is straightforward. Invite link: {{link}}',
+  'I recommend ZhiLian AI for daily AI API usage: stable service, transparent billing, and multiple models. {{link}}',
+  'I am using ZhiLian AI for multi-model API access. It is stable and the quota feels solid. Register with my link: {{link}}',
+  'ZhiLian AI supports multiple models with stable routing and clear quota, no inflated numbers. Invite link: {{link}}',
+] as const
 
 function formatRate(rate: number): string {
   if (!Number.isFinite(rate)) return '-'
@@ -103,17 +130,15 @@ function getStatusBadgeVariant(status: AffiliateInviteeSummary['status']) {
   return 'secondary'
 }
 
-function buildLastSevenDays(
-  rows: AffiliateRebateSettlement[]
-): AffiliateRebateSettlement[] {
-  return [...rows].reverse().slice(-7)
-}
-
 export function AffiliateRebate() {
   const { t } = useTranslation()
   const { copyToClipboard } = useCopyToClipboard()
+  const user = useAuthStore((state) => state.auth.user)
   const [transferring, setTransferring] = useState(false)
   const [filter, setFilter] = useState<InviteeFilter>('all')
+  const [settledDialogOpen, setSettledDialogOpen] = useState(false)
+  const [shareDialogOpen, setShareDialogOpen] = useState(false)
+  const [shareMessage, setShareMessage] = useState('')
   const [selectedInvitee, setSelectedInvitee] =
     useState<AffiliateInviteeSummary | null>(null)
 
@@ -129,6 +154,11 @@ export function AffiliateRebate() {
     queryKey: ['affiliate-rebate-settlements', selectedInvitee?.user_id],
     queryFn: () => getAffiliateRebateSettlements(selectedInvitee!.user_id, 14),
     enabled: selectedInvitee != null,
+  })
+  const dailySettlementsQuery = useQuery({
+    queryKey: ['affiliate-rebate-settlements-daily'],
+    queryFn: () => getAffiliateRebateDailySettlements(30),
+    enabled: settledDialogOpen,
   })
 
   const overview = overviewQuery.data?.data
@@ -159,6 +189,29 @@ export function AffiliateRebate() {
     }
   }
 
+  const generateShareMessage = () => {
+    if (!inviteLink) return
+    const messages = SHARE_COPY_KEYS.map((key) => t(key, { link: inviteLink }))
+    const pool = messages.filter((message) => message !== shareMessage)
+    const candidates = pool.length > 0 ? pool : messages
+    const next = candidates[Math.floor(Math.random() * candidates.length)]
+    setShareMessage(next)
+  }
+
+  const handleOpenShareDialog = () => {
+    if (!inviteLink) return
+    const messages = SHARE_COPY_KEYS.map((key) => t(key, { link: inviteLink }))
+    const next = messages[Math.floor(Math.random() * messages.length)]
+    setShareMessage(next)
+    setShareDialogOpen(true)
+  }
+
+  const handleCopyShareMessage = () => {
+    if (shareMessage) {
+      copyToClipboard(shareMessage)
+    }
+  }
+
   const handleTransfer = async () => {
     const availableQuota = overview?.pending_reward_quota ?? 0
     if (!canTransferAffiliateReward(availableQuota)) return
@@ -175,6 +228,7 @@ export function AffiliateRebate() {
       if (selfResponse.success && selfResponse.data) {
         useAuthStore.getState().auth.setUser(selfResponse.data)
       }
+      toast.success(t('Affiliate rewards transferred to balance'))
     } finally {
       setTransferring(false)
     }
@@ -223,6 +277,8 @@ export function AffiliateRebate() {
                 label={t('Total settled rebate')}
                 value={formatQuota(overview?.total_reward_quota ?? 0)}
                 icon={TrendingUp}
+                hint={t('View details')}
+                onClick={() => setSettledDialogOpen(true)}
               />
               <MetricCard
                 label={t('Invited users')}
@@ -252,21 +308,27 @@ export function AffiliateRebate() {
               </p>
             </div>
 
-            <div className='bg-background/80 flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center'>
+            <div className='bg-background/80 flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:items-center'>
               <div className='min-w-0 flex-1'>
                 <p className='text-sm font-medium'>{t('Your Referral Link')}</p>
                 <p className='text-muted-foreground truncate text-xs'>
                   {inviteLink || t('Generating invite link...')}
                 </p>
               </div>
-              <Button
-                className='sm:self-stretch'
-                onClick={handleCopyLink}
-                disabled={!inviteLink}
-              >
-                <Copy />
-                {t('Copy')}
-              </Button>
+              <div className='flex flex-col gap-2 sm:flex-row sm:self-stretch'>
+                <Button onClick={handleCopyLink} disabled={!inviteLink}>
+                  <Copy />
+                  {t('Copy invite link')}
+                </Button>
+                <Button
+                  variant='outline'
+                  onClick={handleOpenShareDialog}
+                  disabled={!inviteLink}
+                >
+                  <Share2 />
+                  {t('Generate share copy')}
+                </Button>
+              </div>
             </div>
 
             <div className='bg-background/80 flex flex-col gap-3 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between'>
@@ -276,7 +338,7 @@ export function AffiliateRebate() {
                   {t('Move affiliate rewards to your main balance')}
                 </p>
               </div>
-              <div className='flex items-center gap-3'>
+              <div className='flex flex-col gap-3 sm:flex-row sm:items-center'>
                 <div className='text-right'>
                   <p className='text-muted-foreground text-xs'>
                     {t('Pending rebate')}
@@ -297,6 +359,15 @@ export function AffiliateRebate() {
                   <ArrowRightLeft />
                   {t('Transfer to Balance')}
                 </Button>
+                <div className='text-right'>
+                  <p className='text-muted-foreground flex items-center justify-end gap-1 text-xs'>
+                    <Wallet className='size-3.5' />
+                    {t('Current Balance')}
+                  </p>
+                  <p className='text-base font-semibold tabular-nums'>
+                    {formatQuota(user?.quota ?? 0)}
+                  </p>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -443,6 +514,19 @@ export function AffiliateRebate() {
           if (!open) setSelectedInvitee(null)
         }}
       />
+      <SettledRebateDialog
+        open={settledDialogOpen}
+        rows={dailySettlementsQuery.data?.data ?? []}
+        loading={dailySettlementsQuery.isLoading}
+        onOpenChange={setSettledDialogOpen}
+      />
+      <ShareCopyDialog
+        open={shareDialogOpen}
+        message={shareMessage}
+        onOpenChange={setShareDialogOpen}
+        onRegenerate={generateShareMessage}
+        onCopy={handleCopyShareMessage}
+      />
     </div>
   )
 }
@@ -451,17 +535,45 @@ function MetricCard(props: {
   label: string
   value: string
   icon: ElementType
+  hint?: string
+  onClick?: () => void
 }) {
   const Icon = props.icon
-  return (
-    <div className='bg-background/70 rounded-xl border p-3'>
+  const content = (
+    <>
       <div className='flex items-center justify-between gap-2'>
         <p className='text-muted-foreground text-xs'>{props.label}</p>
-        <Icon className='text-primary size-4' />
+        <div className='flex items-center gap-1'>
+          {props.hint ? (
+            <span className='text-muted-foreground text-[11px] font-medium'>
+              {props.hint}
+            </span>
+          ) : null}
+          <Icon className='text-primary size-4' />
+          {props.onClick ? (
+            <ChevronRight className='text-muted-foreground size-3.5' />
+          ) : null}
+        </div>
       </div>
       <p className='mt-2 truncate text-xl font-semibold tabular-nums'>
         {props.value}
       </p>
+    </>
+  )
+  if (props.onClick) {
+    return (
+      <button
+        type='button'
+        className='bg-background/70 hover:border-primary/60 hover:bg-primary/5 focus-visible:ring-ring w-full rounded-xl border p-3 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none'
+        onClick={props.onClick}
+      >
+        {content}
+      </button>
+    )
+  }
+  return (
+    <div className='bg-background/70 rounded-xl border p-3'>
+      {content}
     </div>
   )
 }
@@ -495,8 +607,8 @@ function InviteeDetailSheet(props: {
   onOpenChange: (open: boolean) => void
 }) {
   const { t } = useTranslation()
-  const trendRows = buildLastSevenDays(props.rows)
-  const maxReward = Math.max(1, ...trendRows.map((row) => row.reward_quota))
+  const trendRows = buildAffiliateRebateTrend(props.rows)
+  const maxReward = Math.max(0, ...trendRows.map((row) => row.rewardQuota))
 
   return (
     <Sheet open={props.open} onOpenChange={props.onOpenChange}>
@@ -544,33 +656,42 @@ function InviteeDetailSheet(props: {
             </div>
             {props.loading ? (
               <Skeleton className='h-32 w-full' />
-            ) : trendRows.length === 0 ? (
-              <div className='text-muted-foreground bg-muted/30 flex h-32 items-center justify-center rounded-lg text-sm'>
-                {t('No settlement records yet')}
-              </div>
             ) : (
-              <div className='bg-muted/30 flex h-36 items-end gap-2 rounded-lg px-3 pt-4 pb-3'>
+              <div className='from-muted/30 to-background/70 relative flex h-40 items-end gap-2 overflow-hidden rounded-lg border bg-gradient-to-b px-3 pt-5 pb-3'>
+                <div className='border-border/50 pointer-events-none absolute inset-x-3 top-5 bottom-9 flex flex-col justify-between'>
+                  <span className='border-border/60 border-t' />
+                  <span className='border-border/40 border-t' />
+                  <span className='border-border/40 border-t' />
+                </div>
                 {trendRows.map((row) => {
-                  const height = Math.max(
-                    10,
-                    (row.reward_quota / maxReward) * 100
+                  const height = getAffiliateRebateTrendBarHeight(
+                    row.rewardQuota,
+                    maxReward
                   )
                   return (
                     <div
-                      key={row.id}
-                      className='flex min-w-0 flex-1 flex-col items-center gap-2'
+                      key={row.date}
+                      className='relative flex min-w-0 flex-1 flex-col items-center gap-2'
                     >
                       <div className='text-[10px] font-medium tabular-nums'>
-                        {formatQuotaPlain(row.reward_quota)}
+                        {formatQuotaPlain(row.rewardQuota)}
                       </div>
                       <div className='flex h-24 w-full items-end'>
                         <div
-                          className='bg-primary/80 hover:bg-primary w-full rounded-t-md transition-colors'
-                          style={{ height: `${height}%` }}
+                          className={cn(
+                            'w-full rounded-t-md transition-all duration-200',
+                            row.rewardQuota > 0
+                              ? 'from-primary/75 to-primary/35 hover:from-primary hover:to-primary/60 bg-gradient-to-t shadow-sm'
+                              : 'bg-muted-foreground/20'
+                          )}
+                          style={{
+                            height:
+                              row.rewardQuota > 0 ? `${height}%` : '4px',
+                          }}
                         />
                       </div>
                       <div className='text-muted-foreground truncate text-[10px]'>
-                        {row.settlement_date.slice(5)}
+                        {row.label}
                       </div>
                     </div>
                   )
@@ -615,6 +736,106 @@ function InviteeDetailSheet(props: {
         </div>
       </SheetContent>
     </Sheet>
+  )
+}
+
+function SettledRebateDialog(props: {
+  open: boolean
+  rows: AffiliateRebateDailySettlement[]
+  loading: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+      <DialogContent className='max-h-[82vh] overflow-hidden sm:max-w-lg'>
+        <DialogHeader>
+          <DialogTitle>{t('Settled rebate records')}</DialogTitle>
+          <DialogDescription>
+            {t('Showing settled rebate records from the last 30 days.')}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className='max-h-[56vh] overflow-y-auto rounded-xl border'>
+          <Table>
+            <TableHeader className='bg-muted/60 sticky top-0 z-10'>
+              <TableRow>
+                <TableHead>{t('Settlement Date')}</TableHead>
+                <TableHead className='text-right'>{t('Rebate')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {props.loading ? (
+                Array.from({ length: 5 }).map((_, index) => (
+                  <TableRow key={index}>
+                    <TableCell colSpan={2}>
+                      <Skeleton className='h-6 w-full' />
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : props.rows.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={2}
+                    className='text-muted-foreground h-24 text-center'
+                  >
+                    {t('No settlement records yet')}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                props.rows.map((row) => (
+                  <TableRow key={row.settlement_date}>
+                    <TableCell>{row.settlement_date}</TableCell>
+                    <TableCell className='text-right font-medium tabular-nums'>
+                      {formatQuota(row.reward_quota)}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function ShareCopyDialog(props: {
+  open: boolean
+  message: string
+  onOpenChange: (open: boolean) => void
+  onRegenerate: () => void
+  onCopy: () => void
+}) {
+  const { t } = useTranslation()
+
+  return (
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+      <DialogContent className='sm:max-w-2xl'>
+        <DialogHeader>
+          <DialogTitle>{t('Share copy')}</DialogTitle>
+          <DialogDescription>
+            {t('Generated invitation copy can be sent directly to friends.')}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className='bg-muted/30 rounded-xl border p-4 text-sm leading-7 sm:text-base'>
+          {props.message}
+        </div>
+
+        <div className='flex flex-col gap-2 sm:flex-row sm:justify-end'>
+          <Button variant='outline' onClick={props.onRegenerate}>
+            <RefreshCw />
+            {t('Try another one')}
+          </Button>
+          <Button onClick={props.onCopy} disabled={!props.message}>
+            <Copy />
+            {t('Copy share copy')}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

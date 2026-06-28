@@ -62,10 +62,10 @@ function ChannelTimeline({
   points,
   countdown,
 }: {
-  points: UserChannelStatus['timeline']
+  points?: UserChannelStatus['timeline'] | null
   countdown: number
 }) {
-  const bars = useMemo(() => buildTimelineBars(points), [points])
+  const bars = useMemo(() => buildTimelineBars(points ?? []), [points])
   const { t } = useTranslation()
 
   return (
@@ -107,6 +107,7 @@ function ChannelStatusCard({
 }) {
   const { t } = useTranslation()
   const availability = getWindowAvailability(item, windowDays)
+  const extraModels = item.extra_models ?? []
   const availabilityText = formatAvailability(availability)
   const availabilityValue = availabilityText.endsWith('%')
     ? availabilityText.slice(0, -1)
@@ -175,9 +176,9 @@ function ChannelStatusCard({
         <div className='mt-3 flex items-end justify-between'>
           <div className='text-muted-foreground text-sm'>
             {t('Availability')} · {t('{{days}} days', { days: windowDays })}
-            {item.extra_models.length > 0 && (
+            {extraModels.length > 0 && (
               <div className='mt-1 text-xs'>
-                + {item.extra_models.length} {t('Extra models')}
+                + {extraModels.length} {t('Extra models')}
               </div>
             )}
           </div>
@@ -213,6 +214,7 @@ function DetailSheet({
     enabled: Boolean(item && open),
   })
   const detail = detailQuery.data?.data as UserChannelStatusDetail | undefined
+  const detailModels = detail?.models ?? []
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -248,7 +250,7 @@ function DetailSheet({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {detail?.models.map((model) => (
+                {detailModels.map((model) => (
                   <TableRow key={model.model}>
                     <TableCell className='font-medium'>{model.model}</TableCell>
                     <TableCell>
@@ -268,7 +270,7 @@ function DetailSheet({
                     </TableCell>
                   </TableRow>
                 ))}
-                {!detail?.models.length && (
+                {!detailModels.length && (
                   <TableRow>
                     <TableCell colSpan={6} className='h-24 text-center'>
                       {detailQuery.isLoading ? t('Loading...') : t('No data')}

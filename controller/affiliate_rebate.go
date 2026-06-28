@@ -57,3 +57,21 @@ func GetAffiliateRebateInviteeSettlements(c *gin.Context) {
 	}
 	common.ApiSuccess(c, rows)
 }
+
+func GetAffiliateRebateDailySettlements(c *gin.Context) {
+	userId := c.GetInt("id")
+	if !model.CanUseAffiliateRebate(userId) {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "no permission",
+		})
+		return
+	}
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "30"))
+	rows, err := model.GetAffiliateRebateDailySettlements(userId, limit)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, rows)
+}

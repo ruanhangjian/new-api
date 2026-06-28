@@ -194,11 +194,11 @@ func IsChannelMonitorEnabled() bool {
 func ParseChannelMonitorExtraModels(value string) []string {
 	value = strings.TrimSpace(value)
 	if value == "" {
-		return nil
+		return []string{}
 	}
 	var models []string
 	if err := common.UnmarshalJsonStr(value, &models); err != nil {
-		return nil
+		return []string{}
 	}
 	result := make([]string, 0, len(models))
 	seen := map[string]bool{}

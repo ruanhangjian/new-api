@@ -34,6 +34,11 @@ type AffiliateRebateSettlementResult struct {
 	TotalRewardQuota int    `json:"total_reward_quota"`
 }
 
+type AffiliateRebateDailySettlementSummary struct {
+	SettlementDate string `json:"settlement_date"`
+	RewardQuota    int    `json:"reward_quota"`
+}
+
 type AffiliateInviteeSummary struct {
 	UserId              int    `json:"user_id"`
 	Username            string `json:"username"`
@@ -370,7 +375,10 @@ func GetAffiliateRebateOverview(inviterId int, loc *time.Location) (AffiliateReb
 		})
 	}
 	sort.SliceStable(overview.Invitees, func(i, j int) bool {
-		return overview.Invitees[i].RegisteredAt > overview.Invitees[j].RegisteredAt
+		if overview.Invitees[i].TomorrowRewardQuota == overview.Invitees[j].TomorrowRewardQuota {
+			return overview.Invitees[i].UserId > overview.Invitees[j].UserId
+		}
+		return overview.Invitees[i].TomorrowRewardQuota > overview.Invitees[j].TomorrowRewardQuota
 	})
 	return overview, nil
 }
@@ -391,5 +399,23 @@ func GetAffiliateRebateSettlements(inviterId int, inviteeId int, limit int) ([]A
 		Order("settlement_date desc").
 		Limit(limit).
 		Find(&rows).Error
+	return rows, err
+}
+
+func GetAffiliateRebateDailySettlements(inviterId int, limit int) ([]AffiliateRebateDailySettlementSummary, error) {
+	if limit <= 0 || limit > 30 {
+		limit = 30
+	}
+	if inviterId <= 0 {
+		return nil, errors.New("invalid inviter id")
+	}
+	var rows []AffiliateRebateDailySettlementSummary
+	err := DB.Model(&AffiliateRebateSettlement{}).
+		Select("settlement_date, COALESCE(SUM(reward_quota), 0) AS reward_quota").
+		Where("inviter_id = ? AND status = ?", inviterId, AffiliateRebateStatusSettled).
+		Group("settlement_date").
+		Order("settlement_date desc").
+		Limit(limit).
+		Scan(&rows).Error
 	return rows, err
 }
