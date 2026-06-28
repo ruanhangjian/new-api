@@ -119,6 +119,64 @@ func TestSettleAffiliateRebatesForDateAppliesRatioCapAndMinimum(t *testing.T) {
 	require.Equal(t, 50*int(common.QuotaPerUnit), inviter.AffHistoryQuota)
 }
 
+func TestGetAffiliateRebateOverviewSortsInviteesByTomorrowRewardThenUserId(t *testing.T) {
+	resetAffiliateRebateTables(t)
+	loc := time.FixedZone("CST", 8*60*60)
+	originalQuotaPerUnit := common.QuotaPerUnit
+	t.Cleanup(func() { common.QuotaPerUnit = originalQuotaPerUnit })
+	common.QuotaPerUnit = 500000
+
+	cfg := operation_setting.GetAffiliateRebateSetting()
+	original := *cfg
+	t.Cleanup(func() { *cfg = original })
+	cfg.Enabled = true
+	cfg.Rate = 0.02
+	cfg.DailyCapQuota = 0
+	cfg.MinSettlementQuota = 0
+	cfg.StartTime = 0
+	cfg.GrayEnabled = false
+
+	seedAffiliateUser(t, 1, "inviter", 0)
+	seedAffiliateUser(t, 10, "same_reward_low_id", 1)
+	seedAffiliateUser(t, 20, "highest_reward", 1)
+	seedAffiliateUser(t, 30, "same_reward_high_id", 1)
+
+	today := time.Now().In(loc).Format("2006-01-02")
+	seedAffiliateConsumeLog(t, 10, "same_reward_low_id", mustUnixInLocation(t, loc, today+" 10:00:00"), 100*int(common.QuotaPerUnit))
+	seedAffiliateConsumeLog(t, 20, "highest_reward", mustUnixInLocation(t, loc, today+" 11:00:00"), 300*int(common.QuotaPerUnit))
+	seedAffiliateConsumeLog(t, 30, "same_reward_high_id", mustUnixInLocation(t, loc, today+" 12:00:00"), 100*int(common.QuotaPerUnit))
+
+	overview, err := GetAffiliateRebateOverview(1, loc)
+	require.NoError(t, err)
+	require.Len(t, overview.Invitees, 3)
+	require.Equal(t, []int{20, 30, 10}, []int{
+		overview.Invitees[0].UserId,
+		overview.Invitees[1].UserId,
+		overview.Invitees[2].UserId,
+	})
+}
+
+func TestGetAffiliateRebateDailySettlementsGroupsRecentRowsByDate(t *testing.T) {
+	resetAffiliateRebateTables(t)
+
+	rows := []AffiliateRebateSettlement{
+		{InviterId: 1, InviteeId: 10, SettlementDate: "2026-06-28", RewardQuota: 100, Status: AffiliateRebateStatusSettled},
+		{InviterId: 1, InviteeId: 20, SettlementDate: "2026-06-28", RewardQuota: 250, Status: AffiliateRebateStatusSettled},
+		{InviterId: 1, InviteeId: 30, SettlementDate: "2026-06-27", RewardQuota: 300, Status: AffiliateRebateStatusSettled},
+		{InviterId: 2, InviteeId: 40, SettlementDate: "2026-06-28", RewardQuota: 900, Status: AffiliateRebateStatusSettled},
+	}
+	for _, row := range rows {
+		require.NoError(t, DB.Create(&row).Error)
+	}
+
+	summaries, err := GetAffiliateRebateDailySettlements(1, 30)
+	require.NoError(t, err)
+	require.Equal(t, []AffiliateRebateDailySettlementSummary{
+		{SettlementDate: "2026-06-28", RewardQuota: 350},
+		{SettlementDate: "2026-06-27", RewardQuota: 300},
+	}, summaries)
+}
+
 func TestCanUseAffiliateRebateHonorsGrayWhitelist(t *testing.T) {
 	cfg := operation_setting.GetAffiliateRebateSetting()
 	original := *cfg

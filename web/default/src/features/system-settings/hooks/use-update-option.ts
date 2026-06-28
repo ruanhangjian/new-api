@@ -44,6 +44,10 @@ const STATUS_RELATED_KEYS = [
   'general_setting.quota_display_type',
   'general_setting.custom_currency_symbol',
   'general_setting.custom_currency_exchange_rate',
+  'affiliate_rebate_setting.enabled',
+  'affiliate_rebate_setting.rate',
+  'affiliate_rebate_setting.gray_enabled',
+  'affiliate_rebate_setting.gray_user_ids',
 ]
 
 export function useUpdateOption() {
@@ -59,6 +63,12 @@ export function useUpdateOption() {
         // If updating frontend-display-related config, also refresh status
         if (STATUS_RELATED_KEYS.includes(variables.key)) {
           queryClient.invalidateQueries({ queryKey: ['status'] })
+        }
+
+        if (variables.key.startsWith('affiliate_rebate_setting.')) {
+          queryClient.invalidateQueries({
+            queryKey: ['affiliate-rebate-overview'],
+          })
         }
 
         toast.success(i18next.t('Setting updated successfully'))

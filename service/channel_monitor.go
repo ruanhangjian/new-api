@@ -20,6 +20,8 @@ const (
 	channelMonitorRequestTimeout = 45 * time.Second
 	channelMonitorPingTimeout    = 8 * time.Second
 	channelMonitorDegradedAfter  = 6 * time.Second
+	channelMonitorChallengeMin   = 1
+	channelMonitorChallengeMax   = 50
 )
 
 type ChannelMonitorCheckResult struct {
@@ -103,8 +105,9 @@ func checkSingleChannelMonitorModel(ctx context.Context, monitor *model.ChannelM
 	start := time.Now()
 	status := model.ChannelMonitorStatusOperational
 	message := "OK"
+	challenge := generateChannelMonitorChallenge()
 
-	req, err := buildChannelMonitorRequest(ctx, monitor, modelName)
+	req, err := buildChannelMonitorRequest(ctx, monitor, modelName, challenge.Prompt)
 	if err != nil {
 		return ChannelMonitorCheckResult{
 			MonitorID:     monitor.Id,
@@ -135,9 +138,9 @@ func checkSingleChannelMonitorModel(ctx context.Context, monitor *model.ChannelM
 		} else if len(bytes.TrimSpace(body)) == 0 {
 			status = model.ChannelMonitorStatusFailed
 			message = "empty response"
-		} else if shouldValidateMonitorChallenge(monitor) && !monitorResponseContainsChallenge(body) {
+		} else if shouldValidateMonitorChallenge(monitor) && !monitorResponseContainsChallenge(body, challenge.Expected) {
 			status = model.ChannelMonitorStatusFailed
-			message = "challenge mismatch"
+			message = fmt.Sprintf("challenge mismatch (expected %s)", challenge.Expected)
 		} else if time.Duration(latency)*time.Millisecond >= channelMonitorDegradedAfter {
 			status = model.ChannelMonitorStatusDegraded
 			message = "slow response"
@@ -216,8 +219,8 @@ func pingMonitorEndpoint(ctx context.Context, endpoint string) int {
 	return int(time.Since(start).Milliseconds())
 }
 
-func buildChannelMonitorRequest(ctx context.Context, monitor *model.ChannelMonitor, modelName string) (*http.Request, error) {
-	targetURL, body, err := buildMonitorRequestURLAndBody(monitor, modelName)
+func buildChannelMonitorRequest(ctx context.Context, monitor *model.ChannelMonitor, modelName, prompt string) (*http.Request, error) {
+	targetURL, body, err := buildMonitorRequestURLAndBody(monitor, modelName, prompt)
 	if err != nil {
 		return nil, err
 	}
@@ -234,20 +237,21 @@ func buildChannelMonitorRequest(ctx context.Context, monitor *model.ChannelMonit
 	return req, nil
 }
 
-func buildMonitorRequestURLAndBody(monitor *model.ChannelMonitor, modelName string) (string, string, error) {
+func buildMonitorRequestURLAndBody(monitor *model.ChannelMonitor, modelName, prompt string) (string, string, error) {
 	switch monitor.Provider {
 	case model.ChannelMonitorProviderOpenAI:
 		if monitor.APIMode == model.ChannelMonitorAPIModeResponses {
 			body := map[string]any{
 				"model": modelName,
-				"input": "Reply with OK.",
+				"instructions": "You are a channel health-check endpoint. Answer the arithmetic challenge exactly and briefly.",
+				"input":        prompt,
 			}
 			return joinMonitorURL(monitor.Endpoint, "/v1/responses"), applyBodyOverride(body, monitor), nil
 		}
 		body := map[string]any{
 			"model": modelName,
 			"messages": []map[string]string{
-				{"role": "user", "content": "Reply with OK."},
+				{"role": "user", "content": prompt},
 			},
 			"max_tokens":  8,
 			"temperature": 0,
@@ -260,7 +264,7 @@ func buildMonitorRequestURLAndBody(monitor *model.ChannelMonitor, modelName stri
 		body := map[string]any{
 			"model": modelName,
 			"messages": []map[string]string{
-				{"role": "user", "content": "Reply with OK."},
+				{"role": "user", "content": prompt},
 			},
 			"max_tokens": 8,
 		}
@@ -270,7 +274,7 @@ func buildMonitorRequestURLAndBody(monitor *model.ChannelMonitor, modelName stri
 			"contents": []map[string]any{
 				{
 					"parts": []map[string]string{
-						{"text": "Reply with OK."},
+						{"text": prompt},
 					},
 				},
 			},
@@ -292,8 +296,8 @@ func shouldValidateMonitorChallenge(monitor *model.ChannelMonitor) bool {
 	return monitor.BodyOverrideMode != model.ChannelMonitorBodyOverrideReplace
 }
 
-func monitorResponseContainsChallenge(body []byte) bool {
-	return strings.Contains(strings.ToLower(string(body)), "ok")
+func monitorResponseContainsChallenge(body []byte, expected string) bool {
+	return validateChannelMonitorChallenge(string(body), expected)
 }
 
 func applyChannelMonitorAuthHeaders(req *http.Request, monitor *model.ChannelMonitor) {

@@ -55,6 +55,11 @@ export type AffiliateRebateSettlement = {
   updated_at: number
 }
 
+export type AffiliateRebateDailySettlement = {
+  settlement_date: string
+  reward_quota: number
+}
+
 export type ApiResponse<T> = {
   success: boolean
   message: string

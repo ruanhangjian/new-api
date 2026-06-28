@@ -159,9 +159,9 @@ const overrideModeOptions: Array<{
   value: ChannelMonitorBodyOverrideMode
   label: string
 }> = [
-  { value: 'off', label: 'Off' },
-  { value: 'merge', label: 'Merge' },
-  { value: 'replace', label: 'Replace' },
+  { value: 'off', label: 'Body mode default' },
+  { value: 'merge', label: 'Body mode merge' },
+  { value: 'replace', label: 'Body mode replace' },
 ]
 
 function buildMonitorForm(monitor: ChannelMonitor | null): MonitorFormState {
@@ -460,9 +460,13 @@ function AdvancedRequestConfig({
       (form.provider !== 'openai' || template.api_mode === form.api_mode)
   )
   const bodyModeHint = {
-    off: t('Use the default monitor request body.'),
-    merge: t('Shallow merge JSON fields into the default request body.'),
-    replace: t('Replace the request body completely with the JSON below.'),
+    off: t('Use adapter default body with challenge validation.'),
+    merge: t(
+      'Shallow merge with the default body; user fields win but protected fields cannot be overwritten.'
+    ),
+    replace: t(
+      'Use the JSON below as the complete body. Challenge validation is skipped.'
+    ),
   }[form.body_override_mode]
   const bodyPlaceholder =
     form.provider === 'openai' && form.api_mode === 'responses'
@@ -687,7 +691,7 @@ function AdvancedRequestConfig({
 
         {form.body_override_mode !== 'off' && (
           <LabeledField
-            label={t('Body override JSON')}
+            label={t('Body JSON')}
             hint={t(
               'Must be a JSON object. It is applied according to the selected body handling mode.'
             )}
@@ -1036,42 +1040,36 @@ function MonitorDialog({
                 />
               </LabeledField>
 
-              <div className='grid gap-5 sm:grid-cols-2'>
-                <LabeledField label={t('Group name')}>
-                  <Input
-                    value={form.group_name}
-                    onChange={(event) =>
-                      setForm({ ...form, group_name: event.target.value })
-                    }
-                    placeholder={t('Optional, used for grouping in user view')}
-                  />
-                </LabeledField>
-                <LabeledField
-                  label={t('Interval seconds')}
-                  required
-                  hint={t('Range: 15 - 3600 seconds')}
-                >
-                  <Input
-                    value={form.interval_seconds}
-                    onChange={(event) =>
-                      setForm({ ...form, interval_seconds: event.target.value })
-                    }
-                    type='number'
-                    min={15}
-                    max={3600}
-                    inputMode='numeric'
-                  />
-                </LabeledField>
-              </div>
+              <LabeledField label={t('Group name')}>
+                <Input
+                  value={form.group_name}
+                  onChange={(event) =>
+                    setForm({ ...form, group_name: event.target.value })
+                  }
+                  placeholder={t('Optional, used for grouping in user view')}
+                />
+              </LabeledField>
+
+              <LabeledField
+                label={t('Interval seconds')}
+                required
+                hint={t('Range: 15 - 3600 seconds')}
+              >
+                <Input
+                  value={form.interval_seconds}
+                  onChange={(event) =>
+                    setForm({ ...form, interval_seconds: event.target.value })
+                  }
+                  type='number'
+                  min={15}
+                  max={3600}
+                  inputMode='numeric'
+                />
+              </LabeledField>
 
               <div className='flex items-center justify-between rounded-lg border px-3 py-3'>
-                <div>
-                  <div className='text-sm font-semibold'>{t('Enabled')}</div>
-                  <div className='text-muted-foreground text-xs'>
-                    {t(
-                      'Enabled monitors are visible on the channel status page.'
-                    )}
-                  </div>
+                <div className='text-sm font-semibold'>
+                  {t('Enable monitor')}
                 </div>
                 <Switch
                   checked={form.enabled}

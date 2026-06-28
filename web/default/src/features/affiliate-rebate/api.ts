@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
 import type {
+  AffiliateRebateDailySettlement,
   AffiliateRebateOverview,
   AffiliateRebateSettlement,
   ApiResponse,
@@ -25,6 +26,16 @@ import type {
 
 export type AffiliateTransferRequest = {
   quota: number
+}
+
+export async function getAffiliateRebateOverviewSilent(): Promise<
+  ApiResponse<AffiliateRebateOverview>
+> {
+  const res = await api.get('/api/user/affiliate-rebate/overview', {
+    skipErrorHandler: true,
+    skipBusinessError: true,
+  } as Record<string, unknown>)
+  return res.data
 }
 
 export async function getAffiliateRebateOverview(): Promise<
@@ -42,6 +53,15 @@ export async function getAffiliateRebateSettlements(
     `/api/user/affiliate-rebate/invitees/${inviteeId}/settlements`,
     { params: { limit } }
   )
+  return res.data
+}
+
+export async function getAffiliateRebateDailySettlements(
+  limit = 30
+): Promise<ApiResponse<AffiliateRebateDailySettlement[]>> {
+  const res = await api.get('/api/user/affiliate-rebate/settlements/daily', {
+    params: { limit },
+  })
   return res.data
 }
 

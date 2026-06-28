@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard,
   Activity,
@@ -39,9 +40,38 @@ import {
 import { useTranslation } from 'react-i18next'
 import { WORKSPACE_IDS } from '@/components/layout/lib/workspace-registry'
 import { type SidebarData } from '@/components/layout/types'
+import { getAffiliateRebateOverviewSilent } from '@/features/affiliate-rebate/api'
+
+const DEFAULT_AFFILIATE_REBATE_RATE = 0.02
+
+function formatAffiliateRebateRate(rate: number): string {
+  const normalized = Number.isFinite(rate)
+    ? rate
+    : DEFAULT_AFFILIATE_REBATE_RATE
+  const percentage = normalized * 100
+  if (!Number.isFinite(percentage)) return '2%'
+  return `${Number(percentage.toFixed(2)).toString()}%`
+}
 
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
+  const { data: affiliateRebateOverview } = useQuery({
+    queryKey: ['affiliate-rebate-overview', 'sidebar-badge'],
+    queryFn: async () => {
+      try {
+        const response = await getAffiliateRebateOverviewSilent()
+        return response.success ? response.data : undefined
+      } catch {
+        return undefined
+      }
+    },
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const affiliateRebateRate = formatAffiliateRebateRate(
+    affiliateRebateOverview?.rate ?? DEFAULT_AFFILIATE_REBATE_RATE
+  )
 
   return {
     workspaces: [
@@ -121,7 +151,9 @@ export function useSidebarData(): SidebarData {
             titleClassName: 'flex-none',
             url: '/affiliate-rebate',
             icon: HandCoins,
-            badge: t('Lifetime 2% Rebate'),
+            badge: t('Lifetime {{rate}} Rebate', {
+              rate: affiliateRebateRate,
+            }),
             badgeClassName:
               'isolate relative -ml-1 h-[22px] items-start overflow-visible border-transparent bg-transparent px-1.5 pb-0 pt-[2px] text-[9px] font-bold leading-[12px] text-white shadow-none hover:bg-transparent dark:border-transparent dark:bg-transparent dark:text-white dark:hover:bg-transparent before:absolute before:inset-x-0 before:top-0 before:z-0 before:h-[17px] before:rounded-full before:bg-red-500 before:shadow-sm before:shadow-red-500/25 before:content-[""] after:absolute after:left-1 after:top-[13px] after:z-0 after:h-0 after:w-0 after:border-t-[8px] after:border-r-[9px] after:border-t-red-500 after:border-r-transparent after:content-[""]',
           },

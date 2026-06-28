@@ -97,6 +97,38 @@ const timelineHeightByStatus: Record<TimelineBar['status'], number> = {
   empty: 15,
 }
 
+function getTimelineStatusLabel(status: ChannelMonitorStatus | '') {
+  switch (status) {
+    case 'operational':
+      return '正常'
+    case 'degraded':
+      return '降级'
+    case 'failed':
+      return '失败'
+    case 'error':
+      return '错误'
+    default:
+      return '未知'
+  }
+}
+
+function formatTimelineRelativeTime(timestamp: number) {
+  if (!timestamp) return '--'
+  const checkedAtMs = timestamp > 1_000_000_000_000 ? timestamp : timestamp * 1000
+  const diffSeconds = Math.max(0, Math.floor((Date.now() - checkedAtMs) / 1000))
+  if (diffSeconds < 60) return `${diffSeconds} 秒钟前`
+  const diffMinutes = Math.floor(diffSeconds / 60)
+  if (diffMinutes < 60) return `${diffMinutes} 分钟前`
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) return `${diffHours} 小时前`
+  const diffDays = Math.floor(diffHours / 24)
+  return `${diffDays} 天前`
+}
+
+function formatTimelineTitle(point: ChannelMonitorTimelinePoint) {
+  return `${formatTimelineRelativeTime(point.checked_at)} · ${getTimelineStatusLabel(point.status)} · ${Math.round(point.latency_ms || 0)}ms`
+}
+
 export function buildTimelineBars(
   points: ChannelMonitorTimelinePoint[],
   length = 60
@@ -122,7 +154,7 @@ export function buildTimelineBars(
       className: getTimelineClassName(point.status),
       heightPercent:
         timelineHeightByStatus[point.status] ?? timelineHeightByStatus.empty,
-      title: `${point.status} · ${point.latency_ms}ms`,
+      title: formatTimelineTitle(point),
       point,
     })
   )

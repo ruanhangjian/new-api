@@ -93,6 +93,7 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.DELETE("/passkey", controller.PasskeyDelete)
 				selfRoute.GET("/aff", controller.GetAffCode)
 				selfRoute.GET("/affiliate-rebate/overview", controller.GetAffiliateRebateOverview)
+				selfRoute.GET("/affiliate-rebate/settlements/daily", controller.GetAffiliateRebateDailySettlements)
 				selfRoute.GET("/affiliate-rebate/invitees/:invitee_id/settlements", controller.GetAffiliateRebateInviteeSettlements)
 				selfRoute.GET("/topup/info", controller.GetTopUpInfo)
 				selfRoute.GET("/topup/self", controller.GetUserTopUps)

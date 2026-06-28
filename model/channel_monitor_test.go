@@ -31,3 +31,14 @@ func TestIsChannelMonitorEnabledReadsOptionMap(t *testing.T) {
 		t.Fatal("expected channel monitor to be disabled when option is false")
 	}
 }
+
+func TestParseChannelMonitorExtraModelsReturnsEmptySliceForBlankValue(t *testing.T) {
+	models := ParseChannelMonitorExtraModels("")
+
+	if models == nil {
+		t.Fatal("expected empty slice, got nil")
+	}
+	if len(models) != 0 {
+		t.Fatalf("expected no models, got %d", len(models))
+	}
+}
