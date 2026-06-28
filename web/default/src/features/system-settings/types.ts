@@ -266,6 +266,14 @@ export type BillingSettings = {
   'checkin_setting.enabled': boolean
   'checkin_setting.min_quota': number
   'checkin_setting.max_quota': number
+  'affiliate_rebate_setting.enabled': boolean
+  'affiliate_rebate_setting.rate': number
+  'affiliate_rebate_setting.daily_cap_quota': number
+  'affiliate_rebate_setting.min_settlement_quota': number
+  'affiliate_rebate_setting.start_time': number
+  'affiliate_rebate_setting.settlement_hour': number
+  'affiliate_rebate_setting.gray_enabled': boolean
+  'affiliate_rebate_setting.gray_user_ids': string
 }
 
 export type OperationsSettings = {

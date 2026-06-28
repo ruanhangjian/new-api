@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { type ReactNode, useState, useEffect } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { ChevronRight } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import {
   Collapsible,
@@ -111,8 +112,18 @@ export function NavGroup({ title, items }: NavGroupProps) {
 /**
  * Navigation badge component
  */
-function NavBadge({ children }: { children: ReactNode }) {
-  return <Badge className='px-1 py-0 text-xs'>{children}</Badge>
+function NavBadge({
+  children,
+  className,
+}: {
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <Badge className={`px-1 py-0 text-xs ${className ?? ''}`}>
+      <span className='relative z-10'>{children}</span>
+    </Badge>
+  )
 }
 
 /**
@@ -128,8 +139,17 @@ function SidebarMenuLink({ item, href }: { item: NavLink; href: string }) {
         render={<Link to={item.url} onClick={() => setOpenMobile(false)} />}
       >
         {item.icon && <item.icon />}
-        <span>{item.title}</span>
-        {item.badge && <NavBadge>{item.badge}</NavBadge>}
+        <span
+          className={cn(
+            'min-w-0 flex-1 truncate whitespace-nowrap',
+            item.titleClassName
+          )}
+        >
+          {item.title}
+        </span>
+        {item.badge && (
+          <NavBadge className={item.badgeClassName}>{item.badge}</NavBadge>
+        )}
       </SidebarMenuButton>
     </SidebarMenuItem>
   )
@@ -171,8 +191,17 @@ function SidebarMenuCollapsible({
         render={<SidebarMenuButton tooltip={item.title} />}
       >
         {item.icon && <item.icon />}
-        <span>{item.title}</span>
-        {item.badge && <NavBadge>{item.badge}</NavBadge>}
+        <span
+          className={cn(
+            'min-w-0 flex-1 truncate whitespace-nowrap',
+            item.titleClassName
+          )}
+        >
+          {item.title}
+        </span>
+        {item.badge && (
+          <NavBadge className={item.badgeClassName}>{item.badge}</NavBadge>
+        )}
         <ChevronRight className='ms-auto transition-transform duration-200 group-data-[panel-open]/collapsible-trigger:rotate-90' />
       </CollapsibleTrigger>
       <CollapsibleContent className='CollapsibleContent'>
@@ -186,8 +215,19 @@ function SidebarMenuCollapsible({
                 }
               >
                 {subItem.icon && <subItem.icon />}
-                <span>{subItem.title}</span>
-                {subItem.badge && <NavBadge>{subItem.badge}</NavBadge>}
+                <span
+                  className={cn(
+                    'min-w-0 flex-1 truncate whitespace-nowrap',
+                    subItem.titleClassName
+                  )}
+                >
+                  {subItem.title}
+                </span>
+                {subItem.badge && (
+                  <NavBadge className={subItem.badgeClassName}>
+                    {subItem.badge}
+                  </NavBadge>
+                )}
               </SidebarMenuSubButton>
             </SidebarMenuSubItem>
           ))}
@@ -220,8 +260,17 @@ function SidebarMenuCollapsedDropdown({
           }
         >
           {item.icon && <item.icon />}
-          <span>{item.title}</span>
-          {item.badge && <NavBadge>{item.badge}</NavBadge>}
+          <span
+            className={cn(
+              'min-w-0 flex-1 truncate whitespace-nowrap',
+              item.titleClassName
+            )}
+          >
+            {item.title}
+          </span>
+          {item.badge && (
+            <NavBadge className={item.badgeClassName}>{item.badge}</NavBadge>
+          )}
           <ChevronRight className='ms-auto transition-transform duration-200 group-data-[popup-open]/dropdown-trigger:rotate-90' />
         </DropdownMenuTrigger>
         <DropdownMenuContent side='right' align='start' sideOffset={4}>

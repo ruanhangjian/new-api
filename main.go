@@ -113,12 +113,16 @@ func main() {
 
 	go controller.AutomaticallyTestChannels()
 	controller.StartChannelBalanceAutoRefreshTask()
+	controller.StartChannelMonitorTask()
 
 	// Codex credential auto-refresh check every 10 minutes, refresh when expires within 1 day
 	service.StartCodexCredentialAutoRefreshTask()
 
 	// Subscription quota reset task (daily/weekly/monthly/custom)
 	service.StartSubscriptionQuotaResetTask()
+
+	// Affiliate rebate daily settlement task
+	service.StartAffiliateRebateSettlementTask()
 
 	// Wire task polling adaptor factory (breaks service -> relay import cycle)
 	service.GetTaskAdaptorFunc = func(platform constant.TaskPlatform) service.TaskPollingAdaptor {
