@@ -46,146 +46,66 @@ const numericString = z.string().refine((value) => {
   return !Number.isNaN(Number(trimmed)) && Number(trimmed) >= 0
 }, 'Enter a non-negative number or leave empty')
 
-const monitoringSchema = z
-  .object({
-    ChannelDisableThreshold: numericString,
-    QuotaRemindThreshold: numericString,
-    AutomaticDisableChannelEnabled: z.boolean(),
-    AutomaticEnableChannelEnabled: z.boolean(),
-    AutomaticDisableKeywords: z.string(),
-    AutomaticDisableStatusCodes: z.string(),
-    AutomaticRetryStatusCodes: z.string(),
-    monitor_setting: z.object({
-      auto_test_channel_enabled: z.boolean(),
-      auto_test_channel_minutes: z.coerce
-        .number()
-        .int()
-        .min(1, 'Interval must be at least 1 minute'),
-    }),
-  })
-  .superRefine((values, ctx) => {
-    const disableParsed = parseHttpStatusCodeRules(
-      values.AutomaticDisableStatusCodes
-    )
-    if (!disableParsed.ok) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['AutomaticDisableStatusCodes'],
-        message: `Invalid status code rules: ${disableParsed.invalidTokens.join(
-          ', '
-        )}`,
-      })
-    }
+const monitoringSchema = z.object({
+  QuotaRemindThreshold: numericString,
+  perf_metrics_setting: z.object({
+    enabled: z.boolean(),
+    flush_interval: z.coerce.number().min(1),
+    bucket_time: z.enum(['minute', '5min', 'hour']),
+    retention_days: z.coerce.number().min(0),
+  }),
+})
 
-    const retryParsed = parseHttpStatusCodeRules(
-      values.AutomaticRetryStatusCodes
-    )
-    if (!retryParsed.ok) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['AutomaticRetryStatusCodes'],
-        message: `Invalid status code rules: ${retryParsed.invalidTokens.join(
-          ', '
-        )}`,
-      })
-    }
-  })
-
-type MonitoringFormValues = z.output<typeof monitoringSchema>
 type MonitoringFormInput = z.input<typeof monitoringSchema>
+type MonitoringFormValues = z.output<typeof monitoringSchema>
+
+type FlatMonitoringDefaults = {
+  QuotaRemindThreshold: string
+  'perf_metrics_setting.enabled': boolean
+  'perf_metrics_setting.flush_interval': number
+  'perf_metrics_setting.bucket_time': 'minute' | '5min' | 'hour'
+  'perf_metrics_setting.retention_days': number
+}
 
 type MonitoringSettingsSectionProps = {
-  defaultValues: {
-    ChannelDisableThreshold: string
-    QuotaRemindThreshold: string
-    AutomaticDisableChannelEnabled: boolean
-    AutomaticEnableChannelEnabled: boolean
-    AutomaticDisableKeywords: string
-    AutomaticDisableStatusCodes: string
-    AutomaticRetryStatusCodes: string
-    'monitor_setting.auto_test_channel_enabled': boolean
-    'monitor_setting.auto_test_channel_minutes': number
-  }
-}
-
-function normalizeLineEndings(value: string) {
-  return value.replace(/\r\n/g, '\n')
-}
-
-type NormalizedMonitoringValues = {
-  ChannelDisableThreshold: string
-  QuotaRemindThreshold: string
-  AutomaticDisableChannelEnabled: boolean
-  AutomaticEnableChannelEnabled: boolean
-  AutomaticDisableKeywords: string
-  AutomaticDisableStatusCodes: string
-  AutomaticRetryStatusCodes: string
-  'monitor_setting.auto_test_channel_enabled': boolean
-  'monitor_setting.auto_test_channel_minutes': number
+  defaultValues: FlatMonitoringDefaults
 }
 
 const buildFormDefaults = (
   defaults: MonitoringSettingsSectionProps['defaultValues']
 ): MonitoringFormInput => ({
-  ChannelDisableThreshold: defaults.ChannelDisableThreshold ?? '',
   QuotaRemindThreshold: defaults.QuotaRemindThreshold ?? '',
-  AutomaticDisableChannelEnabled: defaults.AutomaticDisableChannelEnabled,
-  AutomaticEnableChannelEnabled: defaults.AutomaticEnableChannelEnabled,
-  AutomaticDisableKeywords: normalizeLineEndings(
-    defaults.AutomaticDisableKeywords ?? ''
-  ),
-  AutomaticDisableStatusCodes: defaults.AutomaticDisableStatusCodes ?? '',
-  AutomaticRetryStatusCodes: defaults.AutomaticRetryStatusCodes ?? '',
-  monitor_setting: {
-    auto_test_channel_enabled:
-      defaults['monitor_setting.auto_test_channel_enabled'],
-    auto_test_channel_minutes:
-      defaults['monitor_setting.auto_test_channel_minutes'],
+  perf_metrics_setting: {
+    enabled: defaults['perf_metrics_setting.enabled'],
+    flush_interval: defaults['perf_metrics_setting.flush_interval'],
+    bucket_time: defaults['perf_metrics_setting.bucket_time'],
+    retention_days: defaults['perf_metrics_setting.retention_days'],
   },
 })
 
 const normalizeDefaults = (
   defaults: MonitoringSettingsSectionProps['defaultValues']
-): NormalizedMonitoringValues => ({
-  ChannelDisableThreshold: (defaults.ChannelDisableThreshold ?? '').trim(),
+): FlatMonitoringDefaults => ({
   QuotaRemindThreshold: (defaults.QuotaRemindThreshold ?? '').trim(),
-  AutomaticDisableChannelEnabled: defaults.AutomaticDisableChannelEnabled,
-  AutomaticEnableChannelEnabled: defaults.AutomaticEnableChannelEnabled,
-  AutomaticDisableKeywords: normalizeLineEndings(
-    defaults.AutomaticDisableKeywords ?? ''
-  ),
-  AutomaticDisableStatusCodes: parseHttpStatusCodeRules(
-    defaults.AutomaticDisableStatusCodes ?? ''
-  ).normalized,
-  AutomaticRetryStatusCodes: parseHttpStatusCodeRules(
-    defaults.AutomaticRetryStatusCodes ?? ''
-  ).normalized,
-  'monitor_setting.auto_test_channel_enabled':
-    defaults['monitor_setting.auto_test_channel_enabled'],
-  'monitor_setting.auto_test_channel_minutes':
-    defaults['monitor_setting.auto_test_channel_minutes'],
+  'perf_metrics_setting.enabled': defaults['perf_metrics_setting.enabled'],
+  'perf_metrics_setting.flush_interval':
+    defaults['perf_metrics_setting.flush_interval'],
+  'perf_metrics_setting.bucket_time':
+    defaults['perf_metrics_setting.bucket_time'],
+  'perf_metrics_setting.retention_days':
+    defaults['perf_metrics_setting.retention_days'],
 })
 
 const normalizeFormValues = (
   values: MonitoringFormValues
-): NormalizedMonitoringValues => ({
-  ChannelDisableThreshold: values.ChannelDisableThreshold.trim(),
+): FlatMonitoringDefaults => ({
   QuotaRemindThreshold: values.QuotaRemindThreshold.trim(),
-  AutomaticDisableChannelEnabled: values.AutomaticDisableChannelEnabled,
-  AutomaticEnableChannelEnabled: values.AutomaticEnableChannelEnabled,
-  AutomaticDisableKeywords: normalizeLineEndings(
-    values.AutomaticDisableKeywords
-  ),
-  AutomaticDisableStatusCodes: parseHttpStatusCodeRules(
-    values.AutomaticDisableStatusCodes
-  ).normalized,
-  AutomaticRetryStatusCodes: parseHttpStatusCodeRules(
-    values.AutomaticRetryStatusCodes
-  ).normalized,
-  'monitor_setting.auto_test_channel_enabled':
-    values.monitor_setting.auto_test_channel_enabled,
-  'monitor_setting.auto_test_channel_minutes':
-    values.monitor_setting.auto_test_channel_minutes,
+  'perf_metrics_setting.enabled': values.perf_metrics_setting.enabled,
+  'perf_metrics_setting.flush_interval':
+    values.perf_metrics_setting.flush_interval,
+  'perf_metrics_setting.bucket_time': values.perf_metrics_setting.bucket_time,
+  'perf_metrics_setting.retention_days':
+    values.perf_metrics_setting.retention_days,
 })
 
 export function MonitoringSettingsSection({
@@ -193,8 +113,11 @@ export function MonitoringSettingsSection({
 }: MonitoringSettingsSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
-  const baselineRef = useRef<NormalizedMonitoringValues>(
+  const baselineRef = useRef<FlatMonitoringDefaults>(
     normalizeDefaults(defaultValues)
+  )
+  const baselineSerializedRef = useRef<string>(
+    JSON.stringify(normalizeDefaults(defaultValues))
   )
 
   const formDefaults = useMemo(
@@ -209,21 +132,20 @@ export function MonitoringSettingsSection({
 
   useResetForm(form, formDefaults)
 
-  const autoDisableStatusCodes = form.watch('AutomaticDisableStatusCodes')
-  const autoRetryStatusCodes = form.watch('AutomaticRetryStatusCodes')
-  const autoDisableParsed = useMemo(
-    () => parseHttpStatusCodeRules(autoDisableStatusCodes),
-    [autoDisableStatusCodes]
-  )
-  const autoRetryParsed = useMemo(
-    () => parseHttpStatusCodeRules(autoRetryStatusCodes),
-    [autoRetryStatusCodes]
-  )
+  useEffect(() => {
+    const normalized = normalizeDefaults(defaultValues)
+    const serialized = JSON.stringify(normalized)
+    if (serialized === baselineSerializedRef.current) return
+    baselineRef.current = normalized
+    baselineSerializedRef.current = serialized
+  }, [defaultValues])
+
+  const perfMetricsEnabled = form.watch('perf_metrics_setting.enabled')
 
   const onSubmit = async (values: MonitoringFormValues) => {
     const normalized = normalizeFormValues(values)
     const updates = (
-      Object.keys(normalized) as Array<keyof NormalizedMonitoringValues>
+      Object.keys(normalized) as Array<keyof FlatMonitoringDefaults>
     ).filter((key) => normalized[key] !== baselineRef.current[key])
 
     if (updates.length === 0) {
@@ -232,14 +154,14 @@ export function MonitoringSettingsSection({
     }
 
     for (const key of updates) {
-      const value = normalized[key]
       await updateOption.mutateAsync({
         key,
-        value,
+        value: normalized[key],
       })
     }
 
     baselineRef.current = normalized
+    baselineSerializedRef.current = JSON.stringify(normalized)
   }
 
   return (

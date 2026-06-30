@@ -59,7 +59,6 @@ import {
   createWaffoPancakeSubscriptionProduct,
   listWaffoPancakeSubscriptionProductOptions,
 } from '../api'
-import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
 import { getDurationUnitOptions, getResetPeriodOptions } from '../constants'
 import {
   getPlanFormSchema,
@@ -488,7 +487,9 @@ export function SubscriptionsMutateDrawer({
                         </SelectContent>
                       </Select>
                       <FormDescription>
-                        {t('Downgrade to this group after the subscription expires')}
+                        {t(
+                          'Downgrade to this group after the subscription expires'
+                        )}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

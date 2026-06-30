@@ -31,6 +31,8 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
+import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth-store'
 
 type SidebarModuleConfig = {
   enabled: boolean

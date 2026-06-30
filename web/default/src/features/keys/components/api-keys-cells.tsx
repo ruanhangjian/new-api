@@ -31,8 +31,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { BadgeCell } from '@/components/data-table'
-import { StatusBadge } from '@/components/status-badge'
+import { copyToClipboard } from '@/lib/copy-to-clipboard'
+
 import { type ApiKey } from '../types'
 import { useApiKeys } from './api-keys-provider'
 

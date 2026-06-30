@@ -45,7 +45,9 @@ type SidebarModulesSectionProps = {
 type SidebarFormValues = SidebarModulesAdminConfig
 
 const toTitleCase = (value: string) =>
-  value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+  value
+    .replaceAll(/[_-]+/g, ' ')
+    .replaceAll(/\b\w/g, (char) => char.toUpperCase())
 
 export function SidebarModulesSection({
   config,
