@@ -134,6 +134,15 @@ export function ProfileHeader({ profile, loading }: ProfileHeaderProps) {
                   <span className='truncate'>{profile.group}</span>
                 </>
               )}
+              {profile.public_id && (
+                <>
+                  <span>•</span>
+                  <span className='truncate'>
+                    {t('Usage Query User ID')}
+                    {profile.public_id}
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
