@@ -69,6 +69,28 @@ func TestCalculateAffiliateRewardFloorsToTwoDecimalPlaces(t *testing.T) {
 	require.Equal(t, int(0.01*common.QuotaPerUnit), reward)
 }
 
+func TestTransferAffQuotaToQuotaAllowsSettledCentRewards(t *testing.T) {
+	resetAffiliateRebateTables(t)
+	originalQuotaPerUnit := common.QuotaPerUnit
+	t.Cleanup(func() { common.QuotaPerUnit = originalQuotaPerUnit })
+	common.QuotaPerUnit = 500000
+
+	transferQuota := int(0.72 * common.QuotaPerUnit)
+	seedAffiliateUser(t, 1, "inviter", 0)
+	require.NoError(t, DB.Model(&User{}).Where("id = ?", 1).Updates(map[string]any{
+		"aff_quota": transferQuota,
+		"quota":     100,
+	}).Error)
+
+	user := &User{Id: 1}
+	require.NoError(t, user.TransferAffQuotaToQuota(transferQuota))
+
+	var updated User
+	require.NoError(t, DB.First(&updated, 1).Error)
+	require.Equal(t, 0, updated.AffQuota)
+	require.Equal(t, 100+transferQuota, updated.Quota)
+}
+
 func TestSettleAffiliateRebatesForDateAppliesRatioCapAndMinimum(t *testing.T) {
 	resetAffiliateRebateTables(t)
 	loc := time.FixedZone("CST", 8*60*60)

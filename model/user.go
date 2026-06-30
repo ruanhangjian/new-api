@@ -425,8 +425,9 @@ func inviteUser(inviterId int) (err error) {
 
 func (user *User) TransferAffQuotaToQuota(quota int) error {
 	// 检查quota是否小于最小额度
-	if float64(quota) < common.QuotaPerUnit {
-		return fmt.Errorf("转移额度最小为%s！", logger.LogQuota(int(common.QuotaPerUnit)))
+	minTransferQuota := common.GetMinAffiliateTransferQuota()
+	if quota < minTransferQuota {
+		return fmt.Errorf("转移额度最小为%s！", logger.LogQuota(minTransferQuota))
 	}
 
 	// 开始数据库事务
