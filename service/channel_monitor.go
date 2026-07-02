@@ -24,6 +24,41 @@ const (
 	channelMonitorChallengeMax   = 50
 )
 
+var channelMonitorForbiddenHeaderNames = map[string]bool{
+	"host":                true,
+	"content-length":      true,
+	"content-encoding":    true,
+	"transfer-encoding":   true,
+	"connection":          true,
+	"keep-alive":          true,
+	"proxy-authenticate":  true,
+	"proxy-authorization": true,
+	"te":                  true,
+	"trailer":             true,
+	"upgrade":             true,
+}
+
+var channelMonitorBodyMergeKeyDenyList = map[string]map[string]bool{
+	model.ChannelMonitorProviderOpenAI + ":" + model.ChannelMonitorAPIModeChatCompletions: {
+		"model":    true,
+		"messages": true,
+		"stream":   true,
+	},
+	model.ChannelMonitorProviderOpenAI + ":" + model.ChannelMonitorAPIModeResponses: {
+		"model":        true,
+		"instructions": true,
+		"input":        true,
+		"stream":       true,
+	},
+	model.ChannelMonitorProviderAnthropic: {
+		"model":    true,
+		"messages": true,
+	},
+	model.ChannelMonitorProviderGemini: {
+		"contents": true,
+	},
+}
+
 type ChannelMonitorCheckResult struct {
 	MonitorID     int    `json:"monitor_id"`
 	Model         string `json:"model"`
@@ -242,7 +277,7 @@ func buildMonitorRequestURLAndBody(monitor *model.ChannelMonitor, modelName, pro
 	case model.ChannelMonitorProviderOpenAI:
 		if monitor.APIMode == model.ChannelMonitorAPIModeResponses {
 			body := map[string]any{
-				"model": modelName,
+				"model":        modelName,
 				"instructions": "You are a channel health-check endpoint. Answer the arithmetic challenge exactly and briefly.",
 				"input":        prompt,
 			}
@@ -326,8 +361,15 @@ func applyChannelMonitorExtraHeaders(req *http.Request, value string) {
 		if key == "" {
 			continue
 		}
+		if isForbiddenChannelMonitorHeaderName(key) {
+			continue
+		}
 		req.Header.Set(key, fmt.Sprint(raw))
 	}
+}
+
+func isForbiddenChannelMonitorHeaderName(name string) bool {
+	return channelMonitorForbiddenHeaderNames[strings.ToLower(strings.TrimSpace(name))]
 }
 
 func applyBodyOverride(defaultBody map[string]any, monitor *model.ChannelMonitor) string {
@@ -337,7 +379,11 @@ func applyBodyOverride(defaultBody map[string]any, monitor *model.ChannelMonitor
 	if monitor.BodyOverrideMode == model.ChannelMonitorBodyOverrideMerge && strings.TrimSpace(monitor.BodyOverride) != "" {
 		override := map[string]any{}
 		if err := common.UnmarshalJsonStr(monitor.BodyOverride, &override); err == nil {
+			deny := channelMonitorBodyMergeKeyDenyList[channelMonitorBodyMergeDenyKey(monitor)]
 			for key, value := range override {
+				if deny[key] {
+					continue
+				}
 				defaultBody[key] = value
 			}
 		}
@@ -347,6 +393,17 @@ func applyBodyOverride(defaultBody map[string]any, monitor *model.ChannelMonitor
 		return "{}"
 	}
 	return string(data)
+}
+
+func channelMonitorBodyMergeDenyKey(monitor *model.ChannelMonitor) string {
+	if monitor.Provider == model.ChannelMonitorProviderOpenAI {
+		apiMode := model.NormalizeChannelMonitorAPIMode(monitor.APIMode)
+		if apiMode == "" {
+			apiMode = model.ChannelMonitorAPIModeChatCompletions
+		}
+		return monitor.Provider + ":" + apiMode
+	}
+	return monitor.Provider
 }
 
 func joinMonitorURL(endpoint string, path string) string {
