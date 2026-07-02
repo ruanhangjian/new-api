@@ -78,6 +78,9 @@ func SetRelayRouter(router *gin.Engine) {
 		wsRouter.GET("/realtime", func(c *gin.Context) {
 			controller.Relay(c, types.RelayFormatOpenAIRealtime)
 		})
+
+		relayV1Router.GET("/images/tasks/:task_id", controller.PollImageTask)
+		relayV1Router.GET("/images/tasks/:task_id/files/:file_id", controller.GetImageTaskFile)
 	}
 	{
 		//http router
@@ -109,9 +112,7 @@ func SetRelayRouter(router *gin.Engine) {
 		httpRouter.POST("/edits", func(c *gin.Context) {
 			controller.Relay(c, types.RelayFormatOpenAIImage)
 		})
-		httpRouter.POST("/images/generations", func(c *gin.Context) {
-			controller.Relay(c, types.RelayFormatOpenAIImage)
-		})
+		httpRouter.POST("/images/generations", controller.ImageGenerations)
 		httpRouter.POST("/images/edits", func(c *gin.Context) {
 			controller.Relay(c, types.RelayFormatOpenAIImage)
 		})
