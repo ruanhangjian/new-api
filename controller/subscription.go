@@ -85,14 +85,12 @@ func UpdateSubscriptionPreference(c *gin.Context) {
 	}
 	current := user.GetSetting()
 	current.BillingPreference = pref
-	user.SetSetting(current)
-	if err := user.Update(false); err != nil {
+	if err := model.UpdateUserSetting(user.Id, current); err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	common.ApiSuccess(c, gin.H{"billing_preference": pref})
 }
-
 
 func SubscriptionPayBalance(c *gin.Context) {
 	if !operation_setting.IsPaymentComplianceConfirmed() {
