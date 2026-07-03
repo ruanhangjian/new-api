@@ -1,14 +1,10 @@
 package controller
 
 import (
-	"bytes"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
-	"strings"
+	"io"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
@@ -64,22 +60,25 @@ func ListImageWorkshopTokens(c *gin.Context) {
 	common.ApiSuccess(c, resp)
 }
 
-func CreateImageWorkshopGeneration(c *gin.Context) {
+func PrepareImageWorkshopGeneration(c *gin.Context) {
 	token, body, ok := buildImageWorkshopGenerationBody(c)
 	if !ok {
+		c.Abort()
 		return
 	}
-
-	relayCtx, recorder, err := buildImageWorkshopAsyncContext(c, token, body)
-	if relayCtx != nil {
-		defer common.CleanupBodyStorage(relayCtx)
-	}
-	if err != nil {
-		common.ApiErrorMsg(c, imageWorkshopRelayErrorMessage(recorder, err))
+	if err := replaceImageWorkshopRequestBody(c, body); err != nil {
+		common.ApiError(c, err)
+		c.Abort()
 		return
 	}
+	c.Request.Header.Set("Authorization", "Bearer sk-"+token.Key)
+	if c.Request.Header.Get("Content-Type") == "" {
+		c.Request.Header.Set("Content-Type", "application/json")
+	}
+}
 
-	task, submitErr := enqueueAsyncImageGeneration(relayCtx)
+func CreateImageWorkshopGeneration(c *gin.Context) {
+	task, submitErr := enqueueAsyncImageGeneration(c)
 	if submitErr != nil {
 		common.ApiErrorMsg(c, submitErr.Message)
 		return
@@ -151,63 +150,15 @@ func buildImageWorkshopGenerationBody(c *gin.Context) (*model.Token, []byte, boo
 	return token, rewritten, true
 }
 
-func buildImageWorkshopAsyncContext(parent *gin.Context, token *model.Token, body []byte) (*gin.Context, *httptest.ResponseRecorder, error) {
-	recorder := httptest.NewRecorder()
-	relayCtx, _ := gin.CreateTestContext(recorder)
-	req := httptest.NewRequest(http.MethodPost, "/v1/images/generations?async=true", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer sk-"+token.Key)
-	copyImageWorkshopClientHeaders(parent, req)
-	relayCtx.Request = req
-
-	middleware.TokenAuth()(relayCtx)
-	if relayCtx.IsAborted() {
-		return relayCtx, recorder, errImageWorkshopBridgeRejected
+func replaceImageWorkshopRequestBody(c *gin.Context, body []byte) error {
+	common.CleanupBodyStorage(c)
+	storage, err := common.CreateBodyStorage(body)
+	if err != nil {
+		return err
 	}
-	middleware.Distribute()(relayCtx)
-	if relayCtx.IsAborted() {
-		return relayCtx, recorder, errImageWorkshopBridgeRejected
-	}
-	return relayCtx, recorder, nil
-}
-
-var errImageWorkshopBridgeRejected = &imageWorkshopBridgeError{}
-
-type imageWorkshopBridgeError struct{}
-
-func (e *imageWorkshopBridgeError) Error() string {
-	return "image workshop bridge request rejected"
-}
-
-func copyImageWorkshopClientHeaders(parent *gin.Context, req *http.Request) {
-	if parent == nil || parent.Request == nil {
-		return
-	}
-	if parent.Request.RemoteAddr != "" {
-		req.RemoteAddr = parent.Request.RemoteAddr
-	}
-	for _, header := range []string{"X-Forwarded-For", "X-Real-IP", "CF-Connecting-IP", "Accept-Language"} {
-		if value := parent.GetHeader(header); value != "" {
-			req.Header.Set(header, value)
-		}
-	}
-}
-
-func imageWorkshopRelayErrorMessage(recorder *httptest.ResponseRecorder, err error) string {
-	if recorder == nil {
-		return err.Error()
-	}
-	body := strings.TrimSpace(recorder.Body.String())
-	if body == "" {
-		return err.Error()
-	}
-	var resp struct {
-		Error struct {
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	if unmarshalErr := common.Unmarshal([]byte(body), &resp); unmarshalErr == nil && strings.TrimSpace(resp.Error.Message) != "" {
-		return resp.Error.Message
-	}
-	return body
+	c.Set(common.KeyBodyStorage, storage)
+	c.Set(common.KeyRequestBody, body)
+	c.Request.Body = io.NopCloser(storage)
+	c.Request.ContentLength = int64(len(body))
+	return nil
 }

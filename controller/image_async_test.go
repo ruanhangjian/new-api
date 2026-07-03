@@ -416,6 +416,7 @@ func seedImageAsyncControllerUserAndToken(t *testing.T, userID int, tokenID int)
 		Id:       userID,
 		PublicId: fmt.Sprintf("public_%d", userID),
 		Username: fmt.Sprintf("user_%d", userID),
+		Role:     common.RoleCommonUser,
 		AffCode:  fmt.Sprintf("aff_%d", userID),
 		Group:    "default",
 		Quota:    100000,

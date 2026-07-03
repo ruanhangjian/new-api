@@ -271,7 +271,15 @@ func SetApiRouter(router *gin.Engine) {
 		imageWorkshopRoute.Use(middleware.UserAuth())
 		{
 			imageWorkshopRoute.GET("/tokens", controller.ListImageWorkshopTokens)
-			imageWorkshopRoute.POST("/generations", controller.CreateImageWorkshopGeneration)
+			imageWorkshopRoute.POST(
+				"/generations",
+				controller.PrepareImageWorkshopGeneration,
+				middleware.SystemPerformanceCheck(),
+				middleware.TokenAuth(),
+				middleware.ModelRequestRateLimit(),
+				middleware.Distribute(),
+				controller.CreateImageWorkshopGeneration,
+			)
 			imageWorkshopRoute.GET("/tasks/:task_id", controller.GetImageWorkshopTask)
 		}
 		tokenRoute := apiRouter.Group("/token")

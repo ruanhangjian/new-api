@@ -3,6 +3,7 @@ package controller
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -11,8 +12,12 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting"
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -53,14 +58,7 @@ func TestImageWorkshopGenerationRejectsOtherUserToken(t *testing.T) {
 	seedImageAsyncControllerUserAndToken(t, 2, 22)
 	disableImageAsyncControllerBackgroundWork(t)
 
-	recorder := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(recorder)
-	body := []byte(`{"token_id":22,"model":"gpt-image-1","prompt":"draw"}`)
-	c.Request = httptest.NewRequest(http.MethodPost, "/api/image-workshop/generations", bytes.NewReader(body))
-	c.Request.Header.Set("Content-Type", "application/json")
-	c.Set("id", 1)
-
-	CreateImageWorkshopGeneration(c)
+	recorder := performImageWorkshopGenerationRouteRequest(t, 1, []byte(`{"token_id":22,"model":"gpt-image-1","prompt":"draw"}`))
 
 	require.Equal(t, http.StatusOK, recorder.Code)
 	assert.Contains(t, recorder.Body.String(), `"success":false`)
@@ -75,14 +73,8 @@ func TestImageWorkshopGenerationQueuesOwnedTokenAndStripsTokenID(t *testing.T) {
 	seedImageAsyncControllerChannel(t, "gpt-image-1")
 	disableImageAsyncControllerBackgroundWork(t)
 
-	recorder := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(recorder)
 	body := []byte(`{"token_id":11,"model":"gpt-image-1","prompt":"draw","n":1,"size":"1024x1024","quality":"auto","response_format":"url"}`)
-	c.Request = httptest.NewRequest(http.MethodPost, "/api/image-workshop/generations", bytes.NewReader(body))
-	c.Request.Header.Set("Content-Type", "application/json")
-	c.Set("id", 1)
-
-	CreateImageWorkshopGeneration(c)
+	recorder := performImageWorkshopGenerationRouteRequest(t, 1, body)
 
 	require.Equal(t, http.StatusOK, recorder.Code)
 	var resp struct {
@@ -119,20 +111,34 @@ func TestImageWorkshopGenerationRevalidatesTokenStateBeforeQueueing(t *testing.T
 	disableImageAsyncControllerBackgroundWork(t)
 	require.NoError(t, db.Model(&model.Token{}).Where("id = ?", 11).Update("status", common.TokenStatusDisabled).Error)
 
-	recorder := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(recorder)
 	body := []byte(`{"token_id":11,"model":"gpt-image-1","prompt":"draw"}`)
-	c.Request = httptest.NewRequest(http.MethodPost, "/api/image-workshop/generations", bytes.NewReader(body))
-	c.Request.Header.Set("Content-Type", "application/json")
-	c.Set("id", 1)
+	recorder := performImageWorkshopGenerationRouteRequest(t, 1, body)
 
-	CreateImageWorkshopGeneration(c)
-
-	require.Equal(t, http.StatusOK, recorder.Code)
-	assert.Contains(t, recorder.Body.String(), `"success":false`)
+	require.Equal(t, http.StatusUnauthorized, recorder.Code)
 	var count int64
 	require.NoError(t, db.Model(&model.Task{}).Count(&count).Error)
 	assert.EqualValues(t, 0, count)
+}
+
+func TestImageWorkshopGenerationRouteAppliesModelRequestRateLimit(t *testing.T) {
+	db := setupImageAsyncControllerTestDB(t)
+	seedImageAsyncControllerUserAndToken(t, 101, 201)
+	seedImageAsyncControllerChannel(t, "gpt-image-1")
+	disableImageAsyncControllerBackgroundWork(t)
+	restore := enableImageWorkshopModelRequestRateLimit(t, 0, 1)
+	defer restore()
+
+	body := []byte(`{"token_id":201,"model":"gpt-image-1","prompt":"draw"}`)
+	first := performImageWorkshopGenerationRouteRequest(t, 101, body)
+	require.Equal(t, http.StatusOK, first.Code)
+	assert.Contains(t, first.Body.String(), `"success":true`)
+
+	second := performImageWorkshopGenerationRouteRequest(t, 101, body)
+	require.Equal(t, http.StatusTooManyRequests, second.Code)
+
+	var count int64
+	require.NoError(t, db.Model(&model.Task{}).Where("user_id = ?", 101).Count(&count).Error)
+	assert.EqualValues(t, 1, count)
 }
 
 func TestImageWorkshopTaskRequiresCurrentUserAndImagePlatform(t *testing.T) {
@@ -225,4 +231,55 @@ func TestImageWorkshopTaskReturnsSignedResultURL(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code)
 	assert.Contains(t, recorder.Body.String(), "signature=")
 	assert.NotContains(t, recorder.Body.String(), "relative_path")
+}
+
+func performImageWorkshopGenerationRouteRequest(t *testing.T, userID int, body []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	accessToken := fmt.Sprintf("image-workshop-access-%d", userID)
+	require.NoError(t, model.DB.Model(&model.User{}).Where("id = ?", userID).Update("access_token", accessToken).Error)
+
+	router := gin.New()
+	router.Use(sessions.Sessions("session", cookie.NewStore([]byte("image-workshop-test"))))
+	router.Use(middleware.BodyStorageCleanup())
+	router.POST(
+		"/api/image-workshop/generations",
+		middleware.UserAuth(),
+		PrepareImageWorkshopGeneration,
+		middleware.SystemPerformanceCheck(),
+		middleware.TokenAuth(),
+		middleware.ModelRequestRateLimit(),
+		middleware.Distribute(),
+		CreateImageWorkshopGeneration,
+	)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/image-workshop/generations", bytes.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+accessToken)
+	request.Header.Set("New-Api-User", fmt.Sprintf("public_%d", userID))
+	router.ServeHTTP(recorder, request)
+	return recorder
+}
+
+func enableImageWorkshopModelRequestRateLimit(t *testing.T, totalCount int, successCount int) func() {
+	t.Helper()
+	originalEnabled := setting.ModelRequestRateLimitEnabled
+	originalDuration := setting.ModelRequestRateLimitDurationMinutes
+	originalTotal := setting.ModelRequestRateLimitCount
+	originalSuccess := setting.ModelRequestRateLimitSuccessCount
+	originalGroup := setting.ModelRequestRateLimitGroup
+
+	setting.ModelRequestRateLimitEnabled = true
+	setting.ModelRequestRateLimitDurationMinutes = 1
+	setting.ModelRequestRateLimitCount = totalCount
+	setting.ModelRequestRateLimitSuccessCount = successCount
+	setting.ModelRequestRateLimitGroup = map[string][2]int{}
+
+	return func() {
+		setting.ModelRequestRateLimitEnabled = originalEnabled
+		setting.ModelRequestRateLimitDurationMinutes = originalDuration
+		setting.ModelRequestRateLimitCount = originalTotal
+		setting.ModelRequestRateLimitSuccessCount = originalSuccess
+		setting.ModelRequestRateLimitGroup = originalGroup
+	}
 }

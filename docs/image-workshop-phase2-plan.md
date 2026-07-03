@@ -104,8 +104,8 @@ GET /api/image-workshop/tasks/:task_id
 
 - `/api/image-workshop/*` 挂在 `middleware.UserAuth()` 下，前端只使用登录态 session。
 - `GET /api/image-workshop/tokens` 只返回当前用户自己的 token 元数据和 masked key，不返回真实 token key。
-- `POST /api/image-workshop/generations` 接收 `token_id`，服务端校验该 token 属于当前用户，再构造内部 `/v1/images/generations?async=true` 请求。
-- 内部请求会重新经过 `TokenAuth + Distribute`，因此 token 状态、过期、额度、模型限制、分组、渠道选择和计费入口仍复用 Phase 1/现有 relay 链路。
+- `POST /api/image-workshop/generations` 接收 `token_id`，服务端校验该 token 属于当前用户，然后在真实 Gin handler chain 中补入 `Authorization` 并继续执行 relay 中间件。
+- bridge 提交会经过 `SystemPerformanceCheck + TokenAuth + ModelRequestRateLimit + Distribute`，因此 token 状态、过期、额度、模型限制、分组、渠道选择、模型请求限流和计费入口仍复用 Phase 1/现有 relay 链路。
 - 转发到底层异步入队逻辑前会移除 `token_id`，并强制 `response_format` 为 `b64_json`，保证结果落盘和签名 URL 链路稳定。
 - `GET /api/image-workshop/tasks/:task_id` 只按当前登录用户查询 image task，不要求前端再提供 API key；返回 Phase 1 已生成的签名图片 URL，不暴露本地文件路径。
 
