@@ -66,6 +66,12 @@ func SetRelayRouter(router *gin.Engine) {
 	{
 		playgroundRouter.POST("/chat/completions", controller.Playground)
 	}
+	imageFileRouter := router.Group("/v1")
+	imageFileRouter.Use(middleware.RouteTag("relay"))
+	imageFileRouter.Use(middleware.SystemPerformanceCheck())
+	{
+		imageFileRouter.GET("/images/tasks/:task_id/files/:file_id", controller.GetImageTaskFile)
+	}
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.RouteTag("relay"))
 	relayV1Router.Use(middleware.SystemPerformanceCheck())
@@ -80,7 +86,6 @@ func SetRelayRouter(router *gin.Engine) {
 		})
 
 		relayV1Router.GET("/images/tasks/:task_id", controller.PollImageTask)
-		relayV1Router.GET("/images/tasks/:task_id/files/:file_id", controller.GetImageTaskFile)
 	}
 	{
 		//http router

@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
@@ -26,6 +28,22 @@ func TestRemoveAsyncQueryOnlyRemovesAsyncFlag(t *testing.T) {
 	assert.Equal(t, "foo=bar&n=2", removeAsyncQuery("async=true&foo=bar&n=2"))
 	assert.Equal(t, "", removeAsyncQuery("async=true"))
 	assert.Equal(t, "foo=bar", removeAsyncQuery("foo=bar"))
+}
+
+func TestIsImageAsyncQueryTrueAcceptsSmallSet(t *testing.T) {
+	for _, value := range []string{"true", "TRUE", "1", "yes", "on"} {
+		t.Run(value, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations?async="+value, nil)
+			assert.True(t, isImageAsyncQuery(c))
+		})
+	}
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations?async=maybe", nil)
+	assert.False(t, isImageAsyncQuery(c))
 }
 
 func TestSanitizeImageAsyncHeadersDropsCredentials(t *testing.T) {
@@ -76,6 +94,13 @@ func TestSubmitAsyncImageGenerationQueuesTask(t *testing.T) {
 	assert.Equal(t, service.ImageAsyncActionGeneration, task.Action)
 	assert.Equal(t, 1, task.UserId)
 	assert.Equal(t, 11, task.PrivateData.TokenId)
+	var user model.User
+	require.NoError(t, db.Select("quota").Where("id = ?", 1).First(&user).Error)
+	assert.Equal(t, 100000, user.Quota)
+	var token model.Token
+	require.NoError(t, db.Select("remain_quota", "used_quota").Where("id = ?", 11).First(&token).Error)
+	assert.Equal(t, 100000, token.RemainQuota)
+	assert.Equal(t, 0, token.UsedQuota)
 
 	var data service.ImageAsyncTaskData
 	require.NoError(t, task.GetData(&data))
@@ -136,6 +161,7 @@ func TestPollImageTaskHandlerPermissions(t *testing.T) {
 func TestGetImageTaskFileHandlerPermissionsAndTTL(t *testing.T) {
 	setupImageAsyncControllerTestDB(t)
 	seedImageAsyncControllerUserAndToken(t, 1, 11)
+	seedImageAsyncControllerToken(t, 1, 12)
 	store := &service.ImageResultStore{RootDir: t.TempDir(), TTL: time.Hour}
 	imageResultStore = store
 	t.Cleanup(func() { imageResultStore = service.NewImageResultStoreFromEnv() })
@@ -161,9 +187,8 @@ func TestGetImageTaskFileHandlerPermissionsAndTTL(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodGet, "/v1/images/tasks/task_file/files/"+files[0].FileID, nil)
+	c.Request.Header.Set("Authorization", "Bearer sk-token_11")
 	c.Params = gin.Params{{Key: "task_id", Value: "task_file"}, {Key: "file_id", Value: files[0].FileID}}
-	c.Set("id", 1)
-	c.Set("token_id", 11)
 	GetImageTaskFile(c)
 	assert.Equal(t, http.StatusOK, recorder.Code)
 	assert.Equal(t, "image/png", recorder.Header().Get("Content-Type"))
@@ -171,9 +196,8 @@ func TestGetImageTaskFileHandlerPermissionsAndTTL(t *testing.T) {
 	recorder = httptest.NewRecorder()
 	c, _ = gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodGet, "/v1/images/tasks/task_file/files/"+files[0].FileID, nil)
+	c.Request.Header.Set("Authorization", "Bearer sk-token_12")
 	c.Params = gin.Params{{Key: "task_id", Value: "task_file"}, {Key: "file_id", Value: files[0].FileID}}
-	c.Set("id", 1)
-	c.Set("token_id", 12)
 	GetImageTaskFile(c)
 	assert.Equal(t, http.StatusNotFound, recorder.Code)
 
@@ -188,11 +212,122 @@ func TestGetImageTaskFileHandlerPermissionsAndTTL(t *testing.T) {
 	recorder = httptest.NewRecorder()
 	c, _ = gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodGet, "/v1/images/tasks/task_file/files/"+files[0].FileID, nil)
+	c.Request.Header.Set("Authorization", "Bearer sk-token_11")
 	c.Params = gin.Params{{Key: "task_id", Value: "task_file"}, {Key: "file_id", Value: files[0].FileID}}
-	c.Set("id", 1)
-	c.Set("token_id", 11)
 	GetImageTaskFile(c)
 	assert.Equal(t, http.StatusNotFound, recorder.Code)
+}
+
+func TestGetImageTaskFileWithSignedURL(t *testing.T) {
+	setupImageAsyncControllerTestDB(t)
+	seedImageAsyncControllerUserAndToken(t, 1, 11)
+	store := &service.ImageResultStore{RootDir: t.TempDir(), TTL: time.Hour}
+	imageResultStore = store
+	t.Cleanup(func() { imageResultStore = service.NewImageResultStoreFromEnv() })
+
+	rewritten, files, expiresAt, err := store.RewriteB64JSON("task_signed", []byte(`{"data":[{"b64_json":"`+testTinyPNGBase64+`"}]}`), time.Now())
+	require.NoError(t, err)
+	task := &model.Task{
+		TaskID:   "task_signed",
+		UserId:   1,
+		Platform: constant.TaskPlatformImage,
+		Status:   model.TaskStatusSuccess,
+		PrivateData: model.TaskPrivateData{
+			TokenId: 11,
+		},
+	}
+	task.SetData(service.ImageAsyncTaskData{Result: json.RawMessage(rewritten), Files: files, ExpiresAt: expiresAt})
+	insertImageAsyncControllerTask(t, task)
+
+	signedURL := buildImageTaskFileSignedURL(task, files[0], time.Now().Add(time.Minute))
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, signedURL, nil)
+	c.Params = gin.Params{{Key: "task_id", Value: task.TaskID}, {Key: "file_id", Value: files[0].FileID}}
+	GetImageTaskFile(c)
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Equal(t, "image/png", recorder.Header().Get("Content-Type"))
+
+	expiredURL := buildImageTaskFileSignedURL(task, files[0], time.Now().Add(-time.Minute))
+	recorder = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, expiredURL, nil)
+	c.Params = gin.Params{{Key: "task_id", Value: task.TaskID}, {Key: "file_id", Value: files[0].FileID}}
+	GetImageTaskFile(c)
+	assert.Equal(t, http.StatusNotFound, recorder.Code)
+}
+
+func TestSignImageTaskResultURLsRewritesLocalFileURL(t *testing.T) {
+	task := &model.Task{
+		TaskID: "task_result",
+		UserId: 1,
+		PrivateData: model.TaskPrivateData{
+			TokenId: 11,
+		},
+	}
+	file := service.ImageResultFile{
+		FileID:    "imgfile_0_test",
+		URL:       "/v1/images/tasks/task_result/files/imgfile_0_test",
+		ExpiresAt: time.Now().Add(time.Hour).Unix(),
+	}
+	result := []byte(`{"created":1,"data":[{"url":"/v1/images/tasks/task_result/files/imgfile_0_test"}]}`)
+
+	rewritten, files, err := signImageTaskResultURLs(task, result, []service.ImageResultFile{file}, time.Now())
+	require.NoError(t, err)
+	assert.Contains(t, string(rewritten), "signature=")
+	assert.Contains(t, string(rewritten), "expires=")
+	require.Len(t, files, 1)
+	assert.Contains(t, files[0].URL, "signature=")
+}
+
+func TestBuildAsyncImageRelayContextRejectsInvalidTokenStateAndModelLimit(t *testing.T) {
+	setupImageAsyncControllerTestDB(t)
+	seedImageAsyncControllerUserAndToken(t, 1, 11)
+	task := &model.Task{
+		TaskID:   "task_auth",
+		UserId:   1,
+		Group:    "default",
+		Platform: constant.TaskPlatformImage,
+		Status:   model.TaskStatusQueued,
+		PrivateData: model.TaskPrivateData{
+			TokenId: 11,
+		},
+	}
+	data := service.ImageAsyncTaskData{Request: service.ImageAsyncRequest{
+		Method:      http.MethodPost,
+		Path:        "/v1/images/generations",
+		ContentType: "application/json",
+		Body:        json.RawMessage(`{"model":"gpt-image-1","prompt":"draw"}`),
+	}}
+
+	invalidTokenCases := []struct {
+		name    string
+		updates map[string]any
+	}{
+		{name: "disabled", updates: map[string]any{"status": common.TokenStatusDisabled}},
+		{name: "expired", updates: map[string]any{"status": common.TokenStatusEnabled, "expired_time": time.Now().Add(-time.Minute).Unix()}},
+		{name: "exhausted", updates: map[string]any{"status": common.TokenStatusEnabled, "expired_time": int64(-1), "remain_quota": 0}},
+	}
+	for _, tc := range invalidTokenCases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.NoError(t, model.DB.Model(&model.Token{}).Where("id = ?", 11).Updates(tc.updates).Error)
+			_, _, err := buildAsyncImageRelayContext(task, data)
+			require.Error(t, err)
+		})
+	}
+
+	require.NoError(t, model.DB.Model(&model.Token{}).Where("id = ?", 11).Updates(map[string]any{
+		"status":               common.TokenStatusEnabled,
+		"expired_time":         int64(-1),
+		"remain_quota":         100000,
+		"model_limits_enabled": true,
+		"model_limits":         "gpt-4o-mini",
+	}).Error)
+	_, recorder, err := buildAsyncImageRelayContext(task, data)
+	require.NoError(t, err)
+	require.NotNil(t, recorder)
+	assert.NotEqual(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "gpt-image-1")
 }
 
 func TestImageTaskDataDoesNotPersistLargeBase64(t *testing.T) {
@@ -216,6 +351,8 @@ const testTinyPNGBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQ
 
 func setupImageAsyncControllerTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
+	initImageAsyncControllerColumnNames(t)
+	require.NoError(t, i18n.Init())
 	gin.SetMode(gin.TestMode)
 	common.UsingSQLite = true
 	common.RedisEnabled = false
@@ -234,6 +371,42 @@ func setupImageAsyncControllerTestDB(t *testing.T) *gorm.DB {
 	return db
 }
 
+func initImageAsyncControllerColumnNames(t *testing.T) {
+	t.Helper()
+	originalIsMasterNode := common.IsMasterNode
+	originalSQLitePath := common.SQLitePath
+	originalUsingSQLite := common.UsingSQLite
+	originalUsingMySQL := common.UsingMySQL
+	originalUsingPostgreSQL := common.UsingPostgreSQL
+	originalSQLDSN, hadSQLDSN := os.LookupEnv("SQL_DSN")
+	defer func() {
+		common.IsMasterNode = originalIsMasterNode
+		common.SQLitePath = originalSQLitePath
+		common.UsingSQLite = originalUsingSQLite
+		common.UsingMySQL = originalUsingMySQL
+		common.UsingPostgreSQL = originalUsingPostgreSQL
+		if hadSQLDSN {
+			require.NoError(t, os.Setenv("SQL_DSN", originalSQLDSN))
+		} else {
+			require.NoError(t, os.Unsetenv("SQL_DSN"))
+		}
+	}()
+
+	common.IsMasterNode = false
+	common.SQLitePath = fmt.Sprintf("file:%s_init?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
+	common.UsingSQLite = false
+	common.UsingMySQL = false
+	common.UsingPostgreSQL = false
+	require.NoError(t, os.Setenv("SQL_DSN", "local"))
+	require.NoError(t, model.InitDB())
+	if model.DB != nil {
+		sqlDB, err := model.DB.DB()
+		if err == nil {
+			_ = sqlDB.Close()
+		}
+	}
+}
+
 func seedImageAsyncControllerUserAndToken(t *testing.T, userID int, tokenID int) {
 	t.Helper()
 	require.NoError(t, model.DB.Create(&model.User{
@@ -245,6 +418,11 @@ func seedImageAsyncControllerUserAndToken(t *testing.T, userID int, tokenID int)
 		Quota:    100000,
 		Status:   common.UserStatusEnabled,
 	}).Error)
+	seedImageAsyncControllerToken(t, userID, tokenID)
+}
+
+func seedImageAsyncControllerToken(t *testing.T, userID int, tokenID int) {
+	t.Helper()
 	require.NoError(t, model.DB.Create(&model.Token{
 		Id:          tokenID,
 		UserId:      userID,

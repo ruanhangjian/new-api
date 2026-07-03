@@ -2,11 +2,13 @@ package controller
 
 import (
 	"bytes"
+	"crypto/hmac"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,7 +41,7 @@ var (
 )
 
 func ImageGenerations(c *gin.Context) {
-	if !strings.EqualFold(c.Query("async"), "true") {
+	if !isImageAsyncQuery(c) {
 		Relay(c, types.RelayFormatOpenAIImage)
 		return
 	}
@@ -135,6 +137,16 @@ func PollImageTask(c *gin.Context) {
 }
 
 func GetImageTaskFile(c *gin.Context) {
+	if hasImageTaskFileSignature(c) {
+		getImageTaskFileBySignature(c)
+		return
+	}
+
+	middleware.TokenAuth()(c)
+	if c.IsAborted() {
+		return
+	}
+
 	task, exists, err := service.GetOwnedImageTask(c, c.Param("task_id"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"message": err.Error(), "type": "server_error"}})
@@ -144,13 +156,7 @@ func GetImageTaskFile(c *gin.Context) {
 		service.WriteImageTaskNotFound(c)
 		return
 	}
-	path, mimeType, err := imageResultStore.ResolveTaskFile(task, c.Param("file_id"), time.Now())
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"message": err.Error(), "type": "invalid_request_error"}})
-		return
-	}
-	c.Header("Content-Type", mimeType)
-	c.File(path)
+	serveImageTaskFile(c, task)
 }
 
 func executeAsyncImageTask(taskID string) {
@@ -185,7 +191,6 @@ func executeAsyncImageTaskOnce(taskID string) error {
 	if err != nil {
 		return err
 	}
-	middleware.Distribute()(c)
 	if c.IsAborted() {
 		return fmt.Errorf("%s", strings.TrimSpace(recorder.Body.String()))
 	}
@@ -199,6 +204,10 @@ func executeAsyncImageTaskOnce(taskID string) error {
 	}
 	resultBody := recorder.Body.Bytes()
 	rewritten, files, expiresAt, err := imageResultStore.RewriteB64JSON(task.TaskID, resultBody, time.Now())
+	if err != nil {
+		return err
+	}
+	rewritten, files, err = signImageTaskResultURLs(task, rewritten, files, time.Now())
 	if err != nil {
 		return err
 	}
@@ -220,10 +229,6 @@ func buildAsyncImageRelayContext(task *model.Task, data service.ImageAsyncTaskDa
 	if err != nil {
 		return nil, nil, err
 	}
-	userCache, err := model.GetUserCache(task.UserId)
-	if err != nil {
-		return nil, nil, err
-	}
 	rawURL := data.Request.Path
 	if data.Request.Query != "" {
 		rawURL += "?" + data.Request.Query
@@ -242,12 +247,14 @@ func buildAsyncImageRelayContext(task *model.Task, data service.ImageAsyncTaskDa
 		}
 		req.Header.Set(key, value)
 	}
+	req.Header.Set("Authorization", "Bearer sk-"+token.Key)
 	c.Request = req
-	userCache.WriteContext(c)
-	common.SetContextKey(c, constant.ContextKeyUsingGroup, task.Group)
-	if err = middleware.SetupContextForToken(c, token); err != nil {
-		return nil, nil, err
+
+	middleware.TokenAuth()(c)
+	if c.IsAborted() {
+		return nil, recorder, fmt.Errorf("%s", strings.TrimSpace(recorder.Body.String()))
 	}
+	middleware.Distribute()(c)
 	return c, recorder, nil
 }
 
@@ -276,6 +283,97 @@ func removeAsyncQuery(rawQuery string) string {
 	}
 	values.Del("async")
 	return values.Encode()
+}
+
+func isImageAsyncQuery(c *gin.Context) bool {
+	switch strings.ToLower(strings.TrimSpace(c.Query("async"))) {
+	case "true", "1", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func signImageTaskResultURLs(task *model.Task, result []byte, files []service.ImageResultFile, now time.Time) ([]byte, []service.ImageResultFile, error) {
+	if len(files) == 0 {
+		return result, files, nil
+	}
+	var imageResp dto.ImageResponse
+	if err := common.Unmarshal(result, &imageResp); err != nil {
+		return nil, nil, err
+	}
+	for i := range files {
+		signedURL := buildImageTaskFileSignedURL(task, files[i], imageTaskSignedURLExpiresAt(files[i], now))
+		for j := range imageResp.Data {
+			if imageResp.Data[j].Url == files[i].URL {
+				imageResp.Data[j].Url = signedURL
+			}
+		}
+		files[i].URL = signedURL
+	}
+	rewritten, err := common.Marshal(imageResp)
+	if err != nil {
+		return nil, nil, err
+	}
+	return rewritten, files, nil
+}
+
+func imageTaskSignedURLExpiresAt(file service.ImageResultFile, now time.Time) time.Time {
+	minutes := common.GetEnvOrDefault("IMAGE_WORKSHOP_SIGNED_URL_TTL_MINUTES", 30)
+	if minutes <= 0 {
+		minutes = 30
+	}
+	expiresAt := now.Add(time.Duration(minutes) * time.Minute)
+	if file.ExpiresAt > 0 && expiresAt.Unix() > file.ExpiresAt {
+		expiresAt = time.Unix(file.ExpiresAt, 0)
+	}
+	return expiresAt
+}
+
+func buildImageTaskFileSignedURL(task *model.Task, file service.ImageResultFile, expiresAt time.Time) string {
+	expiresUnix := expiresAt.Unix()
+	values := url.Values{}
+	values.Set("expires", strconv.FormatInt(expiresUnix, 10))
+	values.Set("signature", signImageTaskFile(task, file.FileID, expiresUnix))
+	return fmt.Sprintf("/v1/images/tasks/%s/files/%s?%s", task.TaskID, file.FileID, values.Encode())
+}
+
+func hasImageTaskFileSignature(c *gin.Context) bool {
+	return c.Query("expires") != "" || c.Query("signature") != ""
+}
+
+func getImageTaskFileBySignature(c *gin.Context) {
+	task, exists, err := model.GetByOnlyTaskId(c.Param("task_id"))
+	if err != nil || !exists || !service.IsImageAsyncTask(task) {
+		service.WriteImageTaskNotFound(c)
+		return
+	}
+	expiresAt, err := strconv.ParseInt(c.Query("expires"), 10, 64)
+	if err != nil || time.Now().Unix() > expiresAt {
+		service.WriteImageTaskNotFound(c)
+		return
+	}
+	expected := signImageTaskFile(task, c.Param("file_id"), expiresAt)
+	if !hmac.Equal([]byte(expected), []byte(c.Query("signature"))) {
+		service.WriteImageTaskNotFound(c)
+		return
+	}
+	serveImageTaskFile(c, task)
+}
+
+func serveImageTaskFile(c *gin.Context, task *model.Task) {
+	path, mimeType, err := imageResultStore.ResolveTaskFile(task, c.Param("file_id"), time.Now())
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"message": err.Error(), "type": "invalid_request_error"}})
+		return
+	}
+	c.Header("Content-Type", mimeType)
+	c.File(path)
+}
+
+func signImageTaskFile(task *model.Task, fileID string, expiresAt int64) string {
+	material := fmt.Sprintf("%s:%s:%d:%d:%d", task.TaskID, fileID, task.UserId, task.PrivateData.TokenId, expiresAt)
+	return common.GenerateHMAC(material)
 }
 
 func sanitizeImageAsyncHeaders(headers map[string]string) map[string]string {
