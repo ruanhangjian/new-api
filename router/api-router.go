@@ -267,6 +267,13 @@ func SetApiRouter(router *gin.Engine) {
 			channelStatusRoute.GET("/", controller.ListUserChannelStatus)
 			channelStatusRoute.GET("/:id", controller.GetUserChannelStatusDetail)
 		}
+		imageWorkshopRoute := apiRouter.Group("/image-workshop")
+		imageWorkshopRoute.Use(middleware.UserAuth())
+		{
+			imageWorkshopRoute.GET("/tokens", controller.ListImageWorkshopTokens)
+			imageWorkshopRoute.POST("/generations", controller.CreateImageWorkshopGeneration)
+			imageWorkshopRoute.GET("/tasks/:task_id", controller.GetImageWorkshopTask)
+		}
 		tokenRoute := apiRouter.Group("/token")
 		tokenRoute.Use(middleware.UserAuth())
 		{

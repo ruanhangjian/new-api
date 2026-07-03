@@ -354,15 +354,18 @@ func setupImageAsyncControllerTestDB(t *testing.T) *gorm.DB {
 	initImageAsyncControllerColumnNames(t)
 	require.NoError(t, i18n.Init())
 	gin.SetMode(gin.TestMode)
+	originalMemoryCacheEnabled := common.MemoryCacheEnabled
 	common.UsingSQLite = true
 	common.RedisEnabled = false
+	common.MemoryCacheEnabled = false
 	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	require.NoError(t, err)
 	model.DB = db
 	model.LOG_DB = db
-	require.NoError(t, db.AutoMigrate(&model.Task{}, &model.User{}, &model.Token{}))
+	require.NoError(t, db.AutoMigrate(&model.Task{}, &model.User{}, &model.Token{}, &model.Channel{}, &model.Ability{}))
 	t.Cleanup(func() {
+		common.MemoryCacheEnabled = originalMemoryCacheEnabled
 		sqlDB, err := db.DB()
 		if err == nil {
 			_ = sqlDB.Close()
@@ -431,6 +434,25 @@ func seedImageAsyncControllerToken(t *testing.T, userID int, tokenID int) {
 		Status:      common.TokenStatusEnabled,
 		RemainQuota: 100000,
 	}).Error)
+}
+
+func seedImageAsyncControllerChannel(t *testing.T, modelName string) {
+	t.Helper()
+	priority := int64(1)
+	weight := uint(1)
+	channel := &model.Channel{
+		Id:       101,
+		Type:     constant.ChannelTypeOpenAI,
+		Key:      "sk-test-channel",
+		Status:   common.ChannelStatusEnabled,
+		Name:     "image-test-channel",
+		Models:   modelName,
+		Group:    "default",
+		Priority: &priority,
+		Weight:   &weight,
+	}
+	require.NoError(t, model.DB.Create(channel).Error)
+	require.NoError(t, channel.AddAbilities(nil))
 }
 
 func disableImageAsyncControllerBackgroundWork(t *testing.T) {

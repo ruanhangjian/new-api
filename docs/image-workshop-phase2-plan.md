@@ -1,0 +1,557 @@
+# 生图工坊 Phase 2 接入计划
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** 在 Phase 1 异步文生图后端之上，先补齐 NewAPI 登录用户到异步生图 API 的桥接层，再开始迁移生图工坊前端。
+
+**Architecture:** Phase 1 的 `/v1/images/generations?async=true` 仍作为底层 relay/计费入口，继续使用 API token、Distribute 和 OpenAIImage relay。Phase 2A 新增 `/api/image-workshop/*` 登录态桥接接口，让前端用 NewAPI session 调用，不把 API key 暴露给浏览器。Phase 2B 前端只依赖桥接层轮询结果和 Phase 1 返回的签名图片 URL，不依赖本地文件路径或 Authorization header 来展示图片。
+
+**Tech Stack:** Go + Gin + GORM + NewAPI existing TokenAuth/UserAuth/Distribute/Relay, React frontend in existing NewAPI web app, local disk result storage.
+
+---
+
+## 当前状态
+
+Phase 1 后端分支：
+
+```text
+/Users/superdavid/Downloads/中转站/new-api/.worktrees/image-async-backend
+```
+
+当前分支：
+
+```text
+feature/image-async-backend
+```
+
+关键提交：
+
+```text
+9ec3a2a0 实现异步文生图后端 MVP
+8757425c 加固异步生图后端安全策略
+```
+
+已完成能力：
+
+- `POST /v1/images/generations?async=true|1|yes|on`
+- `GET /v1/images/tasks/:task_id`
+- `GET /v1/images/tasks/:task_id/files/:file_id`
+- 同步 `POST /v1/images/generations` 仍走原同步图片 relay。
+- worker 执行前重新经过 `TokenAuth + Distribute + Relay(OpenAIImage)`。
+- `b64_json` 结果落本地磁盘，并在任务结果中改写为短期签名 URL。
+- 签名图片 URL 可直接用于前端 `<img src>`，不需要 Authorization header。
+- 旧的 Authorization 文件访问仍保留，主要用于 API/调试。
+- 单实例恢复策略：超时 queued/running image task 标记 failed，不重放旧任务。
+
+已独立验证：
+
+```bash
+docker run --rm -v "$PWD":/app -v new-api-go125-mod:/go/pkg/mod -v new-api-go125-build:/root/.cache/go-build -w /app golang:1.25.1 sh -lc '/usr/local/go/bin/go test -count=1 ./model ./service ./controller ./router'
+```
+
+结果：
+
+```text
+ok github.com/QuantumNous/new-api/model
+ok github.com/QuantumNous/new-api/service
+ok github.com/QuantumNous/new-api/controller
+ok github.com/QuantumNous/new-api/router
+```
+
+最小 smoke 已确认：
+
+- 异步提交返回 `202` 和 `task_id`。
+- 轮询从 `running` 到 `completed`。
+- 返回的图片 URL 包含 `expires` 和 `signature`。
+- 不带 Authorization 访问签名 URL 返回 `200 image/png`。
+
+## 为什么下一步不是直接做前端
+
+Phase 1 的底层接口属于 `/v1` relay API，需要 API token：
+
+```http
+Authorization: Bearer sk-...
+```
+
+但 NewAPI 的生图工坊页面属于登录态前端，用户已经通过 session 登录。直接让页面保存或拼接 API key 会带来三个问题：
+
+- UX 别扭：用户进工坊后还要手动填 API key。
+- 安全边界变差：API key 进入浏览器状态、localStorage 或请求日志后更容易泄漏。
+- 后续难维护：前端会被迫理解 `/v1` TokenAuth、owner token、任务权限、签名 URL 等底层细节。
+
+因此 Phase 2A 要先做一个登录态桥接层。桥接层只接收用户 session 和 `token_id`，token key 只在服务端读取并用于复用现有 relay 链路。
+
+## Phase 2A：登录态桥接层
+
+### 实施状态（feature/image-workshop-bridge）
+
+Phase 2A 已在独立 worktree/分支中实现：
+
+```text
+/Users/superdavid/Downloads/中转站/new-api/.worktrees/image-workshop-bridge
+feature/image-workshop-bridge
+```
+
+新增登录态 API：
+
+```http
+GET /api/image-workshop/tokens
+POST /api/image-workshop/generations
+GET /api/image-workshop/tasks/:task_id
+```
+
+关键决策：
+
+- `/api/image-workshop/*` 挂在 `middleware.UserAuth()` 下，前端只使用登录态 session。
+- `GET /api/image-workshop/tokens` 只返回当前用户自己的 token 元数据和 masked key，不返回真实 token key。
+- `POST /api/image-workshop/generations` 接收 `token_id`，服务端校验该 token 属于当前用户，再构造内部 `/v1/images/generations?async=true` 请求。
+- 内部请求会重新经过 `TokenAuth + Distribute`，因此 token 状态、过期、额度、模型限制、分组、渠道选择和计费入口仍复用 Phase 1/现有 relay 链路。
+- 转发到底层异步入队逻辑前会移除 `token_id`，并强制 `response_format` 为 `b64_json`，保证结果落盘和签名 URL 链路稳定。
+- `GET /api/image-workshop/tasks/:task_id` 只按当前登录用户查询 image task，不要求前端再提供 API key；返回 Phase 1 已生成的签名图片 URL，不暴露本地文件路径。
+
+### 目标接口
+
+新增登录态 API 组：
+
+```text
+/api/image-workshop
+```
+
+建议接口：
+
+```http
+GET /api/image-workshop/tokens
+POST /api/image-workshop/generations
+GET /api/image-workshop/tasks/:task_id
+```
+
+### 接口契约
+
+#### GET /api/image-workshop/tokens
+
+用途：给前端列出当前用户可选的 token。只返回 masked key 和必要元数据，不返回真实 key。
+
+响应建议：
+
+```json
+{
+  "success": true,
+  "message": "",
+  "data": [
+    {
+      "id": 123,
+      "name": "default",
+      "key": "sk-********",
+      "group": "default",
+      "status": 1,
+      "expired_time": -1,
+      "remain_quota": 100000,
+      "unlimited_quota": false,
+      "model_limits_enabled": false,
+      "model_limits": ""
+    }
+  ]
+}
+```
+
+实现原则：
+
+- 只查询 `c.GetInt("id")` 对应用户的 token。
+- 不返回真实 token key。
+- 不在这里做复杂模型可用性判断，提交时仍以 `TokenAuth + Distribute` 的结果为准。
+
+#### POST /api/image-workshop/generations
+
+用途：登录态前端提交异步文生图任务。
+
+请求建议：
+
+```json
+{
+  "token_id": 123,
+  "model": "gpt-image-1",
+  "prompt": "a clean product photo of a ceramic cup",
+  "n": 1,
+  "size": "1024x1024",
+  "quality": "auto",
+  "response_format": "b64_json"
+}
+```
+
+响应建议：
+
+```json
+{
+  "success": true,
+  "message": "",
+  "data": {
+    "task_id": "task_xxx",
+    "status": "queued"
+  }
+}
+```
+
+实现原则：
+
+- `token_id` 必须属于当前登录用户。
+- 服务端读取 token key 后，内部复用现有异步提交逻辑。
+- 不把 token key 返回给前端。
+- 必须继续经过 `TokenAuth + Distribute`，不要绕过模型权限、额度、分组和渠道选择。
+- 请求体转发到底层 `/v1/images/generations?async=true` 时不要携带 `token_id`。
+- 如果 token 被禁用、过期、额度不足、模型无权限，返回登录态 API 风格错误，同时不要创建成功任务。
+- 默认强制或补齐 `response_format: "b64_json"`，保证本地结果存储和签名 URL 链路可用。
+
+#### GET /api/image-workshop/tasks/:task_id
+
+用途：登录态前端轮询任务。
+
+响应建议：
+
+```json
+{
+  "success": true,
+  "message": "",
+  "data": {
+    "task_id": "task_xxx",
+    "status": "completed",
+    "result": {
+      "created": 1783074236,
+      "data": [
+        {
+          "url": "/v1/images/tasks/task_xxx/files/imgfile_0_xxx?expires=1783076036&signature=..."
+        }
+      ]
+    }
+  }
+}
+```
+
+实现原则：
+
+- 只允许查询当前登录用户自己的 image task。
+- 登录态轮询不需要当前用户再次提供原 token。
+- 返回的 `result.data[].url` 必须是 Phase 1 已生成的签名 URL。
+- 不返回本地文件路径。
+
+### 建议文件
+
+创建：
+
+```text
+controller/image_workshop.go
+controller/image_workshop_test.go
+```
+
+修改：
+
+```text
+router/api-router.go
+controller/image_async.go
+controller/image_async_test.go
+service/image_async_task.go
+service/image_async_task_test.go
+docs/image-workshop-phase2-plan.md
+```
+
+可能需要的职责划分：
+
+- `controller/image_workshop.go`
+  - 登录态 bridge handlers。
+  - token 列表响应。
+  - 登录态提交和轮询响应包装。
+
+- `controller/image_async.go`
+  - 将当前 `SubmitAsyncImageGeneration` 中可复用的提交逻辑抽成内部 helper。
+  - `/v1` 仍返回 OpenAI 风格响应，`/api/image-workshop` 返回 NewAPI `success/message/data` 风格响应。
+
+- `service/image_async_task.go`
+  - 保留 `GetOwnedImageTask` 给 `/v1` token 轮询使用。
+  - 新增 `GetUserImageTask(userID int, taskID string)` 给登录态 bridge 使用，只校验 user 和 image platform。
+
+- `router/api-router.go`
+  - 在 `/api` 下新增 `imageWorkshopRoute := apiRouter.Group("/image-workshop")`。
+  - 该 group 使用 `middleware.UserAuth()`。
+
+### 实现步骤
+
+- [ ] **Step 1：创建独立 worktree/分支**
+
+如果继续在现有 Phase 1 分支上做：
+
+```bash
+cd /Users/superdavid/Downloads/中转站/new-api/.worktrees/image-async-backend
+git status --short --branch
+```
+
+如果要保持 Phase 2A 独立分支，基于 Phase 1 创建：
+
+```bash
+cd /Users/superdavid/Downloads/中转站/new-api
+git worktree add .worktrees/image-workshop-bridge -b feature/image-workshop-bridge feature/image-async-backend
+```
+
+推荐使用独立分支：
+
+```text
+feature/image-workshop-bridge
+```
+
+- [ ] **Step 2：补 service 测试**
+
+在 `service/image_async_task_test.go` 增加测试：
+
+```go
+func TestGetUserImageTaskAllowsSameUserRegardlessToken(t *testing.T) {
+    // Arrange: user 1 has image task with PrivateData.TokenId = 11.
+    // Assert: GetUserImageTask(1, taskID) returns exists=true.
+    // Assert: GetUserImageTask(2, taskID) returns exists=false.
+    // Assert: non-image platform returns exists=false.
+}
+```
+
+期望：
+
+```bash
+go test ./service -run TestGetUserImageTaskAllowsSameUserRegardlessToken -count=1
+```
+
+先失败，因为 `GetUserImageTask` 尚未实现。
+
+- [ ] **Step 3：实现 GetUserImageTask**
+
+在 `service/image_async_task.go` 增加：
+
+```go
+func GetUserImageTask(userID int, taskID string) (*model.Task, bool, error) {
+    task, exists, err := model.GetByTaskId(userID, taskID)
+    if err != nil || !exists {
+        return task, exists, err
+    }
+    if !IsImageAsyncTask(task) {
+        return nil, false, nil
+    }
+    return task, true, nil
+}
+```
+
+然后运行：
+
+```bash
+go test ./service -run TestGetUserImageTaskAllowsSameUserRegardlessToken -count=1
+```
+
+- [ ] **Step 4：抽出异步提交 helper**
+
+在 `controller/image_async.go` 中把 `SubmitAsyncImageGeneration` 的核心逻辑抽成可复用 helper。目标是让：
+
+- `/v1/images/generations?async=true` 继续返回当前 OpenAI 风格 `202 {"data": ...}`。
+- `/api/image-workshop/generations` 可以复用同一段入队逻辑，但包装成 NewAPI API 风格。
+
+建议内部返回结构：
+
+```go
+type imageAsyncSubmitResult struct {
+    TaskID string `json:"task_id"`
+    Status string `json:"status"`
+}
+```
+
+建议 helper 形态：
+
+```go
+func submitAsyncImageGeneration(c *gin.Context) (imageAsyncSubmitResult, int, error) {
+    // 复用当前 SubmitAsyncImageGeneration 的 body 读取、request validate、
+    // GenRelayInfo、task.Insert、imageAsyncTaskRunner 逻辑。
+}
+```
+
+`SubmitAsyncImageGeneration` 只负责把 helper 结果写成原有响应：
+
+```go
+func SubmitAsyncImageGeneration(c *gin.Context) {
+    result, status, err := submitAsyncImageGeneration(c)
+    if err != nil {
+        c.JSON(status, gin.H{"error": gin.H{"message": err.Error(), "type": "invalid_request_error"}})
+        return
+    }
+    c.JSON(http.StatusAccepted, gin.H{"data": result})
+}
+```
+
+注意：
+
+- 错误类型可以先保持最小实现，但测试必须覆盖 bad request 和 forbidden/unauthorized 场景。
+- 不要改变同步 `/v1/images/generations` 行为。
+
+- [ ] **Step 5：创建 bridge controller 测试**
+
+在 `controller/image_workshop_test.go` 增加测试：
+
+```go
+func TestImageWorkshopGenerationsRequiresOwnedToken(t *testing.T) {
+    // user 1 使用 user 2 的 token_id 提交，应返回失败，不应创建 image task。
+}
+
+func TestImageWorkshopGenerationsQueuesTaskWithOwnedToken(t *testing.T) {
+    // user 1 使用自己的 token_id 提交，内部经过 TokenAuth + Distribute 后创建 queued image task。
+    // 断言 task.UserId == user 1。
+    // 断言 task.PrivateData.TokenId == token_id。
+    // 断言 task.Data.Request.Body 不包含 token_id。
+}
+
+func TestImageWorkshopPollTaskRequiresOwner(t *testing.T) {
+    // user 1 可以轮询自己的 task。
+    // user 2 轮询同 task 返回 404 或 success=false。
+}
+```
+
+先运行并确认失败：
+
+```bash
+go test ./controller -run 'TestImageWorkshop' -count=1
+```
+
+- [ ] **Step 6：实现 controller/image_workshop.go**
+
+实现：
+
+```go
+func ListImageWorkshopTokens(c *gin.Context)
+func CreateImageWorkshopGeneration(c *gin.Context)
+func PollImageWorkshopTask(c *gin.Context)
+```
+
+关键要求：
+
+- 使用 `c.GetInt("id")` 作为登录用户 ID。
+- `token_id` 通过 `model.GetTokenByIds(tokenID, userID)` 校验归属。
+- 读取 token 后，在当前 request context 内设置 `Authorization: Bearer sk-<token.Key>`，再走 `middleware.TokenAuth()` 和 `middleware.Distribute()`。
+- 保留原始客户端 IP，不要用新的 `httptest` context 伪造请求，避免 token IP 限制失真。
+- 转给底层异步提交前，从 body 中移除 `token_id`。
+- 输出使用 `common.ApiSuccess` / `common.ApiError` 风格。
+
+- [ ] **Step 7：注册路由**
+
+在 `router/api-router.go` 增加：
+
+```go
+imageWorkshopRoute := apiRouter.Group("/image-workshop")
+imageWorkshopRoute.Use(middleware.UserAuth())
+{
+    imageWorkshopRoute.GET("/tokens", controller.ListImageWorkshopTokens)
+    imageWorkshopRoute.POST("/generations", controller.CreateImageWorkshopGeneration)
+    imageWorkshopRoute.GET("/tasks/:task_id", controller.PollImageWorkshopTask)
+}
+```
+
+运行：
+
+```bash
+go test ./router -count=1
+```
+
+- [ ] **Step 8：跑后端相关测试**
+
+```bash
+go test -count=1 ./model ./service ./controller ./router
+```
+
+如果本机没有 Go：
+
+```bash
+docker run --rm -v "$PWD":/app -v new-api-go125-mod:/go/pkg/mod -v new-api-go125-build:/root/.cache/go-build -w /app golang:1.25.1 sh -lc '/usr/local/go/bin/go test -count=1 ./model ./service ./controller ./router'
+```
+
+- [ ] **Step 9：做 bridge smoke**
+
+使用本地 Docker 环境时，保持原 NewAPI：
+
+```text
+http://127.0.0.1:3000
+```
+
+继续使用生图测试容器：
+
+```text
+http://127.0.0.1:3001
+```
+
+需要用浏览器登录态或测试 session 调用 `/api/image-workshop/*`：
+
+- `GET /api/image-workshop/tokens` 返回当前用户 token 列表。
+- `POST /api/image-workshop/generations` 返回 `task_id`。
+- `GET /api/image-workshop/tasks/:task_id` 从 queued/running 到 completed。
+- completed 结果里的签名 URL 可直接 `<img src>` 访问。
+- user 2 无法查询 user 1 的 task。
+- user 1 无法使用 user 2 的 token_id 提交。
+
+- [ ] **Step 10：更新文档并提交**
+
+更新：
+
+```text
+docs/image-async-backend-phase1.md
+docs/image-workshop-phase2-plan.md
+```
+
+提交：
+
+```bash
+git status --short
+git add controller/image_workshop.go controller/image_workshop_test.go controller/image_async.go controller/image_async_test.go service/image_async_task.go service/image_async_task_test.go router/api-router.go docs/image-async-backend-phase1.md docs/image-workshop-phase2-plan.md
+git commit -m "新增生图工坊登录态桥接接口"
+```
+
+## Phase 2B：前端工坊 MVP
+
+只有 Phase 2A 完成后再开始 Phase 2B。
+
+前端 MVP 目标：
+
+- 生图工坊页面入口。
+- token 选择器。
+- 模型选择器。
+- prompt 输入。
+- `n`、`size`、`quality` 等基础参数。
+- 提交异步任务。
+- 轮询任务状态。
+- 用签名 URL 展示图片。
+- 下载图片。
+- 失败状态展示。
+
+前端约束：
+
+- 不保存真实 API key。
+- 不直接访问本地文件路径。
+- 不假设 `<img>` 可以带 Authorization header。
+- 不先做图片编辑、Agent 模式、作品库和多实例能力。
+- UI 可以参考 `CookSleep/gpt_image_playground 0.6.1`，但不要不加筛选地整包搬入。
+
+建议分支：
+
+```text
+feature/image-workshop-frontend
+```
+
+## Phase 3：增强能力
+
+后续增强按独立分支推进：
+
+- 1K、2K、4K 分辨率差异计费。
+- 多生图模型配置，例如 `gpt-image-2`、`nano banana`。
+- 图片编辑、参考图、局部重绘。
+- Agent 模式。
+- 用户作品库、收藏、再次编辑。
+- 管理员配置页：TTL、磁盘上限、清理策略、签名 URL TTL。
+- 生产级补偿退款策略：上游成功但本地落盘失败时进行补偿。
+
+## 合并建议
+
+推荐顺序：
+
+1. `feature/image-async-backend` 作为后端底座完成最终验收。
+2. `feature/image-workshop-bridge` 基于 `feature/image-async-backend` 开发并提交。
+3. bridge 验收通过后，再决定是先串行合入 main，还是继续基于 bridge 开前端分支。
+4. `feature/image-workshop-frontend` 只做前端 MVP，不混入计费、多模型和作品库。
+
+不要在 `main` / `master` 上直接开发。

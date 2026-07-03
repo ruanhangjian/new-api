@@ -80,6 +80,17 @@ func GetOwnedImageTask(c *gin.Context, taskID string) (*model.Task, bool, error)
 	return task, true, nil
 }
 
+func GetUserImageTask(userID int, taskID string) (*model.Task, bool, error) {
+	task, exists, err := model.GetByTaskId(userID, taskID)
+	if err != nil || !exists {
+		return task, exists, err
+	}
+	if !IsImageAsyncTask(task) {
+		return nil, false, nil
+	}
+	return task, true, nil
+}
+
 func MarkStaleImageTasksFailed(timeout time.Duration, limit int) {
 	if timeout <= 0 {
 		return

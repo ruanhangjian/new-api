@@ -79,3 +79,33 @@ func TestChannelCreateRoutesMatchWithAndWithoutTrailingSlash(t *testing.T) {
 		})
 	}
 }
+
+func TestImageWorkshopRoutesRequireUserAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.Use(sessions.Sessions("session", cookie.NewStore([]byte("api-router-test"))))
+	SetApiRouter(router)
+
+	tests := []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodGet, path: "/api/image-workshop/tokens"},
+		{method: http.MethodPost, path: "/api/image-workshop/generations"},
+		{method: http.MethodGet, path: "/api/image-workshop/tasks/task_x"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.method+" "+tt.path, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(tt.method, tt.path, nil)
+
+			router.ServeHTTP(recorder, request)
+
+			if recorder.Code != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want %d", recorder.Code, http.StatusUnauthorized)
+			}
+		})
+	}
+}

@@ -49,28 +49,56 @@ func ImageGenerations(c *gin.Context) {
 }
 
 func SubmitAsyncImageGeneration(c *gin.Context) {
+	task, err := enqueueAsyncImageGeneration(c)
+	if err != nil {
+		c.JSON(err.StatusCode, gin.H{"error": gin.H{"message": err.Message, "type": err.Type}})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"data": gin.H{
+			"task_id": task.TaskID,
+			"status":  "queued",
+		},
+	})
+}
+
+type imageAsyncSubmitError struct {
+	StatusCode int
+	Message    string
+	Type       string
+}
+
+func newImageAsyncSubmitError(statusCode int, message string, errorType string) *imageAsyncSubmitError {
+	if errorType == "" {
+		errorType = "server_error"
+	}
+	return &imageAsyncSubmitError{StatusCode: statusCode, Message: message, Type: errorType}
+}
+
+func (e *imageAsyncSubmitError) Error() string {
+	return e.Message
+}
+
+func enqueueAsyncImageGeneration(c *gin.Context) (*model.Task, *imageAsyncSubmitError) {
 	imageAsyncMaintenanceRunner()
 
 	bodyStorage, err := common.GetBodyStorage(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"message": err.Error(), "type": "invalid_request_error"}})
-		return
+		return nil, newImageAsyncSubmitError(http.StatusBadRequest, err.Error(), "invalid_request_error")
 	}
 	body, err := bodyStorage.Bytes()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"message": err.Error(), "type": "invalid_request_error"}})
-		return
+		return nil, newImageAsyncSubmitError(http.StatusBadRequest, err.Error(), "invalid_request_error")
 	}
 	request, err := helper.GetAndValidateRequest(c, types.RelayFormatOpenAIImage)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"message": err.Error(), "type": "invalid_request_error"}})
-		return
+		return nil, newImageAsyncSubmitError(http.StatusBadRequest, err.Error(), "invalid_request_error")
 	}
 	imageReq, _ := request.(*dto.ImageRequest)
 	relayInfo, err := relaycommon.GenRelayInfo(c, types.RelayFormatOpenAIImage, request, nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"message": err.Error(), "type": "server_error"}})
-		return
+		return nil, newImageAsyncSubmitError(http.StatusInternalServerError, err.Error(), "server_error")
 	}
 
 	now := time.Now().Unix()
@@ -104,18 +132,12 @@ func SubmitAsyncImageGeneration(c *gin.Context) {
 		},
 	})
 	if err = task.Insert(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": gin.H{"message": err.Error(), "type": "server_error"}})
-		return
+		return nil, newImageAsyncSubmitError(http.StatusInternalServerError, err.Error(), "server_error")
 	}
 
 	imageAsyncTaskRunner(task.TaskID)
 
-	c.JSON(http.StatusAccepted, gin.H{
-		"data": gin.H{
-			"task_id": task.TaskID,
-			"status":  "queued",
-		},
-	})
+	return task, nil
 }
 
 func PollImageTask(c *gin.Context) {
