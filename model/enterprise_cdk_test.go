@@ -394,7 +394,7 @@ func TestOrdinaryRedemptionManagementExcludesEnterpriseCdks(t *testing.T) {
 	require.Len(t, all, 1)
 	require.Equal(t, ordinary.Id, all[0].Id)
 
-	search, searchTotal, err := SearchRedemptions("enterprise", 0, 20)
+	search, searchTotal, err := SearchRedemptions("enterprise", "", 0, 20)
 	require.NoError(t, err)
 	require.Equal(t, int64(0), searchTotal)
 	require.Empty(t, search)
