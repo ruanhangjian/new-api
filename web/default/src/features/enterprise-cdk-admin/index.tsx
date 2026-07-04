@@ -50,7 +50,10 @@ import {
   adminUpdateEnterpriseCdkWhitelist,
 } from '@/features/enterprise-cdk/api'
 import { PaginationControls } from '@/features/enterprise-cdk/pagination-controls'
-import type { EnterpriseCdkUserSearchResult } from '@/features/enterprise-cdk/types'
+import type {
+  EnterpriseCdkCode,
+  EnterpriseCdkUserSearchResult,
+} from '@/features/enterprise-cdk/types'
 import {
   CDK_STATUS,
   formatQuota,
@@ -240,10 +243,16 @@ export function EnterpriseCdkAdminPage() {
   const selectedCodes = codeItems.filter((code) =>
     selectedIds.includes(code.id)
   )
-  const selectedRefundQuota = selectedCodes.reduce(
-    (sum, code) => sum + code.quota,
-    0
-  )
+  const selectedRefundQuota = selectedCodes
+    .filter(isEnterpriseCdkCodeRecyclable)
+    .reduce((sum, code) => sum + code.quota, 0)
+  const balanceAmount = Number(balanceForm.amount)
+  const balanceSubmitDisabled =
+    balanceMutation.isPending ||
+    !Number(balanceForm.user_id) ||
+    !Number.isFinite(balanceAmount) ||
+    balanceAmount <= 0 ||
+    balanceForm.remark.trim() === ''
   const exportCodeFilters = () => ({
     user_id: Number(codeFilters.user_id) || undefined,
     batch_id: Number(codeFilters.batch_id) || undefined,
@@ -515,6 +524,7 @@ export function EnterpriseCdkAdminPage() {
                   </div>
                   <div className='flex items-end'>
                     <Button
+                      disabled={balanceSubmitDisabled}
                       onClick={() =>
                         balanceMutation.mutate({
                           user_id: Number(balanceForm.user_id),
@@ -754,7 +764,7 @@ export function EnterpriseCdkAdminPage() {
                             <input
                               type='checkbox'
                               checked={selectedIds.includes(code.id)}
-                              disabled={getCodeStatus(code) !== '未兑换'}
+                              disabled={!isEnterpriseCdkCodeRecyclable(code)}
                               onChange={() => toggleSelected(code.id)}
                             />
                           </TableCell>
@@ -1117,4 +1127,9 @@ function dateTimeLocalToUnix(value: string) {
   const timestamp = new Date(value).getTime()
   if (!Number.isFinite(timestamp)) return undefined
   return Math.floor(timestamp / 1000)
+}
+
+function isEnterpriseCdkCodeRecyclable(code: EnterpriseCdkCode) {
+  if ((code.recycled_time ?? 0) > 0) return false
+  return code.status !== CDK_STATUS.used
 }

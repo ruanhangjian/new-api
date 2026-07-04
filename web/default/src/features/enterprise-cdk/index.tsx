@@ -120,6 +120,7 @@ export function EnterpriseCdkPage() {
   })
 
   const batchItems = batches.data?.data?.items ?? []
+  const batchTotal = batches.data?.data?.total ?? batchItems.length
   const createdTotal = balance.data?.data?.created_quota ?? 0
   const usedTotal = balance.data?.data?.used_quota ?? 0
   const unusedTotal = balance.data?.data?.unused_quota ?? 0
@@ -210,7 +211,7 @@ export function EnterpriseCdkPage() {
               <StatCard
                 title='已创建总面额'
                 value={formatQuota(createdTotal, quotaPerUnit)}
-                description={`${batchItems.length} 个批次`}
+                description={`${batchTotal} 个批次`}
               />
               <StatCard
                 title='未兑换总面额'
