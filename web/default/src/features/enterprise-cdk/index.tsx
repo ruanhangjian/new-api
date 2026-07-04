@@ -230,83 +230,150 @@ export function EnterpriseCdkPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>批次名称</TableHead>
-                          <TableHead>面额</TableHead>
-                          <TableHead>数量</TableHead>
-                          <TableHead>未兑换</TableHead>
-                          <TableHead>已兑换</TableHead>
-                          <TableHead>过期时间</TableHead>
-                          <TableHead className='text-right'>操作</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {batchItems.map((batch) => (
-                          <TableRow key={batch.id}>
-                            <TableCell className='font-medium'>
-                              <Link
-                                to='/enterprise-cdk/batches/$id'
-                                params={{ id: String(batch.id) }}
-                                className='hover:underline'
-                              >
-                                {batch.name}
-                              </Link>
-                            </TableCell>
-                            <TableCell>
-                              {formatQuota(batch.quota, quotaPerUnit)}
-                            </TableCell>
-                            <TableCell>{batch.count}</TableCell>
-                            <TableCell>
-                              {batch.unused_count ??
+                    <div className='divide-border divide-y md:hidden'>
+                      {batchItems.map((batch) => (
+                        <div key={batch.id} className='space-y-3 py-3'>
+                          <Link
+                            to='/enterprise-cdk/batches/$id'
+                            params={{ id: String(batch.id) }}
+                            className='block font-medium hover:underline'
+                          >
+                            {batch.name}
+                          </Link>
+                          <div className='grid grid-cols-2 gap-x-4 gap-y-2 text-sm'>
+                            <MobileFact
+                              label='面额'
+                              value={formatQuota(batch.quota, quotaPerUnit)}
+                            />
+                            <MobileFact label='数量' value={batch.count} />
+                            <MobileFact
+                              label='未兑换'
+                              value={
+                                batch.unused_count ??
                                 batch.stats?.unused_count ??
-                                0}
-                            </TableCell>
-                            <TableCell>
-                              {batch.used_count ?? batch.stats?.used_count ?? 0}
-                            </TableCell>
-                            <TableCell>
-                              {formatTime(batch.expired_time, '永不过期')}
-                            </TableCell>
-                            <TableCell>
-                              <div className='flex justify-end gap-2'>
-                                <Button
-                                  variant='outline'
-                                  size='sm'
-                                  onClick={() =>
-                                    exportEnterpriseCdkCodes({
-                                      batch_id: batch.id,
-                                    })
-                                  }
-                                >
-                                  <Download />
-                                  导出
-                                </Button>
-                                <Button
-                                  variant='ghost'
-                                  size='sm'
-                                  onClick={() => openCreate(batch)}
-                                >
-                                  <RotateCcw />
-                                  再次创建
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                        {batchItems.length === 0 && (
-                          <TableRow>
-                            <TableCell
-                              colSpan={7}
-                              className='text-muted-foreground py-10 text-center'
+                                0
+                              }
+                            />
+                            <MobileFact
+                              label='已兑换'
+                              value={
+                                batch.used_count ?? batch.stats?.used_count ?? 0
+                              }
+                            />
+                            <MobileFact
+                              label='过期时间'
+                              value={formatTime(batch.expired_time, '永不过期')}
+                            />
+                          </div>
+                          <div className='flex flex-wrap justify-end gap-2'>
+                            <Button
+                              variant='outline'
+                              size='sm'
+                              onClick={() =>
+                                exportEnterpriseCdkCodes({ batch_id: batch.id })
+                              }
                             >
-                              暂无批次
-                            </TableCell>
+                              <Download />
+                              导出
+                            </Button>
+                            <Button
+                              variant='ghost'
+                              size='sm'
+                              onClick={() => openCreate(batch)}
+                            >
+                              <RotateCcw />
+                              再次创建
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                      {batchItems.length === 0 && (
+                        <div className='text-muted-foreground py-10 text-center'>
+                          暂无批次
+                        </div>
+                      )}
+                    </div>
+                    <div className='hidden md:block'>
+                      <Table className='min-w-[760px]'>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>批次名称</TableHead>
+                            <TableHead>面额</TableHead>
+                            <TableHead>数量</TableHead>
+                            <TableHead>未兑换</TableHead>
+                            <TableHead>已兑换</TableHead>
+                            <TableHead>过期时间</TableHead>
+                            <TableHead className='text-right'>操作</TableHead>
                           </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
+                        </TableHeader>
+                        <TableBody>
+                          {batchItems.map((batch) => (
+                            <TableRow key={batch.id}>
+                              <TableCell className='font-medium'>
+                                <Link
+                                  to='/enterprise-cdk/batches/$id'
+                                  params={{ id: String(batch.id) }}
+                                  className='hover:underline'
+                                >
+                                  {batch.name}
+                                </Link>
+                              </TableCell>
+                              <TableCell>
+                                {formatQuota(batch.quota, quotaPerUnit)}
+                              </TableCell>
+                              <TableCell>{batch.count}</TableCell>
+                              <TableCell>
+                                {batch.unused_count ??
+                                  batch.stats?.unused_count ??
+                                  0}
+                              </TableCell>
+                              <TableCell>
+                                {batch.used_count ??
+                                  batch.stats?.used_count ??
+                                  0}
+                              </TableCell>
+                              <TableCell>
+                                {formatTime(batch.expired_time, '永不过期')}
+                              </TableCell>
+                              <TableCell>
+                                <div className='flex justify-end gap-2'>
+                                  <Button
+                                    variant='outline'
+                                    size='sm'
+                                    onClick={() =>
+                                      exportEnterpriseCdkCodes({
+                                        batch_id: batch.id,
+                                      })
+                                    }
+                                  >
+                                    <Download />
+                                    导出
+                                  </Button>
+                                  <Button
+                                    variant='ghost'
+                                    size='sm'
+                                    onClick={() => openCreate(batch)}
+                                  >
+                                    <RotateCcw />
+                                    再次创建
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {batchItems.length === 0 && (
+                            <TableRow>
+                              <TableCell
+                                colSpan={7}
+                                className='text-muted-foreground py-10 text-center'
+                              >
+                                暂无批次
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -319,7 +386,7 @@ export function EnterpriseCdkPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <Table>
+                    <Table className='min-w-[760px]'>
                       <TableHeader>
                         <TableRow>
                           <TableHead>时间</TableHead>
@@ -612,7 +679,7 @@ export function EnterpriseCdkBatchDetailPage({ batchId }: { batchId: number }) {
                   />
                 </div>
               </div>
-              <Table>
+              <Table className='min-w-[960px]'>
                 <TableHeader>
                   <TableRow>
                     <TableHead className='w-10'></TableHead>
@@ -683,6 +750,21 @@ function StatCard({
         )}
       </CardContent>
     </Card>
+  )
+}
+
+function MobileFact({
+  label,
+  value,
+}: {
+  label: string
+  value: string | number
+}) {
+  return (
+    <div className='min-w-0'>
+      <div className='text-muted-foreground text-xs'>{label}</div>
+      <div className='mt-0.5 truncate text-sm font-medium'>{value}</div>
+    </div>
   )
 }
 

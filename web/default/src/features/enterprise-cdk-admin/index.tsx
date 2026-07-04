@@ -241,7 +241,7 @@ export function EnterpriseCdkAdminPage() {
                     添加白名单
                   </Button>
                 </div>
-                <Table>
+                <Table className='min-w-[920px]'>
                   <TableHeader>
                     <TableRow>
                       <TableHead>用户</TableHead>
@@ -530,7 +530,7 @@ export function EnterpriseCdkAdminPage() {
                     回收选中
                   </Button>
                 </div>
-                <Table>
+                <Table className='min-w-[1120px]'>
                   <TableHeader>
                     <TableRow>
                       <TableHead></TableHead>
@@ -715,11 +715,13 @@ function DataTable({
   description,
   headers,
   rows,
+  minWidth = 760,
 }: {
   title: string
   description?: string
   headers: string[]
   rows: Array<Array<string | number>>
+  minWidth?: number
 }) {
   return (
     <Card>
@@ -728,7 +730,7 @@ function DataTable({
         {description && <CardDescription>{description}</CardDescription>}
       </CardHeader>
       <CardContent>
-        <Table>
+        <Table style={{ minWidth }}>
           <TableHeader>
             <TableRow>
               {headers.map((header) => (
