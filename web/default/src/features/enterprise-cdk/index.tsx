@@ -54,6 +54,7 @@ import {
   getEnterpriseCdkBatches,
   getEnterpriseCdkPermission,
 } from './api'
+import { PaginationControls } from './pagination-controls'
 import type { CreateEnterpriseCdkBatchInput, EnterpriseCdkBatch } from './types'
 import {
   CDK_STATUS,
@@ -83,6 +84,8 @@ export function EnterpriseCdkPage() {
       : '余额不足。如需充值，请联系管理员线下收款后授信。'
   const [createOpen, setCreateOpen] = useState(false)
   const [form, setForm] = useState<CreateEnterpriseCdkBatchInput>(emptyForm)
+  const [batchesPage, setBatchesPage] = useState(1)
+  const [logsPage, setLogsPage] = useState(1)
 
   const permission = useQuery({
     queryKey: ['enterprise-cdk', 'permission'],
@@ -95,13 +98,13 @@ export function EnterpriseCdkPage() {
     enabled: permission.data?.data?.has_permission === true,
   })
   const batches = useQuery({
-    queryKey: ['enterprise-cdk', 'batches'],
-    queryFn: () => getEnterpriseCdkBatches({ p: 1 }),
+    queryKey: ['enterprise-cdk', 'batches', batchesPage],
+    queryFn: () => getEnterpriseCdkBatches({ p: batchesPage }),
     enabled: permission.data?.data?.has_permission === true,
   })
   const logs = useQuery({
-    queryKey: ['enterprise-cdk', 'balance-logs'],
-    queryFn: () => getEnterpriseCdkBalanceLogs({ p: 1 }),
+    queryKey: ['enterprise-cdk', 'balance-logs', logsPage],
+    queryFn: () => getEnterpriseCdkBalanceLogs({ p: logsPage }),
     enabled: permission.data?.data?.has_permission === true,
   })
 
@@ -117,20 +120,9 @@ export function EnterpriseCdkPage() {
   })
 
   const batchItems = batches.data?.data?.items ?? []
-  const createdTotal = batchItems.reduce(
-    (sum, item) => sum + item.total_quota,
-    0
-  )
-  const usedTotal = batchItems.reduce(
-    (sum, item) =>
-      sum + (item.used_count ?? item.stats?.used_count ?? 0) * item.quota,
-    0
-  )
-  const unusedTotal = batchItems.reduce(
-    (sum, item) =>
-      sum + (item.unused_count ?? item.stats?.unused_count ?? 0) * item.quota,
-    0
-  )
+  const createdTotal = balance.data?.data?.created_quota ?? 0
+  const usedTotal = balance.data?.data?.used_quota ?? 0
+  const unusedTotal = balance.data?.data?.unused_quota ?? 0
 
   const totalQuota =
     Number(form.quota || 0) * Number(form.count || 0) * (quotaPerUnit || 500000)
@@ -380,6 +372,12 @@ export function EnterpriseCdkPage() {
                         </TableBody>
                       </Table>
                     </div>
+                    <PaginationControls
+                      page={batches.data?.data?.page ?? batchesPage}
+                      pageSize={batches.data?.data?.page_size}
+                      total={batches.data?.data?.total}
+                      onPageChange={setBatchesPage}
+                    />
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -426,6 +424,12 @@ export function EnterpriseCdkPage() {
                         ))}
                       </TableBody>
                     </Table>
+                    <PaginationControls
+                      page={logs.data?.data?.page ?? logsPage}
+                      pageSize={logs.data?.data?.page_size}
+                      total={logs.data?.data?.total}
+                      onPageChange={setLogsPage}
+                    />
                   </CardContent>
                 </Card>
               </TabsContent>

@@ -129,6 +129,35 @@ func TestEnterpriseCdkContactMessageIsExposedInStatus(t *testing.T) {
 	require.Equal(t, "请微信联系企业专员充值", payload.EnterpriseCdkContactMessage)
 }
 
+func TestEnterpriseCdkBalanceReturnsGlobalQuotaTotals(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 1000)
+	seedEnterpriseCdkControllerUser(t, 2, "redeemer", 0)
+	require.NoError(t, model.AddEnterpriseCdkWhitelist(1, 99))
+	firstBatch := &model.EnterpriseCdkBatch{CreatorUserId: 1, Name: "first", Quota: 100, Count: 2, TotalQuota: 200}
+	secondBatch := &model.EnterpriseCdkBatch{CreatorUserId: 1, Name: "second", Quota: 300, Count: 1, TotalQuota: 300}
+	require.NoError(t, model.DB.Create(firstBatch).Error)
+	require.NoError(t, model.DB.Create(secondBatch).Error)
+	require.NoError(t, model.DB.Create(&model.Redemption{UserId: 1, BatchId: firstBatch.Id, Key: "used-cdk", Name: "first", Quota: 100, Status: common.RedemptionCodeStatusUsed, UsedUserId: 2}).Error)
+	require.NoError(t, model.DB.Create(&model.Redemption{UserId: 1, BatchId: firstBatch.Id, Key: "unused-cdk", Name: "first", Quota: 100, Status: common.RedemptionCodeStatusEnabled}).Error)
+	require.NoError(t, model.DB.Create(&model.Redemption{UserId: 1, BatchId: secondBatch.Id, Key: "disabled-cdk", Name: "second", Quota: 300, Status: common.RedemptionCodeStatusDisabled}).Error)
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodGet, "/api/enterprise/cdk/balance", nil, 1)
+	EnterpriseCdkBalance(ctx)
+
+	response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.True(t, response.Success, response.Message)
+	var payload struct {
+		CreatedQuota int `json:"created_quota"`
+		UsedQuota    int `json:"used_quota"`
+		UnusedQuota  int `json:"unused_quota"`
+	}
+	require.NoError(t, json.Unmarshal(response.Data, &payload))
+	require.Equal(t, 500, payload.CreatedQuota)
+	require.Equal(t, 100, payload.UsedQuota)
+	require.Equal(t, 100, payload.UnusedQuota)
+}
+
 func TestEnterpriseCdkCreateBatchDeductsBalanceAndCreatesCodes(t *testing.T) {
 	setupEnterpriseCdkControllerTestDB(t)
 	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 1000)

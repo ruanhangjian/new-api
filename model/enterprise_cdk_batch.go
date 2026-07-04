@@ -36,6 +36,12 @@ type EnterpriseCdkUserSummary struct {
 	DisabledCdks int64 `json:"disabled_cdks"`
 }
 
+type EnterpriseCdkQuotaTotals struct {
+	CreatedQuota int `json:"created_quota"`
+	UnusedQuota  int `json:"unused_quota"`
+	UsedQuota    int `json:"used_quota"`
+}
+
 type EnterpriseCdkBatchRow struct {
 	EnterpriseCdkBatch
 	CreatorEmail  string                  `json:"creator_email"`
@@ -136,6 +142,30 @@ func GetEnterpriseCdkBatchStats(batchId int) (*EnterpriseCdkBatchStats, error) {
 		}
 	}
 	return stats, nil
+}
+
+func GetEnterpriseCdkQuotaTotalsByUser(userId int) (*EnterpriseCdkQuotaTotals, error) {
+	totals := &EnterpriseCdkQuotaTotals{}
+	if err := DB.Model(&EnterpriseCdkBatch{}).
+		Select("COALESCE(SUM(total_quota), 0)").
+		Where("creator_user_id = ?", userId).
+		Scan(&totals.CreatedQuota).Error; err != nil {
+		return nil, err
+	}
+	if err := DB.Model(&Redemption{}).
+		Select("COALESCE(SUM(quota), 0)").
+		Where("user_id = ? AND batch_id > 0 AND status = ?", userId, common.RedemptionCodeStatusUsed).
+		Scan(&totals.UsedQuota).Error; err != nil {
+		return nil, err
+	}
+	now := common.GetTimestamp()
+	if err := DB.Model(&Redemption{}).
+		Select("COALESCE(SUM(quota), 0)").
+		Where("user_id = ? AND batch_id > 0 AND status = ? AND (expired_time = 0 OR expired_time >= ?)", userId, common.RedemptionCodeStatusEnabled, now).
+		Scan(&totals.UnusedQuota).Error; err != nil {
+		return nil, err
+	}
+	return totals, nil
 }
 
 func GetEnterpriseCdkUserSummary(userId int) (*EnterpriseCdkUserSummary, error) {

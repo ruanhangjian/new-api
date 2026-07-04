@@ -19,6 +19,9 @@ export interface EnterpriseCdkPermission {
 export interface EnterpriseCdkBalance {
   balance: string
   balance_quota: number
+  created_quota: number
+  unused_quota: number
+  used_quota: number
 }
 
 export interface EnterpriseCdkBatchStats {

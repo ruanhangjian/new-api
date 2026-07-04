@@ -66,9 +66,17 @@ func EnterpriseCdkBalance(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	totals, err := model.GetEnterpriseCdkQuotaTotalsByUser(userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	common.ApiSuccess(c, gin.H{
 		"balance":       service.QuotaToUSDString(user.EnterpriseCdkQuota),
 		"balance_quota": user.EnterpriseCdkQuota,
+		"created_quota": totals.CreatedQuota,
+		"unused_quota":  totals.UnusedQuota,
+		"used_quota":    totals.UsedQuota,
 	})
 }
 

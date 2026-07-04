@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Download,
@@ -49,6 +49,7 @@ import {
   adminUpdateEnterpriseCdkLimit,
   adminUpdateEnterpriseCdkWhitelist,
 } from '@/features/enterprise-cdk/api'
+import { PaginationControls } from '@/features/enterprise-cdk/pagination-controls'
 import type { EnterpriseCdkUserSearchResult } from '@/features/enterprise-cdk/types'
 import {
   CDK_STATUS,
@@ -84,10 +85,14 @@ export function EnterpriseCdkAdminPage() {
   const [recycleRemark, setRecycleRemark] = useState('')
   const [customerUserId, setCustomerUserId] = useState('')
   const [customerSearch, setCustomerSearch] = useState('')
+  const [whitelistPage, setWhitelistPage] = useState(1)
+  const [balanceLogsPage, setBalanceLogsPage] = useState(1)
+  const [codesPage, setCodesPage] = useState(1)
+  const [operationLogsPage, setOperationLogsPage] = useState(1)
 
   const whitelist = useQuery({
-    queryKey: ['enterprise-cdk-admin', 'whitelist'],
-    queryFn: () => adminGetEnterpriseCdkWhitelist({ p: 1 }),
+    queryKey: ['enterprise-cdk-admin', 'whitelist', whitelistPage],
+    queryFn: () => adminGetEnterpriseCdkWhitelist({ p: whitelistPage }),
   })
   const whitelistSearchQuery = useQuery({
     queryKey: [
@@ -105,16 +110,23 @@ export function EnterpriseCdkAdminPage() {
     enabled: balanceSearch.trim().length > 0,
   })
   const balanceLogs = useQuery({
-    queryKey: ['enterprise-cdk-admin', 'balance-logs', balanceLogUserId],
+    queryKey: [
+      'enterprise-cdk-admin',
+      'balance-logs',
+      balanceLogUserId,
+      balanceLogsPage,
+    ],
     queryFn: () =>
       adminGetEnterpriseCdkBalanceLogs({
+        p: balanceLogsPage,
         user_id: Number(balanceLogUserId) || undefined,
       }),
   })
   const codes = useQuery({
-    queryKey: ['enterprise-cdk-admin', 'codes', codeFilters],
+    queryKey: ['enterprise-cdk-admin', 'codes', codeFilters, codesPage],
     queryFn: () =>
       adminGetEnterpriseCdkCodes({
+        p: codesPage,
         user_id: codeFilters.user_id || undefined,
         batch_id: codeFilters.batch_id || undefined,
         status: codeFilters.status || undefined,
@@ -132,8 +144,8 @@ export function EnterpriseCdkAdminPage() {
     enabled: codeCreatorSearch.trim().length > 0,
   })
   const operationLogs = useQuery({
-    queryKey: ['enterprise-cdk-admin', 'operation-logs'],
-    queryFn: () => adminGetEnterpriseCdkOperationLogs(),
+    queryKey: ['enterprise-cdk-admin', 'operation-logs', operationLogsPage],
+    queryFn: () => adminGetEnterpriseCdkOperationLogs({ p: operationLogsPage }),
   })
   const customerDetail = useQuery({
     queryKey: ['enterprise-cdk-admin', 'customer', customerUserId],
@@ -222,6 +234,11 @@ export function EnterpriseCdkAdminPage() {
         ? current.filter((item) => item !== id)
         : [...current, id]
     )
+  }
+  const updateCodeFilters = (patch: Partial<typeof codeFilters>) => {
+    setCodeFilters((current) => ({ ...current, ...patch }))
+    setCodesPage(1)
+    setSelectedIds([])
   }
 
   return (
@@ -379,6 +396,12 @@ export function EnterpriseCdkAdminPage() {
                     ))}
                   </TableBody>
                 </Table>
+                <PaginationControls
+                  page={whitelist.data?.data?.page ?? whitelistPage}
+                  pageSize={whitelist.data?.data?.page_size}
+                  total={whitelist.data?.data?.total}
+                  onPageChange={setWhitelistPage}
+                />
               </CardContent>
             </Card>
           </TabsContent>
@@ -492,7 +515,10 @@ export function EnterpriseCdkAdminPage() {
                   className='max-w-48'
                   placeholder='用户 ID'
                   value={balanceLogUserId}
-                  onChange={(event) => setBalanceLogUserId(event.target.value)}
+                  onChange={(event) => {
+                    setBalanceLogUserId(event.target.value)
+                    setBalanceLogsPage(1)
+                  }}
                 />
                 <Button variant='outline' onClick={() => balanceLogs.refetch()}>
                   <RefreshCw />
@@ -520,6 +546,14 @@ export function EnterpriseCdkAdminPage() {
                   formatQuota(item.balance_after, quotaPerUnit),
                   item.remark || '-',
                 ])}
+                footer={
+                  <PaginationControls
+                    page={balanceLogs.data?.data?.page ?? balanceLogsPage}
+                    pageSize={balanceLogs.data?.data?.page_size}
+                    total={balanceLogs.data?.data?.total}
+                    onPageChange={setBalanceLogsPage}
+                  />
+                }
               />
             </div>
           </TabsContent>
@@ -547,10 +581,9 @@ export function EnterpriseCdkAdminPage() {
                     quotaPerUnit={quotaPerUnit}
                     actionLabel='设为筛选'
                     onSelect={(user) =>
-                      setCodeFilters((current) => ({
-                        ...current,
+                      updateCodeFilters({
                         user_id: String(user.id),
-                      }))
+                      })
                     }
                   />
                 </div>
@@ -560,10 +593,9 @@ export function EnterpriseCdkAdminPage() {
                     placeholder='用户 ID'
                     value={codeFilters.user_id}
                     onChange={(event) =>
-                      setCodeFilters((current) => ({
-                        ...current,
+                      updateCodeFilters({
                         user_id: event.target.value,
-                      }))
+                      })
                     }
                   />
                   <Input
@@ -571,20 +603,18 @@ export function EnterpriseCdkAdminPage() {
                     placeholder='批次 ID'
                     value={codeFilters.batch_id}
                     onChange={(event) =>
-                      setCodeFilters((current) => ({
-                        ...current,
+                      updateCodeFilters({
                         batch_id: event.target.value,
-                      }))
+                      })
                     }
                   />
                   <select
                     className='border-input h-8 rounded-lg border bg-transparent px-2 text-sm'
                     value={codeFilters.status}
                     onChange={(event) =>
-                      setCodeFilters((current) => ({
-                        ...current,
+                      updateCodeFilters({
                         status: event.target.value,
-                      }))
+                      })
                     }
                   >
                     <option value=''>全部状态</option>
@@ -598,10 +628,9 @@ export function EnterpriseCdkAdminPage() {
                     placeholder='搜索 CDK'
                     value={codeFilters.keyword}
                     onChange={(event) =>
-                      setCodeFilters((current) => ({
-                        ...current,
+                      updateCodeFilters({
                         keyword: event.target.value,
-                      }))
+                      })
                     }
                   />
                   <Button variant='outline' onClick={() => codes.refetch()}>
@@ -725,6 +754,15 @@ export function EnterpriseCdkAdminPage() {
                     ))}
                   </TableBody>
                 </Table>
+                <PaginationControls
+                  page={codes.data?.data?.page ?? codesPage}
+                  pageSize={codes.data?.data?.page_size}
+                  total={codes.data?.data?.total}
+                  onPageChange={(nextPage) => {
+                    setCodesPage(nextPage)
+                    setSelectedIds([])
+                  }}
+                />
               </CardContent>
             </Card>
           </TabsContent>
@@ -862,6 +900,14 @@ export function EnterpriseCdkAdminPage() {
                 item.cdk_count,
                 item.remark || item.request_summary || '-',
               ])}
+              footer={
+                <PaginationControls
+                  page={operationLogs.data?.data?.page ?? operationLogsPage}
+                  pageSize={operationLogs.data?.data?.page_size}
+                  total={operationLogs.data?.data?.total}
+                  onPageChange={setOperationLogsPage}
+                />
+              }
             />
           </TabsContent>
         </Tabs>
@@ -926,12 +972,14 @@ function DataTable({
   description,
   headers,
   rows,
+  footer,
   minWidth = 760,
 }: {
   title: string
   description?: string
   headers: string[]
   rows: Array<Array<string | number>>
+  footer?: ReactNode
   minWidth?: number
 }) {
   return (
@@ -969,6 +1017,7 @@ function DataTable({
             )}
           </TableBody>
         </Table>
+        {footer}
       </CardContent>
     </Card>
   )
