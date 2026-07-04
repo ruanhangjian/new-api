@@ -75,7 +75,7 @@ func GetEnterpriseCdkRedemptions(startIdx, pageSize int, creatorUserId int, batc
 }
 
 func enterpriseCdkRedemptionRowsQuery() *gorm.DB {
-	keyExpr := fmt.Sprintf("r.%s", commonKeyCol)
+	keyExpr := fmt.Sprintf("r.%s", enterpriseCdkKeyColumn())
 	return DB.Table("redemptions AS r").
 		Joins("LEFT JOIN enterprise_cdk_batches AS b ON b.id = r.batch_id").
 		Joins("LEFT JOIN users AS creator ON creator.id = r.user_id").
@@ -99,9 +99,19 @@ func applyEnterpriseCdkRedemptionFilters(query *gorm.DB, status string, keyword 
 		query = query.Where("r.status = ?", common.RedemptionCodeStatusDisabled)
 	}
 	if keyword != "" {
-		query = query.Where(fmt.Sprintf("r.%s LIKE ?", commonKeyCol), "%"+keyword+"%")
+		query = query.Where(fmt.Sprintf("r.%s LIKE ?", enterpriseCdkKeyColumn()), "%"+keyword+"%")
 	}
 	return query
+}
+
+func enterpriseCdkKeyColumn() string {
+	if commonKeyCol != "" {
+		return commonKeyCol
+	}
+	if common.UsingPostgreSQL {
+		return `"key"`
+	}
+	return "`key`"
 }
 
 func RecycleEnterpriseCdkCodes(cdkIds []int, operatorId int, remark string) (int, int, error) {

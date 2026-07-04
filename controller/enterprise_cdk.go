@@ -1,0 +1,624 @@
+package controller
+
+import (
+	"encoding/csv"
+	"errors"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
+
+type createEnterpriseCdkBatchRequest struct {
+	Name        string `json:"name" binding:"required"`
+	Remark      string `json:"remark"`
+	Quota       string `json:"quota" binding:"required"`
+	Count       int    `json:"count" binding:"required"`
+	ExpiredTime int64  `json:"expired_time"`
+}
+
+type enterpriseCdkExportRequest struct {
+	BatchId int    `json:"batch_id"`
+	CdkIds  []int  `json:"cdk_ids"`
+	UserId  int    `json:"user_id"`
+	Status  string `json:"status"`
+	Keyword string `json:"keyword"`
+}
+
+func enterpriseCdkForbidden(c *gin.Context) {
+	c.JSON(http.StatusForbidden, gin.H{
+		"success": false,
+		"message": "no permission",
+	})
+}
+
+func EnterpriseCdkPermission(c *gin.Context) {
+	userId := c.GetInt("id")
+	common.ApiSuccess(c, gin.H{
+		"has_permission": service.IsEnterpriseCdkUser(userId),
+	})
+}
+
+func EnterpriseCdkBalance(c *gin.Context) {
+	userId := c.GetInt("id")
+	if !service.IsEnterpriseCdkUser(userId) {
+		enterpriseCdkForbidden(c)
+		return
+	}
+	user, err := model.GetUserById(userId, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"balance":       service.QuotaToUSDString(user.EnterpriseCdkQuota),
+		"balance_quota": user.EnterpriseCdkQuota,
+	})
+}
+
+func EnterpriseCdkBalanceLogs(c *gin.Context) {
+	userId := c.GetInt("id")
+	if !service.IsEnterpriseCdkUser(userId) {
+		enterpriseCdkForbidden(c)
+		return
+	}
+	pageInfo := common.GetPageQuery(c)
+	logs, total, err := model.GetEnterpriseCdkQuotaLogs(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(logs)
+	common.ApiSuccess(c, pageInfo)
+}
+
+func EnterpriseCdkBatches(c *gin.Context) {
+	userId := c.GetInt("id")
+	if !service.IsEnterpriseCdkUser(userId) {
+		enterpriseCdkForbidden(c)
+		return
+	}
+	pageInfo := common.GetPageQuery(c)
+	batches, total, err := model.GetEnterpriseCdkBatchesByUser(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(batches)
+	common.ApiSuccess(c, pageInfo)
+}
+
+func EnterpriseCdkBatchDetail(c *gin.Context) {
+	userId := c.GetInt("id")
+	if !service.IsEnterpriseCdkUser(userId) {
+		enterpriseCdkForbidden(c)
+		return
+	}
+	batchId, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	batch, err := model.GetEnterpriseCdkBatchById(batchId, userId, false)
+	if err != nil {
+		enterpriseCdkForbidden(c)
+		return
+	}
+	pageInfo := common.GetPageQuery(c)
+	cdks, total, err := model.GetRedemptionsByBatch(batchId, c.Query("status"), c.Query("keyword"), pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(cdks)
+	common.ApiSuccess(c, gin.H{
+		"batch": batch,
+		"cdks":  pageInfo,
+	})
+}
+
+func CreateEnterpriseCdkBatch(c *gin.Context) {
+	userId := c.GetInt("id")
+	if !service.IsEnterpriseCdkUser(userId) {
+		enterpriseCdkForbidden(c)
+		return
+	}
+	var req createEnterpriseCdkBatchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	req.Name = strings.TrimSpace(req.Name)
+	if req.Name == "" || utf8.RuneCountInString(req.Name) > 128 {
+		common.ApiError(c, errors.New("批次名称不能为空且不能超过 128 个字符"))
+		return
+	}
+	if req.Count <= 0 {
+		common.ApiError(c, errors.New("创建数量必须大于 0"))
+		return
+	}
+	if req.ExpiredTime != 0 && req.ExpiredTime < common.GetTimestamp() {
+		common.ApiError(c, errors.New("过期时间不能早于当前时间"))
+		return
+	}
+	policy, err := service.GetEnterpriseCdkWhitelistPolicy(userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if req.Count > policy.MaxBatchCreateCount {
+		common.ApiError(c, fmt.Errorf("单次最多创建 %d 个 CDK", policy.MaxBatchCreateCount))
+		return
+	}
+	unitQuota, err := service.USDStringToQuota(req.Quota)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	totalQuota := unitQuota * req.Count
+	if unitQuota != 0 && totalQuota/unitQuota != req.Count {
+		common.ApiError(c, errors.New("创建总面额过大"))
+		return
+	}
+
+	var batch *model.EnterpriseCdkBatch
+	createdCdks := make([]model.Redemption, 0, req.Count)
+	err = model.DB.Transaction(func(tx *gorm.DB) error {
+		now := common.GetTimestamp()
+		batch = &model.EnterpriseCdkBatch{
+			CreatorUserId: userId,
+			Name:          req.Name,
+			Remark:        strings.TrimSpace(req.Remark),
+			Quota:         unitQuota,
+			Count:         req.Count,
+			TotalQuota:    totalQuota,
+			ExpiredTime:   req.ExpiredTime,
+			CreatedTime:   now,
+		}
+		if err := tx.Create(batch).Error; err != nil {
+			return err
+		}
+		if err := model.AdjustEnterpriseCdkQuota(tx, userId, 0, model.CdkQuotaLogTypeCreateCdk, -totalQuota, batch.Id, req.Count, ""); err != nil {
+			return err
+		}
+		for i := 0; i < req.Count; i++ {
+			createdCdks = append(createdCdks, model.Redemption{
+				UserId:      userId,
+				BatchId:     batch.Id,
+				Key:         common.GetUUID(),
+				Name:        req.Name,
+				Quota:       unitQuota,
+				Status:      common.RedemptionCodeStatusEnabled,
+				CreatedTime: now,
+				ExpiredTime: req.ExpiredTime,
+			})
+		}
+		return tx.CreateInBatches(&createdCdks, 100).Error
+	})
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"batch": batch,
+		"cdks":  createdCdks,
+	})
+}
+
+func EnterpriseCdkExport(c *gin.Context) {
+	userId := c.GetInt("id")
+	if !service.IsEnterpriseCdkUser(userId) {
+		enterpriseCdkForbidden(c)
+		return
+	}
+	var req enterpriseCdkExportRequest
+	_ = c.ShouldBindJSON(&req)
+	rows, err := model.GetRedemptionsForExport(userId, req.BatchId, req.CdkIds, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.CreateEnterpriseCdkOperationLog(&model.EnterpriseCdkOperationLog{
+		OperatorId:     userId,
+		TargetUserId:   userId,
+		Action:         model.EnterpriseCdkOperationExportUser,
+		BatchId:        req.BatchId,
+		CdkCount:       len(rows),
+		RequestSummary: fmt.Sprintf("batch_id=%d ids=%v", req.BatchId, req.CdkIds),
+	}); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	writeEnterpriseCdkCSV(c, rows, false)
+}
+
+func EnterpriseCdkCopyUnusedLog(c *gin.Context) {
+	userId := c.GetInt("id")
+	if !service.IsEnterpriseCdkUser(userId) {
+		enterpriseCdkForbidden(c)
+		return
+	}
+	var req struct {
+		BatchId int `json:"batch_id"`
+		Count   int `json:"count"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	batch, err := model.GetEnterpriseCdkBatchById(req.BatchId, userId, false)
+	if err != nil {
+		enterpriseCdkForbidden(c)
+		return
+	}
+	err = model.CreateEnterpriseCdkOperationLog(&model.EnterpriseCdkOperationLog{
+		OperatorId:   userId,
+		TargetUserId: userId,
+		Action:       model.EnterpriseCdkOperationCopyUnused,
+		BatchId:      batch.Id,
+		CdkCount:     req.Count,
+	})
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
+}
+
+func AdminGetEnterpriseCdkWhitelist(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	users, total, err := service.ListEnterpriseCdkWhitelist(pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(users)
+	common.ApiSuccess(c, pageInfo)
+}
+
+func AdminUpdateEnterpriseCdkWhitelist(c *gin.Context) {
+	var req struct {
+		Action string `json:"action" binding:"required"`
+		UserId int    `json:"user_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	operatorId := c.GetInt("id")
+	switch req.Action {
+	case "add":
+		if err := service.AddEnterpriseCdkWhitelist(req.UserId, operatorId); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		_ = model.CreateEnterpriseCdkOperationLog(&model.EnterpriseCdkOperationLog{OperatorId: operatorId, TargetUserId: req.UserId, Action: model.EnterpriseCdkOperationWhitelistAdd})
+	case "remove":
+		if err := service.RemoveEnterpriseCdkWhitelist(req.UserId); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		_ = model.CreateEnterpriseCdkOperationLog(&model.EnterpriseCdkOperationLog{OperatorId: operatorId, TargetUserId: req.UserId, Action: model.EnterpriseCdkOperationWhitelistRemove})
+	default:
+		common.ApiError(c, errors.New("action 必须为 add 或 remove"))
+		return
+	}
+	common.ApiSuccess(c, nil)
+}
+
+func AdminUpdateEnterpriseCdkWhitelistLimit(c *gin.Context) {
+	userId, err := strconv.Atoi(c.Param("user_id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	var req struct {
+		MaxBatchCreateCount int `json:"max_batch_create_count" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.UpdateEnterpriseCdkWhitelistLimit(userId, req.MaxBatchCreateCount); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	_ = model.CreateEnterpriseCdkOperationLog(&model.EnterpriseCdkOperationLog{
+		OperatorId:     c.GetInt("id"),
+		TargetUserId:   userId,
+		Action:         model.EnterpriseCdkOperationLimitUpdate,
+		RequestSummary: fmt.Sprintf("max_batch_create_count=%d", req.MaxBatchCreateCount),
+	})
+	common.ApiSuccess(c, nil)
+}
+
+func AdminGetEnterpriseCdkBalance(c *gin.Context) {
+	userId, err := strconv.Atoi(c.Param("user_id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	user, err := model.GetUserById(userId, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"user_id":       user.Id,
+		"email":         user.Email,
+		"balance":       service.QuotaToUSDString(user.EnterpriseCdkQuota),
+		"balance_quota": user.EnterpriseCdkQuota,
+	})
+}
+
+func AdminAdjustEnterpriseCdkBalance(c *gin.Context) {
+	var req struct {
+		UserId int    `json:"user_id" binding:"required"`
+		Amount string `json:"amount" binding:"required"`
+		Type   string `json:"type" binding:"required"`
+		Remark string `json:"remark" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	req.Remark = strings.TrimSpace(req.Remark)
+	if req.Remark == "" {
+		common.ApiError(c, errors.New("备注不能为空"))
+		return
+	}
+	amountQuota, err := service.USDStringToQuota(req.Amount)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	switch req.Type {
+	case model.CdkQuotaLogTypeAdminAdd, model.CdkQuotaLogTypeAdminRefund:
+	case model.CdkQuotaLogTypeAdminDeduct:
+		amountQuota = -amountQuota
+	default:
+		common.ApiError(c, errors.New("type 仅允许 admin_add/admin_deduct/admin_refund"))
+		return
+	}
+	err = model.DB.Transaction(func(tx *gorm.DB) error {
+		return model.AdjustEnterpriseCdkQuota(tx, req.UserId, c.GetInt("id"), req.Type, amountQuota, 0, 0, req.Remark)
+	})
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
+}
+
+func AdminGetEnterpriseCdkBalanceLogs(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	userId, _ := strconv.Atoi(c.Query("user_id"))
+	logs, total, err := model.GetEnterpriseCdkQuotaLogs(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(logs)
+	common.ApiSuccess(c, pageInfo)
+}
+
+func AdminGetEnterpriseCdkBatches(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	creatorUserId, _ := strconv.Atoi(c.Query("user_id"))
+	batches, total, err := model.GetAllEnterpriseCdkBatches(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), creatorUserId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(batches)
+	common.ApiSuccess(c, pageInfo)
+}
+
+func AdminGetEnterpriseCdkCodes(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	creatorUserId, _ := strconv.Atoi(c.Query("user_id"))
+	batchId, _ := strconv.Atoi(c.Query("batch_id"))
+	rows, total, err := model.GetEnterpriseCdkRedemptions(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), creatorUserId, batchId, c.Query("status"), c.Query("keyword"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(rows)
+	common.ApiSuccess(c, pageInfo)
+}
+
+func AdminDisableEnterpriseCdkCode(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	var req struct {
+		Disabled bool `json:"disabled"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	status := common.RedemptionCodeStatusEnabled
+	if req.Disabled {
+		status = common.RedemptionCodeStatusDisabled
+	}
+	if err := model.DB.Model(&model.Redemption{}).Where("id = ? AND batch_id > 0", id).Update("status", status).Error; err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	_ = model.CreateEnterpriseCdkOperationLog(&model.EnterpriseCdkOperationLog{
+		OperatorId:     c.GetInt("id"),
+		Action:         model.EnterpriseCdkOperationToggleCdk,
+		CdkCount:       1,
+		RequestSummary: fmt.Sprintf("id=%d disabled=%v", id, req.Disabled),
+	})
+	common.ApiSuccess(c, nil)
+}
+
+func AdminRecycleEnterpriseCdkCodes(c *gin.Context) {
+	var req struct {
+		CdkIds []int  `json:"cdk_ids" binding:"required"`
+		Remark string `json:"remark" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if strings.TrimSpace(req.Remark) == "" {
+		common.ApiError(c, errors.New("备注不能为空"))
+		return
+	}
+	refundedCount, refundedQuota, err := model.RecycleEnterpriseCdkCodes(req.CdkIds, c.GetInt("id"), strings.TrimSpace(req.Remark))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"refunded_count": refundedCount,
+		"refunded_quota": refundedQuota,
+	})
+}
+
+func AdminGetEnterpriseCdkOperationLogs(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	targetUserId, _ := strconv.Atoi(c.Query("user_id"))
+	logs, total, err := model.GetEnterpriseCdkOperationLogs(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), targetUserId, c.Query("action"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	pageInfo.SetTotal(int(total))
+	pageInfo.SetItems(logs)
+	common.ApiSuccess(c, pageInfo)
+}
+
+func AdminEnterpriseCdkExport(c *gin.Context) {
+	var req enterpriseCdkExportRequest
+	_ = c.ShouldBindJSON(&req)
+	var rows []*model.EnterpriseCdkExportRow
+	var err error
+	if req.UserId > 0 || req.Status != "" || req.Keyword != "" {
+		rows, _, err = model.GetEnterpriseCdkRedemptions(0, 100000, req.UserId, req.BatchId, req.Status, req.Keyword)
+	} else {
+		rows, err = model.GetRedemptionsForExport(0, req.BatchId, req.CdkIds, true)
+	}
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.CreateEnterpriseCdkOperationLog(&model.EnterpriseCdkOperationLog{
+		OperatorId:     c.GetInt("id"),
+		TargetUserId:   req.UserId,
+		Action:         model.EnterpriseCdkOperationExportAdmin,
+		BatchId:        req.BatchId,
+		CdkCount:       len(rows),
+		RequestSummary: fmt.Sprintf("user_id=%d batch_id=%d status=%s keyword=%s ids=%v", req.UserId, req.BatchId, req.Status, req.Keyword, req.CdkIds),
+	}); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	writeEnterpriseCdkCSV(c, rows, true)
+}
+
+func AdminGetEnterpriseCdkUserDetail(c *gin.Context) {
+	userId, err := strconv.Atoi(c.Param("user_id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	user, err := model.GetUserById(userId, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	policy, _ := model.GetEnterpriseCdkWhitelistPolicy(userId)
+	logs, _, err := model.GetEnterpriseCdkQuotaLogs(userId, 0, 20)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	batches, _, err := model.GetEnterpriseCdkBatchesByUser(userId, 0, 20)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"user": gin.H{
+			"id":                   user.Id,
+			"email":                user.Email,
+			"username":             user.Username,
+			"enterprise_cdk_quota": user.EnterpriseCdkQuota,
+			"balance":              service.QuotaToUSDString(user.EnterpriseCdkQuota),
+		},
+		"whitelist": policy,
+		"logs":      logs,
+		"batches":   batches,
+	})
+}
+
+func writeEnterpriseCdkCSV(c *gin.Context, rows []*model.EnterpriseCdkExportRow, includeCreator bool) {
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", `attachment; filename="enterprise-cdks.csv"`)
+	_, _ = c.Writer.Write([]byte{0xEF, 0xBB, 0xBF})
+	writer := csv.NewWriter(c.Writer)
+	header := []string{"批次名称", "CDK", "面额(USD)", "状态", "创建时间", "过期时间", "兑换时间", "兑换用户邮箱"}
+	if includeCreator {
+		header = []string{"创建人邮箱", "批次名称", "CDK", "面额(USD)", "状态", "创建时间", "过期时间", "兑换时间", "兑换用户邮箱"}
+	}
+	_ = writer.Write(header)
+	for _, row := range rows {
+		redeemer := row.UsedUserEmail
+		if redeemer == "" && row.UsedUserId > 0 {
+			redeemer = strconv.Itoa(row.UsedUserId)
+		}
+		record := []string{
+			row.BatchName,
+			row.Key,
+			service.QuotaToUSDString(row.Quota),
+			enterpriseCdkStatusText(row),
+			formatEnterpriseCdkTime(row.CreatedTime),
+			formatEnterpriseCdkTime(row.ExpiredTime),
+			formatEnterpriseCdkTime(row.RedeemedTime),
+			redeemer,
+		}
+		if includeCreator {
+			record = append([]string{row.CreatorEmail}, record...)
+		}
+		_ = writer.Write(record)
+	}
+	writer.Flush()
+}
+
+func enterpriseCdkStatusText(row *model.EnterpriseCdkExportRow) string {
+	switch row.Status {
+	case common.RedemptionCodeStatusUsed:
+		return "已兑换"
+	case common.RedemptionCodeStatusDisabled:
+		return "已禁用"
+	}
+	if row.ExpiredTime != 0 && row.ExpiredTime < common.GetTimestamp() {
+		return "已过期"
+	}
+	return "未兑换"
+}
+
+func formatEnterpriseCdkTime(ts int64) string {
+	if ts == 0 {
+		return ""
+	}
+	return time.Unix(ts, 0).Format("2006-01-02 15:04:05")
+}
