@@ -212,7 +212,7 @@ func TestEnterpriseCdkQueriesExcludeSoftDeletedRedemptions(t *testing.T) {
 	require.Len(t, detailRows, 1)
 	require.Equal(t, active.Id, detailRows[0].Id)
 
-	adminRows, adminTotal, err := GetEnterpriseCdkRedemptions(0, 20, 1, batch.Id, "", "")
+	adminRows, adminTotal, err := GetEnterpriseCdkRedemptions(0, 20, 1, batch.Id, "", "", 0, 0)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), adminTotal)
 	require.Len(t, adminRows, 1)

@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -34,7 +35,7 @@ func USDStringToQuota(raw string) (int, error) {
 	if err != nil || !amount.GreaterThan(decimal.Zero) {
 		return 0, errors.New("金额必须大于 0")
 	}
-	quota := amount.Mul(decimal.NewFromFloat(common.QuotaPerUnit))
+	quota := amount.Mul(quotaPerUnitDecimal())
 	if !quota.Equal(quota.Truncate(0)) {
 		return 0, errors.New("金额精度过高")
 	}
@@ -43,6 +44,15 @@ func USDStringToQuota(raw string) (int, error) {
 
 func QuotaToUSDString(quota int) string {
 	return decimal.NewFromInt(int64(quota)).
-		Div(decimal.NewFromFloat(common.QuotaPerUnit)).
+		Div(quotaPerUnitDecimal()).
 		StringFixed(2)
+}
+
+func quotaPerUnitDecimal() decimal.Decimal {
+	value := strconv.FormatFloat(common.QuotaPerUnit, 'f', -1, 64)
+	quotaPerUnit, err := decimal.NewFromString(value)
+	if err != nil || !quotaPerUnit.GreaterThan(decimal.Zero) {
+		return decimal.NewFromInt(1)
+	}
+	return quotaPerUnit
 }

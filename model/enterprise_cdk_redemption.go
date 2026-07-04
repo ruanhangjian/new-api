@@ -66,7 +66,7 @@ func GetRedemptionsByBatch(batchId int, status string, keyword string, startIdx,
 	return rows, total, err
 }
 
-func GetEnterpriseCdkRedemptions(startIdx, pageSize int, creatorUserId int, batchId int, status string, keyword string) ([]*EnterpriseCdkExportRow, int64, error) {
+func GetEnterpriseCdkRedemptions(startIdx, pageSize int, creatorUserId int, batchId int, status string, keyword string, createdStart int64, createdEnd int64) ([]*EnterpriseCdkExportRow, int64, error) {
 	var rows []*EnterpriseCdkExportRow
 	var total int64
 	query := enterpriseCdkRedemptionRowsQuery().Where("r.batch_id > 0")
@@ -75,6 +75,12 @@ func GetEnterpriseCdkRedemptions(startIdx, pageSize int, creatorUserId int, batc
 	}
 	if batchId > 0 {
 		query = query.Where("r.batch_id = ?", batchId)
+	}
+	if createdStart > 0 {
+		query = query.Where("r.created_time >= ?", createdStart)
+	}
+	if createdEnd > 0 {
+		query = query.Where("r.created_time <= ?", createdEnd)
 	}
 	query = applyEnterpriseCdkRedemptionFilters(query, status, keyword)
 	if err := query.Count(&total).Error; err != nil {

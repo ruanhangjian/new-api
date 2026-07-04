@@ -79,6 +79,8 @@ export function EnterpriseCdkAdminPage() {
     batch_id: '',
     status: '',
     keyword: '',
+    created_start: '',
+    created_end: '',
   })
   const [codeCreatorSearch, setCodeCreatorSearch] = useState('')
   const [selectedIds, setSelectedIds] = useState<number[]>([])
@@ -133,6 +135,8 @@ export function EnterpriseCdkAdminPage() {
         batch_id: codeFilters.batch_id || undefined,
         status: codeFilters.status || undefined,
         keyword: codeFilters.keyword || undefined,
+        created_start: dateTimeLocalToUnix(codeFilters.created_start),
+        created_end: dateTimeLocalToUnix(codeFilters.created_end),
       }),
   })
   const codeCreatorSearchQuery = useQuery({
@@ -245,6 +249,8 @@ export function EnterpriseCdkAdminPage() {
     batch_id: Number(codeFilters.batch_id) || undefined,
     status: codeFilters.status || undefined,
     keyword: codeFilters.keyword || undefined,
+    created_start: dateTimeLocalToUnix(codeFilters.created_start),
+    created_end: dateTimeLocalToUnix(codeFilters.created_end),
   })
   const toggleSelected = (id: number) => {
     setSelectedIds((current) =>
@@ -648,6 +654,30 @@ export function EnterpriseCdkAdminPage() {
                     onChange={(event) =>
                       updateCodeFilters({
                         keyword: event.target.value,
+                      })
+                    }
+                  />
+                  <Input
+                    aria-label='创建开始时间'
+                    className='max-w-48'
+                    title='创建开始时间'
+                    type='datetime-local'
+                    value={codeFilters.created_start}
+                    onChange={(event) =>
+                      updateCodeFilters({
+                        created_start: event.target.value,
+                      })
+                    }
+                  />
+                  <Input
+                    aria-label='创建结束时间'
+                    className='max-w-48'
+                    title='创建结束时间'
+                    type='datetime-local'
+                    value={codeFilters.created_end}
+                    onChange={(event) =>
+                      updateCodeFilters({
+                        created_end: event.target.value,
                       })
                     }
                   />
@@ -1080,4 +1110,11 @@ function DataTable({
       </CardContent>
     </Card>
   )
+}
+
+function dateTimeLocalToUnix(value: string) {
+  if (!value) return undefined
+  const timestamp = new Date(value).getTime()
+  if (!Number.isFinite(timestamp)) return undefined
+  return Math.floor(timestamp / 1000)
 }

@@ -19,7 +19,8 @@ export function formatDateTimeLocal(timestamp?: number) {
 }
 
 export function formatQuota(quota: number | undefined, quotaPerUnit?: number) {
-  const unit = quotaPerUnit && quotaPerUnit > 0 ? quotaPerUnit : 500000
+  const unit = quotaPerUnit && quotaPerUnit > 0 ? quotaPerUnit : undefined
+  if (!unit) return '$0.00'
   return `$${((quota ?? 0) / unit).toFixed(2)}`
 }
 

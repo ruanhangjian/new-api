@@ -381,6 +381,68 @@ func TestAdminGetEnterpriseCdkCodesWritesViewOperationLog(t *testing.T) {
 	require.Contains(t, log.RequestSummary, "keyword=view")
 }
 
+func TestAdminEnterpriseCdkCodesFiltersByCreatedTime(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 0)
+	batch := &model.EnterpriseCdkBatch{CreatorUserId: 1, Name: "batch", Quota: 100, Count: 3, TotalQuota: 300}
+	require.NoError(t, model.DB.Create(batch).Error)
+	for _, item := range []struct {
+		key         string
+		createdTime int64
+	}{
+		{"too-early", 1000},
+		{"in-range", 2000},
+		{"too-late", 3000},
+	} {
+		require.NoError(t, model.DB.Create(&model.Redemption{
+			UserId:      1,
+			BatchId:     batch.Id,
+			Key:         item.key,
+			Name:        "batch",
+			Quota:       100,
+			Status:      common.RedemptionCodeStatusEnabled,
+			CreatedTime: item.createdTime,
+		}).Error)
+	}
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodGet, "/api/admin/enterprise/codes?created_start=1500&created_end=2500&p=1&page_size=10", nil, 99)
+	AdminGetEnterpriseCdkCodes(ctx)
+
+	response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.True(t, response.Success, response.Message)
+	var payload struct {
+		Total int             `json:"total"`
+		Items json.RawMessage `json:"items"`
+	}
+	require.NoError(t, json.Unmarshal(response.Data, &payload))
+	require.Equal(t, 1, payload.Total)
+	var rows []model.EnterpriseCdkExportRow
+	require.NoError(t, json.Unmarshal(payload.Items, &rows))
+	require.Len(t, rows, 1)
+	require.Equal(t, "in-range", rows[0].Key)
+}
+
+func TestAdminEnterpriseCdkExportFiltersByCreatedTime(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 0)
+	batch := &model.EnterpriseCdkBatch{CreatorUserId: 1, Name: "batch", Quota: 100, Count: 2, TotalQuota: 200}
+	require.NoError(t, model.DB.Create(batch).Error)
+	require.NoError(t, model.DB.Create(&model.Redemption{UserId: 1, BatchId: batch.Id, Key: "too-early", Name: "batch", Quota: 100, Status: common.RedemptionCodeStatusEnabled, CreatedTime: 1000}).Error)
+	require.NoError(t, model.DB.Create(&model.Redemption{UserId: 1, BatchId: batch.Id, Key: "in-range", Name: "batch", Quota: 100, Status: common.RedemptionCodeStatusEnabled, CreatedTime: 2000}).Error)
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/admin/enterprise/export", gin.H{
+		"user_id":       1,
+		"created_start": int64(1500),
+		"created_end":   int64(2500),
+	}, 99)
+	AdminEnterpriseCdkExport(ctx)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	body := string(recorder.Body.Bytes())
+	require.Contains(t, body, "in-range")
+	require.NotContains(t, body, "too-early")
+}
+
 func TestEnterpriseCdkExportWritesCSVWithBOMAndOperationLog(t *testing.T) {
 	setupEnterpriseCdkControllerTestDB(t)
 	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 0)

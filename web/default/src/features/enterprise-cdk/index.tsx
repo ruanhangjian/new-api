@@ -126,13 +126,14 @@ export function EnterpriseCdkPage() {
 
   const formQuota = Number(form.quota)
   const formCount = Number(form.count)
+  const hasQuotaUnit = Boolean(quotaPerUnit && quotaPerUnit > 0)
   const hasValidName = form.name.trim().length > 0
   const hasValidQuota = Number.isFinite(formQuota) && formQuota > 0
   const hasValidCount = Number.isInteger(formCount) && formCount > 0
   const totalQuota =
     Math.max(0, Number.isFinite(formQuota) ? formQuota : 0) *
     Math.max(0, Number.isFinite(formCount) ? formCount : 0) *
-    (quotaPerUnit || 500000)
+    (quotaPerUnit || 0)
   const remainingQuota = (balance.data?.data?.balance_quota ?? 0) - totalQuota
   const insufficient = remainingQuota < 0
   const maxBatchCreateCount =
@@ -141,6 +142,7 @@ export function EnterpriseCdkPage() {
   const createDisabled =
     createMutation.isPending ||
     !hasValidName ||
+    !hasQuotaUnit ||
     !hasValidQuota ||
     !hasValidCount ||
     insufficient ||

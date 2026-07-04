@@ -26,11 +26,13 @@ type createEnterpriseCdkBatchRequest struct {
 }
 
 type enterpriseCdkExportRequest struct {
-	BatchId int    `json:"batch_id"`
-	CdkIds  []int  `json:"cdk_ids"`
-	UserId  int    `json:"user_id"`
-	Status  string `json:"status"`
-	Keyword string `json:"keyword"`
+	BatchId      int    `json:"batch_id"`
+	CdkIds       []int  `json:"cdk_ids"`
+	UserId       int    `json:"user_id"`
+	Status       string `json:"status"`
+	Keyword      string `json:"keyword"`
+	CreatedStart int64  `json:"created_start"`
+	CreatedEnd   int64  `json:"created_end"`
 }
 
 func enterpriseCdkForbidden(c *gin.Context) {
@@ -475,7 +477,9 @@ func AdminGetEnterpriseCdkCodes(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	creatorUserId, _ := strconv.Atoi(c.Query("user_id"))
 	batchId, _ := strconv.Atoi(c.Query("batch_id"))
-	rows, total, err := model.GetEnterpriseCdkRedemptions(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), creatorUserId, batchId, c.Query("status"), c.Query("keyword"))
+	createdStart, _ := strconv.ParseInt(c.Query("created_start"), 10, 64)
+	createdEnd, _ := strconv.ParseInt(c.Query("created_end"), 10, 64)
+	rows, total, err := model.GetEnterpriseCdkRedemptions(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), creatorUserId, batchId, c.Query("status"), c.Query("keyword"), createdStart, createdEnd)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -486,7 +490,7 @@ func AdminGetEnterpriseCdkCodes(c *gin.Context) {
 		Action:         model.EnterpriseCdkOperationViewAdmin,
 		BatchId:        batchId,
 		CdkCount:       len(rows),
-		RequestSummary: fmt.Sprintf("page=%d page_size=%d user_id=%d batch_id=%d status=%s keyword=%s", pageInfo.GetPage(), pageInfo.GetPageSize(), creatorUserId, batchId, c.Query("status"), c.Query("keyword")),
+		RequestSummary: fmt.Sprintf("page=%d page_size=%d user_id=%d batch_id=%d status=%s keyword=%s created_start=%d created_end=%d", pageInfo.GetPage(), pageInfo.GetPageSize(), creatorUserId, batchId, c.Query("status"), c.Query("keyword"), createdStart, createdEnd),
 	}); err != nil {
 		common.ApiError(c, err)
 		return
@@ -579,8 +583,8 @@ func AdminEnterpriseCdkExport(c *gin.Context) {
 	_ = c.ShouldBindJSON(&req)
 	var rows []*model.EnterpriseCdkExportRow
 	var err error
-	if req.UserId > 0 || req.Status != "" || req.Keyword != "" {
-		rows, _, err = model.GetEnterpriseCdkRedemptions(0, 100000, req.UserId, req.BatchId, req.Status, req.Keyword)
+	if req.UserId > 0 || req.Status != "" || req.Keyword != "" || req.CreatedStart > 0 || req.CreatedEnd > 0 {
+		rows, _, err = model.GetEnterpriseCdkRedemptions(0, 100000, req.UserId, req.BatchId, req.Status, req.Keyword, req.CreatedStart, req.CreatedEnd)
 	} else {
 		rows, err = model.GetRedemptionsForExport(0, req.BatchId, req.CdkIds, true)
 	}
@@ -594,7 +598,7 @@ func AdminEnterpriseCdkExport(c *gin.Context) {
 		Action:         model.EnterpriseCdkOperationExportAdmin,
 		BatchId:        req.BatchId,
 		CdkCount:       len(rows),
-		RequestSummary: fmt.Sprintf("user_id=%d batch_id=%d status=%s keyword=%s ids=%v", req.UserId, req.BatchId, req.Status, req.Keyword, req.CdkIds),
+		RequestSummary: fmt.Sprintf("user_id=%d batch_id=%d status=%s keyword=%s created_start=%d created_end=%d ids=%v", req.UserId, req.BatchId, req.Status, req.Keyword, req.CreatedStart, req.CreatedEnd, req.CdkIds),
 	}); err != nil {
 		common.ApiError(c, err)
 		return
