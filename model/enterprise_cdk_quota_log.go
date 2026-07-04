@@ -20,9 +20,9 @@ type EnterpriseCdkQuotaLog struct {
 	UserId          int    `json:"user_id" gorm:"index;not null"`
 	OperatorId      int    `json:"operator_id" gorm:"default:0"`
 	Type            string `json:"type" gorm:"type:varchar(32);not null"`
-	Amount          int    `json:"amount" gorm:"type:int;not null"`
-	BalanceBefore   int    `json:"balance_before" gorm:"type:int;not null"`
-	BalanceAfter    int    `json:"balance_after" gorm:"type:int;not null"`
+	Amount          int    `json:"amount" gorm:"type:bigint;not null"`
+	BalanceBefore   int    `json:"balance_before" gorm:"type:bigint;not null"`
+	BalanceAfter    int    `json:"balance_after" gorm:"type:bigint;not null"`
 	RelatedBatchId  int    `json:"related_batch_id" gorm:"default:0"`
 	RelatedCdkCount int    `json:"related_cdk_count" gorm:"default:0"`
 	Remark          string `json:"remark" gorm:"type:varchar(512)"`

@@ -171,6 +171,35 @@ func TestRecycleEnterpriseCdkCodesRefundsDisabledAndExpiredUnredeemedCodes(t *te
 	require.Equal(t, 300, user.EnterpriseCdkQuota)
 }
 
+func TestRecycleEnterpriseCdkCodesWritesOperationLogsByUserAndBatch(t *testing.T) {
+	resetEnterpriseCdkTables(t)
+	seedEnterpriseCdkUser(t, 1, "enterprise-a", 0)
+	seedEnterpriseCdkUser(t, 2, "enterprise-b", 0)
+	firstBatch := &EnterpriseCdkBatch{CreatorUserId: 1, Name: "first", Quota: 100, Count: 1, TotalQuota: 100}
+	secondBatch := &EnterpriseCdkBatch{CreatorUserId: 2, Name: "second", Quota: 200, Count: 1, TotalQuota: 200}
+	require.NoError(t, DB.Create(firstBatch).Error)
+	require.NoError(t, DB.Create(secondBatch).Error)
+	firstCode := &Redemption{UserId: 1, BatchId: firstBatch.Id, Key: "recycle-log-a", Name: firstBatch.Name, Quota: 100, Status: common.RedemptionCodeStatusEnabled}
+	secondCode := &Redemption{UserId: 2, BatchId: secondBatch.Id, Key: "recycle-log-b", Name: secondBatch.Name, Quota: 200, Status: common.RedemptionCodeStatusEnabled}
+	require.NoError(t, DB.Create(firstCode).Error)
+	require.NoError(t, DB.Create(secondCode).Error)
+
+	refunded, amount, err := RecycleEnterpriseCdkCodes([]int{firstCode.Id, secondCode.Id}, 99, "manual refund")
+	require.NoError(t, err)
+	require.Equal(t, 2, refunded)
+	require.Equal(t, 300, amount)
+
+	var logs []EnterpriseCdkOperationLog
+	require.NoError(t, DB.Where("action = ?", EnterpriseCdkOperationRecycleCdks).Order("target_user_id asc").Find(&logs).Error)
+	require.Len(t, logs, 2)
+	require.Equal(t, 1, logs[0].TargetUserId)
+	require.Equal(t, firstBatch.Id, logs[0].BatchId)
+	require.Equal(t, 1, logs[0].CdkCount)
+	require.Equal(t, 2, logs[1].TargetUserId)
+	require.Equal(t, secondBatch.Id, logs[1].BatchId)
+	require.Equal(t, 1, logs[1].CdkCount)
+}
+
 func TestRecycleEnterpriseCdkCodesDoesNotRefundCodeChangedAfterSelection(t *testing.T) {
 	resetEnterpriseCdkTables(t)
 	seedEnterpriseCdkUser(t, 1, "enterprise", 0)

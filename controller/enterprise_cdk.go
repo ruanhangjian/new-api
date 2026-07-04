@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type createEnterpriseCdkBatchRequest struct {
@@ -171,6 +172,11 @@ func CreateEnterpriseCdkBatch(c *gin.Context) {
 		common.ApiError(c, errors.New("过期时间不能早于当前时间"))
 		return
 	}
+	req.Remark = strings.TrimSpace(req.Remark)
+	if utf8.RuneCountInString(req.Remark) > 512 {
+		common.ApiError(c, errors.New("批次备注不能超过 512 个字符"))
+		return
+	}
 	policy, err := service.GetEnterpriseCdkWhitelistPolicy(userId)
 	if err != nil {
 		common.ApiError(c, err)
@@ -198,7 +204,7 @@ func CreateEnterpriseCdkBatch(c *gin.Context) {
 		batch = &model.EnterpriseCdkBatch{
 			CreatorUserId: userId,
 			Name:          req.Name,
-			Remark:        strings.TrimSpace(req.Remark),
+			Remark:        req.Remark,
 			Quota:         unitQuota,
 			Count:         req.Count,
 			TotalQuota:    totalQuota,
@@ -427,6 +433,10 @@ func AdminAdjustEnterpriseCdkBalance(c *gin.Context) {
 		common.ApiError(c, errors.New("备注不能为空"))
 		return
 	}
+	if utf8.RuneCountInString(req.Remark) > 512 {
+		common.ApiError(c, errors.New("备注不能超过 512 个字符"))
+		return
+	}
 	amountQuota, err := service.USDStringToQuota(req.Amount)
 	if err != nil {
 		common.ApiError(c, err)
@@ -510,14 +520,28 @@ func AdminDisableEnterpriseCdkCode(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Disabled bool `json:"disabled"`
+		Disabled *bool `json:"disabled" binding:"required"`
 	}
-	_ = c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	status := common.RedemptionCodeStatusEnabled
-	if req.Disabled {
+	if *req.Disabled {
 		status = common.RedemptionCodeStatusDisabled
 	}
 	err = model.DB.Transaction(func(tx *gorm.DB) error {
+		var code model.Redemption
+		query := tx.Where("id = ? AND batch_id > 0 AND status IN ? AND used_user_id = 0 AND recycled_time = 0", id, []int{
+			common.RedemptionCodeStatusEnabled,
+			common.RedemptionCodeStatusDisabled,
+		})
+		if !common.UsingSQLite {
+			query = query.Clauses(clause.Locking{Strength: "UPDATE"})
+		}
+		if err := query.First(&code).Error; err != nil {
+			return errors.New("CDK 不存在或状态不可操作")
+		}
 		result := tx.Model(&model.Redemption{}).
 			Where("id = ? AND batch_id > 0 AND status IN ? AND used_user_id = 0 AND recycled_time = 0", id, []int{
 				common.RedemptionCodeStatusEnabled,
@@ -532,9 +556,11 @@ func AdminDisableEnterpriseCdkCode(c *gin.Context) {
 		}
 		return tx.Create(&model.EnterpriseCdkOperationLog{
 			OperatorId:     c.GetInt("id"),
+			TargetUserId:   code.UserId,
 			Action:         model.EnterpriseCdkOperationToggleCdk,
+			BatchId:        code.BatchId,
 			CdkCount:       1,
-			RequestSummary: fmt.Sprintf("id=%d disabled=%v", id, req.Disabled),
+			RequestSummary: fmt.Sprintf("id=%d disabled=%v", id, *req.Disabled),
 		}).Error
 	})
 	if err != nil {
@@ -555,6 +581,10 @@ func AdminRecycleEnterpriseCdkCodes(c *gin.Context) {
 	}
 	if strings.TrimSpace(req.Remark) == "" {
 		common.ApiError(c, errors.New("备注不能为空"))
+		return
+	}
+	if utf8.RuneCountInString(strings.TrimSpace(req.Remark)) > 512 {
+		common.ApiError(c, errors.New("备注不能超过 512 个字符"))
 		return
 	}
 	refundedCount, refundedQuota, err := model.RecycleEnterpriseCdkCodes(req.CdkIds, c.GetInt("id"), strings.TrimSpace(req.Remark))
@@ -589,7 +619,7 @@ func AdminEnterpriseCdkExport(c *gin.Context) {
 	var rows []*model.EnterpriseCdkExportRow
 	var err error
 	if req.UserId > 0 || req.Status != "" || req.Keyword != "" || req.CreatedStart > 0 || req.CreatedEnd > 0 {
-		rows, _, err = model.GetEnterpriseCdkRedemptions(0, 100000, req.UserId, req.BatchId, req.Status, req.Keyword, req.CreatedStart, req.CreatedEnd)
+		rows, err = model.GetEnterpriseCdkRedemptionsForExport(req.UserId, req.BatchId, req.CdkIds, req.Status, req.Keyword, req.CreatedStart, req.CreatedEnd)
 	} else {
 		rows, err = model.GetRedemptionsForExport(0, req.BatchId, req.CdkIds, true)
 	}

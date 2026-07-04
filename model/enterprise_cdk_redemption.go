@@ -69,6 +69,23 @@ func GetRedemptionsByBatch(batchId int, status string, keyword string, startIdx,
 func GetEnterpriseCdkRedemptions(startIdx, pageSize int, creatorUserId int, batchId int, status string, keyword string, createdStart int64, createdEnd int64) ([]*EnterpriseCdkExportRow, int64, error) {
 	var rows []*EnterpriseCdkExportRow
 	var total int64
+	query := buildEnterpriseCdkRedemptionsQuery(creatorUserId, batchId, nil, status, keyword, createdStart, createdEnd)
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err := query.Order("r.id desc").Limit(pageSize).Offset(startIdx).Scan(&rows).Error
+	return rows, total, err
+}
+
+func GetEnterpriseCdkRedemptionsForExport(creatorUserId int, batchId int, cdkIds []int, status string, keyword string, createdStart int64, createdEnd int64) ([]*EnterpriseCdkExportRow, error) {
+	var rows []*EnterpriseCdkExportRow
+	err := buildEnterpriseCdkRedemptionsQuery(creatorUserId, batchId, cdkIds, status, keyword, createdStart, createdEnd).
+		Order("r.id asc").
+		Scan(&rows).Error
+	return rows, err
+}
+
+func buildEnterpriseCdkRedemptionsQuery(creatorUserId int, batchId int, cdkIds []int, status string, keyword string, createdStart int64, createdEnd int64) *gorm.DB {
 	query := enterpriseCdkRedemptionRowsQuery().Where("r.batch_id > 0")
 	if creatorUserId > 0 {
 		query = query.Where("r.user_id = ?", creatorUserId)
@@ -76,18 +93,16 @@ func GetEnterpriseCdkRedemptions(startIdx, pageSize int, creatorUserId int, batc
 	if batchId > 0 {
 		query = query.Where("r.batch_id = ?", batchId)
 	}
+	if len(cdkIds) > 0 {
+		query = query.Where("r.id IN ?", cdkIds)
+	}
 	if createdStart > 0 {
 		query = query.Where("r.created_time >= ?", createdStart)
 	}
 	if createdEnd > 0 {
 		query = query.Where("r.created_time <= ?", createdEnd)
 	}
-	query = applyEnterpriseCdkRedemptionFilters(query, status, keyword)
-	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-	err := query.Order("r.id desc").Limit(pageSize).Offset(startIdx).Scan(&rows).Error
-	return rows, total, err
+	return applyEnterpriseCdkRedemptionFilters(query, status, keyword)
 }
 
 func enterpriseCdkRedemptionRowsQuery() *gorm.DB {
@@ -156,7 +171,16 @@ func RecycleEnterpriseCdkCodes(cdkIds []int, operatorId int, remark string) (int
 			quota int
 			count int
 		}
+		type operationKey struct {
+			userId  int
+			batchId int
+		}
+		type operationBucket struct {
+			count int
+			ids   []int
+		}
 		byUser := make(map[int]refundBucket)
+		byOperation := make(map[operationKey]operationBucket)
 		for _, code := range codes {
 			result := tx.Model(&Redemption{}).
 				Where("id = ? AND batch_id > 0 AND user_id = ? AND quota = ? AND status IN ? AND used_user_id = 0 AND redeemed_time = 0 AND recycled_time = 0", code.Id, code.UserId, code.Quota, eligibleStatuses).
@@ -186,6 +210,12 @@ func RecycleEnterpriseCdkCodes(cdkIds []int, operatorId int, remark string) (int
 			}
 			bucket.count++
 			byUser[code.UserId] = bucket
+
+			opKey := operationKey{userId: code.UserId, batchId: code.BatchId}
+			opBucket := byOperation[opKey]
+			opBucket.count++
+			opBucket.ids = append(opBucket.ids, code.Id)
+			byOperation[opKey] = opBucket
 		}
 		if refundedCount == 0 {
 			return nil
@@ -197,13 +227,19 @@ func RecycleEnterpriseCdkCodes(cdkIds []int, operatorId int, remark string) (int
 			}
 		}
 
-		return tx.Create(&EnterpriseCdkOperationLog{
-			OperatorId:     operatorId,
-			Action:         EnterpriseCdkOperationRecycleCdks,
-			CdkCount:       refundedCount,
-			RequestSummary: fmt.Sprintf("ids=%v", eligibleIds),
-			Remark:         remark,
-		}).Error
+		logs := make([]EnterpriseCdkOperationLog, 0, len(byOperation))
+		for key, bucket := range byOperation {
+			logs = append(logs, EnterpriseCdkOperationLog{
+				OperatorId:     operatorId,
+				TargetUserId:   key.userId,
+				Action:         EnterpriseCdkOperationRecycleCdks,
+				BatchId:        key.batchId,
+				CdkCount:       bucket.count,
+				RequestSummary: fmt.Sprintf("ids=%v all_ids=%v", bucket.ids, eligibleIds),
+				Remark:         remark,
+			})
+		}
+		return tx.Create(&logs).Error
 	})
 	if err != nil {
 		return 0, 0, err

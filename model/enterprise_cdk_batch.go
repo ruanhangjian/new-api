@@ -11,9 +11,9 @@ type EnterpriseCdkBatch struct {
 	CreatorUserId int    `json:"creator_user_id" gorm:"index;not null"`
 	Name          string `json:"name" gorm:"type:varchar(128);not null"`
 	Remark        string `json:"remark" gorm:"type:varchar(512)"`
-	Quota         int    `json:"quota" gorm:"type:int;not null"`
+	Quota         int    `json:"quota" gorm:"type:bigint;not null"`
 	Count         int    `json:"count" gorm:"not null"`
-	TotalQuota    int    `json:"total_quota" gorm:"type:int;not null"`
+	TotalQuota    int    `json:"total_quota" gorm:"type:bigint;not null"`
 	ExpiredTime   int64  `json:"expired_time" gorm:"bigint;default:0"`
 	CreatedTime   int64  `json:"created_time" gorm:"bigint;autoCreateTime"`
 }

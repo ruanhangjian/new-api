@@ -344,6 +344,71 @@ func TestAdminDisableEnterpriseCdkCodeRejectsUsedCode(t *testing.T) {
 	require.Equal(t, 2, code.UsedUserId)
 }
 
+func TestAdminDisableEnterpriseCdkCodeRejectsMalformedJSON(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 0)
+	batch := &model.EnterpriseCdkBatch{CreatorUserId: 1, Name: "batch", Quota: 100, Count: 1, TotalQuota: 100}
+	require.NoError(t, model.DB.Create(batch).Error)
+	code := &model.Redemption{UserId: 1, BatchId: batch.Id, Key: "toggle-malformed", Name: "batch", Quota: 100, Status: common.RedemptionCodeStatusDisabled}
+	require.NoError(t, model.DB.Create(code).Error)
+
+	ctx, recorder := newEnterpriseCdkRawJSONContext(t, http.MethodPut, fmt.Sprintf("/api/admin/enterprise/codes/%d/disable", code.Id), "{", 99)
+	ctx.Params = gin.Params{{Key: "id", Value: fmt.Sprintf("%d", code.Id)}}
+	AdminDisableEnterpriseCdkCode(ctx)
+
+	response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.False(t, response.Success)
+
+	var updated model.Redemption
+	require.NoError(t, model.DB.First(&updated, code.Id).Error)
+	require.Equal(t, common.RedemptionCodeStatusDisabled, updated.Status)
+}
+
+func TestAdminDisableEnterpriseCdkCodeRequiresDisabledField(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 0)
+	batch := &model.EnterpriseCdkBatch{CreatorUserId: 1, Name: "batch", Quota: 100, Count: 1, TotalQuota: 100}
+	require.NoError(t, model.DB.Create(batch).Error)
+	code := &model.Redemption{UserId: 1, BatchId: batch.Id, Key: "toggle-missing", Name: "batch", Quota: 100, Status: common.RedemptionCodeStatusDisabled}
+	require.NoError(t, model.DB.Create(code).Error)
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPut, fmt.Sprintf("/api/admin/enterprise/codes/%d/disable", code.Id), gin.H{}, 99)
+	ctx.Params = gin.Params{{Key: "id", Value: fmt.Sprintf("%d", code.Id)}}
+	AdminDisableEnterpriseCdkCode(ctx)
+
+	response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.False(t, response.Success)
+
+	var updated model.Redemption
+	require.NoError(t, model.DB.First(&updated, code.Id).Error)
+	require.Equal(t, common.RedemptionCodeStatusDisabled, updated.Status)
+}
+
+func TestAdminDisableEnterpriseCdkCodeWritesStructuredOperationLog(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 0)
+	batch := &model.EnterpriseCdkBatch{CreatorUserId: 1, Name: "batch", Quota: 100, Count: 1, TotalQuota: 100}
+	require.NoError(t, model.DB.Create(batch).Error)
+	code := &model.Redemption{UserId: 1, BatchId: batch.Id, Key: "toggle-log", Name: "batch", Quota: 100, Status: common.RedemptionCodeStatusEnabled}
+	require.NoError(t, model.DB.Create(code).Error)
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPut, fmt.Sprintf("/api/admin/enterprise/codes/%d/disable", code.Id), gin.H{
+		"disabled": true,
+	}, 99)
+	ctx.Params = gin.Params{{Key: "id", Value: fmt.Sprintf("%d", code.Id)}}
+	AdminDisableEnterpriseCdkCode(ctx)
+
+	response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.True(t, response.Success, response.Message)
+
+	var log model.EnterpriseCdkOperationLog
+	require.NoError(t, model.DB.First(&log, "action = ?", model.EnterpriseCdkOperationToggleCdk).Error)
+	require.Equal(t, 99, log.OperatorId)
+	require.Equal(t, 1, log.TargetUserId)
+	require.Equal(t, batch.Id, log.BatchId)
+	require.Equal(t, 1, log.CdkCount)
+}
+
 func TestAdminEnterpriseCdkUserDetailReturnsPaginatedLogsAndBatches(t *testing.T) {
 	setupEnterpriseCdkControllerTestDB(t)
 	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 1000)
@@ -480,6 +545,37 @@ func TestAdminEnterpriseCdkExportFiltersByCreatedTime(t *testing.T) {
 	body := string(recorder.Body.Bytes())
 	require.Contains(t, body, "in-range")
 	require.NotContains(t, body, "too-early")
+}
+
+func TestAdminEnterpriseCdkExportCombinesIdsAndFilters(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	seedEnterpriseCdkControllerUser(t, 1, "enterprise-a", 0)
+	seedEnterpriseCdkControllerUser(t, 2, "enterprise-b", 0)
+	firstBatch := &model.EnterpriseCdkBatch{CreatorUserId: 1, Name: "batch-a", Quota: 100, Count: 2, TotalQuota: 200}
+	secondBatch := &model.EnterpriseCdkBatch{CreatorUserId: 2, Name: "batch-b", Quota: 100, Count: 1, TotalQuota: 100}
+	require.NoError(t, model.DB.Create(firstBatch).Error)
+	require.NoError(t, model.DB.Create(secondBatch).Error)
+	ownedIncluded := &model.Redemption{UserId: 1, BatchId: firstBatch.Id, Key: "owned-included", Name: "batch-a", Quota: 100, Status: common.RedemptionCodeStatusEnabled, CreatedTime: 2000}
+	ownedNotSelected := &model.Redemption{UserId: 1, BatchId: firstBatch.Id, Key: "owned-not-selected", Name: "batch-a", Quota: 100, Status: common.RedemptionCodeStatusEnabled, CreatedTime: 2000}
+	otherSelected := &model.Redemption{UserId: 2, BatchId: secondBatch.Id, Key: "other-selected", Name: "batch-b", Quota: 100, Status: common.RedemptionCodeStatusEnabled, CreatedTime: 2000}
+	require.NoError(t, model.DB.Create(ownedIncluded).Error)
+	require.NoError(t, model.DB.Create(ownedNotSelected).Error)
+	require.NoError(t, model.DB.Create(otherSelected).Error)
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/admin/enterprise/export", gin.H{
+		"user_id":       1,
+		"status":        "unused",
+		"created_start": int64(1500),
+		"created_end":   int64(2500),
+		"cdk_ids":       []int{ownedIncluded.Id, otherSelected.Id},
+	}, 99)
+	AdminEnterpriseCdkExport(ctx)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	body := string(recorder.Body.Bytes())
+	require.Contains(t, body, "owned-included")
+	require.NotContains(t, body, "owned-not-selected")
+	require.NotContains(t, body, "other-selected")
 }
 
 func TestAdminEnterpriseCdkExportRejectsMalformedJSON(t *testing.T) {

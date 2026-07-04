@@ -39,6 +39,7 @@ import {
   adminAdjustEnterpriseCdkBalance,
   adminExportEnterpriseCdkCodes,
   adminGetEnterpriseCdkBalanceLogs,
+  adminGetEnterpriseCdkBatches,
   adminGetEnterpriseCdkCodes,
   adminGetEnterpriseCdkOperationLogs,
   adminGetEnterpriseCdkUserDetail,
@@ -77,6 +78,8 @@ export function EnterpriseCdkAdminPage() {
     remark: '',
   })
   const [balanceLogUserId, setBalanceLogUserId] = useState('')
+  const [batchCreatorSearch, setBatchCreatorSearch] = useState('')
+  const [batchCreatorUserId, setBatchCreatorUserId] = useState('')
   const [codeFilters, setCodeFilters] = useState({
     user_id: '',
     batch_id: '',
@@ -91,6 +94,7 @@ export function EnterpriseCdkAdminPage() {
   const [customerUserId, setCustomerUserId] = useState('')
   const [customerSearch, setCustomerSearch] = useState('')
   const [whitelistPage, setWhitelistPage] = useState(1)
+  const [batchesPage, setBatchesPage] = useState(1)
   const [balanceLogsPage, setBalanceLogsPage] = useState(1)
   const [codesPage, setCodesPage] = useState(1)
   const [operationLogsPage, setOperationLogsPage] = useState(1)
@@ -128,6 +132,29 @@ export function EnterpriseCdkAdminPage() {
         p: balanceLogsPage,
         user_id: Number(balanceLogUserId) || undefined,
       }),
+  })
+  const batches = useQuery({
+    queryKey: [
+      'enterprise-cdk-admin',
+      'batches',
+      batchCreatorUserId,
+      batchesPage,
+    ],
+    queryFn: () =>
+      adminGetEnterpriseCdkBatches({
+        p: batchesPage,
+        user_id: Number(batchCreatorUserId) || undefined,
+      }),
+  })
+  const batchCreatorSearchQuery = useQuery({
+    queryKey: [
+      'enterprise-cdk-admin',
+      'user-search',
+      'batches',
+      batchCreatorSearch,
+    ],
+    queryFn: () => adminSearchEnterpriseCdkUsers(batchCreatorSearch.trim()),
+    enabled: batchCreatorSearch.trim().length > 0,
   })
   const codes = useQuery({
     queryKey: ['enterprise-cdk-admin', 'codes', codeFilters, codesPage],
@@ -294,6 +321,10 @@ export function EnterpriseCdkAdminPage() {
             <TabsTrigger value='logs'>
               <History />
               余额流水
+            </TabsTrigger>
+            <TabsTrigger value='batches'>
+              <Ticket />
+              批次
             </TabsTrigger>
             <TabsTrigger value='codes'>
               <Ticket />
@@ -592,6 +623,82 @@ export function EnterpriseCdkAdminPage() {
             </div>
           </TabsContent>
 
+          <TabsContent value='batches'>
+            <div className='space-y-3'>
+              <div className='space-y-3'>
+                <Input
+                  className='max-w-72'
+                  placeholder='搜索创建人邮箱或 ID'
+                  value={batchCreatorSearch}
+                  onChange={(event) =>
+                    setBatchCreatorSearch(event.target.value)
+                  }
+                />
+                <UserSearchResults
+                  users={batchCreatorSearchQuery.data?.data?.items ?? []}
+                  quotaPerUnit={quotaPerUnit}
+                  actionLabel='设为筛选'
+                  onSelect={(user) => {
+                    setBatchCreatorUserId(String(user.id))
+                    setBatchesPage(1)
+                  }}
+                />
+              </div>
+              <div className='flex flex-wrap gap-2'>
+                <Input
+                  className='max-w-40'
+                  placeholder='创建人用户 ID'
+                  value={batchCreatorUserId}
+                  onChange={(event) => {
+                    setBatchCreatorUserId(event.target.value)
+                    setBatchesPage(1)
+                  }}
+                />
+                <Button variant='outline' onClick={() => batches.refetch()}>
+                  <RefreshCw />
+                  刷新
+                </Button>
+              </div>
+              <DataTable
+                title='全局批次列表'
+                description='按企业负责人查看所有企业 CDK 批次及兑换统计。'
+                minWidth={960}
+                headers={[
+                  '批次 ID',
+                  '批次名称',
+                  '创建人',
+                  '单个面额',
+                  '数量',
+                  '未兑换',
+                  '已兑换',
+                  '已过期',
+                  '总面额',
+                  '创建时间',
+                ]}
+                rows={(batches.data?.data?.items ?? []).map((item) => [
+                  item.id,
+                  item.name,
+                  item.creator_email || item.creator_user_id,
+                  formatQuota(item.quota, quotaPerUnit),
+                  item.count,
+                  item.unused_count ?? item.stats?.unused_count ?? 0,
+                  item.used_count ?? item.stats?.used_count ?? 0,
+                  item.expired_count ?? item.stats?.expired_count ?? 0,
+                  formatQuota(item.total_quota, quotaPerUnit),
+                  formatTime(item.created_time),
+                ])}
+                footer={
+                  <PaginationControls
+                    page={batches.data?.data?.page ?? batchesPage}
+                    pageSize={batches.data?.data?.page_size}
+                    total={batches.data?.data?.total}
+                    onPageChange={setBatchesPage}
+                  />
+                }
+              />
+            </div>
+          </TabsContent>
+
           <TabsContent value='codes'>
             <Card>
               <CardHeader>
@@ -873,9 +980,7 @@ export function EnterpriseCdkAdminPage() {
                     className='max-w-64'
                     placeholder='用户 ID'
                     value={customerUserId}
-                    onChange={(event) =>
-                      selectCustomerUser(event.target.value)
-                    }
+                    onChange={(event) => selectCustomerUser(event.target.value)}
                   />
                   <Button onClick={() => customerDetail.refetch()}>
                     <Search />

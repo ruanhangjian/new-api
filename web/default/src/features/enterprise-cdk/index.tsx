@@ -131,10 +131,11 @@ export function EnterpriseCdkPage() {
   const hasValidName = form.name.trim().length > 0
   const hasValidQuota = Number.isFinite(formQuota) && formQuota > 0
   const hasValidCount = Number.isInteger(formCount) && formCount > 0
-  const totalQuota =
-    Math.max(0, Number.isFinite(formQuota) ? formQuota : 0) *
-    Math.max(0, Number.isFinite(formCount) ? formCount : 0) *
-    (quotaPerUnit || 0)
+  const totalQuota = estimateEnterpriseCdkQuota(
+    form.quota,
+    formCount,
+    quotaPerUnit
+  )
   const remainingQuota = (balance.data?.data?.balance_quota ?? 0) - totalQuota
   const insufficient = remainingQuota < 0
   const maxBatchCreateCount =
@@ -626,7 +627,7 @@ export function EnterpriseCdkBatchDetailPage({ batchId }: { batchId: number }) {
     return <SectionPageLayout>加载批次详情...</SectionPageLayout>
   }
 
-  if (detail.data && !detail.data.success) {
+  if (detail.isError || (detail.data && !detail.data.success)) {
     return (
       <SectionPageLayout>
         <Card className='mx-auto mt-12 max-w-lg'>
@@ -890,6 +891,30 @@ function statusLabel(value: string) {
     default:
       return '全部'
   }
+}
+
+function estimateEnterpriseCdkQuota(
+  amount: string,
+  count: number,
+  quotaPerUnit?: number
+) {
+  if (
+    !quotaPerUnit ||
+    quotaPerUnit <= 0 ||
+    !Number.isInteger(count) ||
+    count <= 0
+  ) {
+    return 0
+  }
+  const normalized = amount.trim()
+  const match = /^(\d+)(?:\.(\d{0,8}))?$/.exec(normalized)
+  if (!match) return 0
+  const whole = BigInt(match[1])
+  const scale = 100_000_000n
+  const fraction = BigInt((match[2] ?? '').padEnd(8, '0'))
+  const unit = BigInt(Math.trunc(quotaPerUnit))
+  const single = ((whole * scale + fraction) * unit) / scale
+  return Number(single * BigInt(count))
 }
 
 export { CDK_STATUS }
