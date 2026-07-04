@@ -113,3 +113,27 @@ export interface EnterpriseCdkOperationLog {
   remark: string
   created_time: number
 }
+
+export interface EnterpriseCdkUserSearchResult {
+  id: number
+  username: string
+  display_name?: string
+  email?: string
+  enterprise_cdk_quota?: number
+  created_at?: number
+}
+
+export interface EnterpriseCdkQuotaSummary {
+  total_charged_quota: number
+  total_consumed_quota: number
+  total_refunded_quota: number
+}
+
+export interface EnterpriseCdkCustomerSummary {
+  batch_count: number
+  total_cdks: number
+  redeemed_cdks: number
+  unused_cdks: number
+  expired_cdks: number
+  disabled_cdks: number
+}

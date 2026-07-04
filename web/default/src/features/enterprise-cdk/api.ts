@@ -9,6 +9,9 @@ import type {
   EnterpriseCdkOperationLog,
   EnterpriseCdkPermission,
   EnterpriseCdkQuotaLog,
+  EnterpriseCdkCustomerSummary,
+  EnterpriseCdkQuotaSummary,
+  EnterpriseCdkUserSearchResult,
   PageData,
 } from './types'
 
@@ -51,7 +54,7 @@ export async function getEnterpriseCdkBatchDetail(
   const res = await api.get<ApiResponse<EnterpriseCdkBatchDetail>>(
     `/api/enterprise/cdk/batches/${id}`,
     {
-      params: { page_size: 1000, ...params },
+      params: { page_size: 100, ...params },
       skipErrorHandler: true,
     } as Record<string, unknown>
   )
@@ -67,15 +70,11 @@ export async function createEnterpriseCdkBatch(
   return res.data
 }
 
-export async function logEnterpriseCdkCopyUnused(
-  batchId: number,
-  count: number
-) {
-  const res = await api.post<ApiResponse>(
+export async function copyEnterpriseCdkUnusedCodes(batchId: number) {
+  const res = await api.post<ApiResponse<{ codes: string[]; count: number }>>(
     '/api/enterprise/cdk/copy-unused-log',
     {
       batch_id: batchId,
-      count,
     }
   )
   return res.data
@@ -227,10 +226,21 @@ export async function adminGetEnterpriseCdkUserDetail(userId: number) {
         balance: string
       }
       whitelist?: EnterpriseCdkWhitelistUser
+      quota_summary: EnterpriseCdkQuotaSummary
+      customer_summary: EnterpriseCdkCustomerSummary
       logs: EnterpriseCdkQuotaLog[]
       batches: EnterpriseCdkBatch[]
     }>
   >(`/api/admin/enterprise/users/${userId}`)
+  return res.data
+}
+
+export async function adminSearchEnterpriseCdkUsers(keyword: string) {
+  const res = await api.get<
+    ApiResponse<PageData<EnterpriseCdkUserSearchResult>>
+  >('/api/user/search', {
+    params: { keyword, page_size: 5, p: 1 },
+  })
   return res.data
 }
 

@@ -30,7 +30,7 @@ type EnterpriseCdkExportRow struct {
 
 func GetRedemptionsForExport(userId int, batchId int, cdkIds []int, isAdmin bool) ([]*EnterpriseCdkExportRow, error) {
 	var rows []*EnterpriseCdkExportRow
-	query := enterpriseCdkRedemptionRowsQuery()
+	query := enterpriseCdkRedemptionRowsQuery().Where("r.batch_id > 0")
 	if !isAdmin {
 		query = query.Where("r.user_id = ?", userId)
 	}
@@ -41,6 +41,16 @@ func GetRedemptionsForExport(userId int, batchId int, cdkIds []int, isAdmin bool
 		query = query.Where("r.id IN ?", cdkIds)
 	}
 	err := query.Order("r.id asc").Scan(&rows).Error
+	return rows, err
+}
+
+func GetUnusedEnterpriseCdkCodesForCopy(batchId int) ([]*EnterpriseCdkExportRow, error) {
+	var rows []*EnterpriseCdkExportRow
+	now := common.GetTimestamp()
+	err := enterpriseCdkRedemptionRowsQuery().
+		Where("r.batch_id = ? AND r.status = ? AND (r.expired_time = 0 OR r.expired_time >= ?)", batchId, common.RedemptionCodeStatusEnabled, now).
+		Order("r.id asc").
+		Scan(&rows).Error
 	return rows, err
 }
 
@@ -122,7 +132,8 @@ func RecycleEnterpriseCdkCodes(cdkIds []int, operatorId int, remark string) (int
 	var refundedQuota int
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		var codes []Redemption
-		query := tx.Where("id IN ? AND batch_id > 0 AND status = ? AND used_user_id = 0 AND recycled_time = 0", cdkIds, common.RedemptionCodeStatusEnabled)
+		now := common.GetTimestamp()
+		query := tx.Where("id IN ? AND batch_id > 0 AND status = ? AND used_user_id = 0 AND recycled_time = 0 AND (expired_time = 0 OR expired_time >= ?)", cdkIds, common.RedemptionCodeStatusEnabled, now)
 		if !common.UsingSQLite {
 			query = query.Clauses(clause.Locking{Strength: "UPDATE"})
 		}
@@ -132,8 +143,6 @@ func RecycleEnterpriseCdkCodes(cdkIds []int, operatorId int, remark string) (int
 		if len(codes) == 0 {
 			return nil
 		}
-
-		now := common.GetTimestamp()
 		eligibleIds := make([]int, 0, len(codes))
 		type refundBucket struct {
 			quota int

@@ -27,6 +27,15 @@ type EnterpriseCdkBatchStats struct {
 	DisabledCount int `json:"disabled_count"`
 }
 
+type EnterpriseCdkUserSummary struct {
+	BatchCount   int64 `json:"batch_count"`
+	TotalCdks    int64 `json:"total_cdks"`
+	RedeemedCdks int64 `json:"redeemed_cdks"`
+	UnusedCdks   int64 `json:"unused_cdks"`
+	ExpiredCdks  int64 `json:"expired_cdks"`
+	DisabledCdks int64 `json:"disabled_cdks"`
+}
+
 type EnterpriseCdkBatchRow struct {
 	EnterpriseCdkBatch
 	CreatorEmail  string                  `json:"creator_email"`
@@ -127,4 +136,30 @@ func GetEnterpriseCdkBatchStats(batchId int) (*EnterpriseCdkBatchStats, error) {
 		}
 	}
 	return stats, nil
+}
+
+func GetEnterpriseCdkUserSummary(userId int) (*EnterpriseCdkUserSummary, error) {
+	summary := &EnterpriseCdkUserSummary{}
+	if err := DB.Model(&EnterpriseCdkBatch{}).Where("creator_user_id = ?", userId).Count(&summary.BatchCount).Error; err != nil {
+		return nil, err
+	}
+	var redemptions []Redemption
+	if err := DB.Where("user_id = ? AND batch_id > 0", userId).Find(&redemptions).Error; err != nil {
+		return nil, err
+	}
+	now := common.GetTimestamp()
+	for _, redemption := range redemptions {
+		summary.TotalCdks++
+		switch {
+		case redemption.Status == common.RedemptionCodeStatusUsed:
+			summary.RedeemedCdks++
+		case redemption.Status == common.RedemptionCodeStatusDisabled:
+			summary.DisabledCdks++
+		case redemption.ExpiredTime != 0 && redemption.ExpiredTime < now:
+			summary.ExpiredCdks++
+		default:
+			summary.UnusedCdks++
+		}
+	}
+	return summary, nil
 }

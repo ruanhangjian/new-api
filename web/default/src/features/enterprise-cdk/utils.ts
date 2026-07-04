@@ -11,6 +11,13 @@ export function formatTime(timestamp?: number, emptyText = '-') {
   return new Date(timestamp * 1000).toLocaleString()
 }
 
+export function formatDateTimeLocal(timestamp?: number) {
+  if (!timestamp) return ''
+  const date = new Date(timestamp * 1000)
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return localDate.toISOString().slice(0, 16)
+}
+
 export function formatQuota(quota: number | undefined, quotaPerUnit?: number) {
   const unit = quotaPerUnit && quotaPerUnit > 0 ? quotaPerUnit : 500000
   return `$${((quota ?? 0) / unit).toFixed(2)}`

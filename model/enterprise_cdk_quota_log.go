@@ -110,3 +110,28 @@ func GetEnterpriseCdkQuotaLogs(userId int, startIdx, pageSize int) ([]*Enterpris
 		Scan(&logs).Error
 	return logs, total, err
 }
+
+type EnterpriseCdkQuotaSummary struct {
+	TotalCharged  int `json:"total_charged_quota"`
+	TotalConsumed int `json:"total_consumed_quota"`
+	TotalRefunded int `json:"total_refunded_quota"`
+}
+
+func GetEnterpriseCdkQuotaSummary(userId int) (*EnterpriseCdkQuotaSummary, error) {
+	var logs []EnterpriseCdkQuotaLog
+	if err := DB.Where("user_id = ?", userId).Find(&logs).Error; err != nil {
+		return nil, err
+	}
+	summary := &EnterpriseCdkQuotaSummary{}
+	for _, log := range logs {
+		switch log.Type {
+		case CdkQuotaLogTypeAdminAdd:
+			summary.TotalCharged += log.Amount
+		case CdkQuotaLogTypeCreateCdk:
+			summary.TotalConsumed += -log.Amount
+		case CdkQuotaLogTypeAdminRefund:
+			summary.TotalRefunded += log.Amount
+		}
+	}
+	return summary, nil
+}

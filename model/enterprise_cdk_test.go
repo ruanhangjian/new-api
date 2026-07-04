@@ -130,6 +130,38 @@ func TestRecycleEnterpriseCdkCodesCannotRefundTwice(t *testing.T) {
 	require.Equal(t, 100, user.EnterpriseCdkQuota)
 }
 
+func TestRecycleEnterpriseCdkCodesDoesNotRefundExpiredCodes(t *testing.T) {
+	resetEnterpriseCdkTables(t)
+	seedEnterpriseCdkUser(t, 1, "enterprise", 0)
+	batch := &EnterpriseCdkBatch{
+		CreatorUserId: 1,
+		Name:          "July batch",
+		Quota:         100,
+		Count:         1,
+		TotalQuota:    100,
+	}
+	require.NoError(t, DB.Create(batch).Error)
+	code := &Redemption{
+		UserId:      1,
+		BatchId:     batch.Id,
+		Key:         "expired-cdk",
+		Name:        batch.Name,
+		Quota:       100,
+		Status:      common.RedemptionCodeStatusEnabled,
+		ExpiredTime: common.GetTimestamp() - 60,
+	}
+	require.NoError(t, DB.Create(code).Error)
+
+	refunded, amount, err := RecycleEnterpriseCdkCodes([]int{code.Id}, 99, "manual refund")
+	require.NoError(t, err)
+	require.Equal(t, 0, refunded)
+	require.Equal(t, 0, amount)
+
+	var user User
+	require.NoError(t, DB.First(&user, 1).Error)
+	require.Equal(t, 0, user.EnterpriseCdkQuota)
+}
+
 func TestGetRedemptionsForExportFiltersByCreatorForNonAdminUsers(t *testing.T) {
 	resetEnterpriseCdkTables(t)
 	seedEnterpriseCdkUser(t, 1, "enterprise-a", 0)
@@ -141,6 +173,7 @@ func TestGetRedemptionsForExportFiltersByCreatorForNonAdminUsers(t *testing.T) {
 	require.NoError(t, DB.Create(secondBatch).Error)
 	require.NoError(t, DB.Create(&Redemption{UserId: 1, BatchId: firstBatch.Id, Key: "owned", Name: "A", Quota: 100, Status: common.RedemptionCodeStatusEnabled}).Error)
 	require.NoError(t, DB.Create(&Redemption{UserId: 2, BatchId: secondBatch.Id, Key: "other", Name: "B", Quota: 100, Status: common.RedemptionCodeStatusEnabled}).Error)
+	require.NoError(t, DB.Create(&Redemption{UserId: 1, BatchId: 0, Key: "ordinary", Name: "ordinary", Quota: 100, Status: common.RedemptionCodeStatusEnabled}).Error)
 
 	rows, err := GetRedemptionsForExport(1, 0, nil, false)
 	require.NoError(t, err)
@@ -150,4 +183,21 @@ func TestGetRedemptionsForExportFiltersByCreatorForNonAdminUsers(t *testing.T) {
 	adminRows, err := GetRedemptionsForExport(0, 0, nil, true)
 	require.NoError(t, err)
 	require.Len(t, adminRows, 2)
+}
+
+func TestDeleteInvalidRedemptionsKeepsEnterpriseCdkHistory(t *testing.T) {
+	resetEnterpriseCdkTables(t)
+	seedEnterpriseCdkUser(t, 1, "enterprise-a", 0)
+	batch := &EnterpriseCdkBatch{CreatorUserId: 1, Name: "A", Quota: 100, Count: 1, TotalQuota: 100}
+	require.NoError(t, DB.Create(batch).Error)
+	require.NoError(t, DB.Create(&Redemption{UserId: 1, BatchId: batch.Id, Key: "enterprise-used", Name: "A", Quota: 100, Status: common.RedemptionCodeStatusUsed}).Error)
+	require.NoError(t, DB.Create(&Redemption{UserId: 1, BatchId: 0, Key: "ordinary-used", Name: "ordinary", Quota: 100, Status: common.RedemptionCodeStatusUsed}).Error)
+
+	deleted, err := DeleteInvalidRedemptions()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), deleted)
+
+	var enterpriseCount int64
+	require.NoError(t, DB.Model(&Redemption{}).Where("batch_id = ?", batch.Id).Count(&enterpriseCount).Error)
+	require.Equal(t, int64(1), enterpriseCount)
 }

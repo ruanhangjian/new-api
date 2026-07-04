@@ -45,6 +45,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { SectionPageLayout } from '@/components/layout'
 import {
+  copyEnterpriseCdkUnusedCodes,
   createEnterpriseCdkBatch,
   exportEnterpriseCdkCodes,
   getEnterpriseCdkBalance,
@@ -52,11 +53,11 @@ import {
   getEnterpriseCdkBatchDetail,
   getEnterpriseCdkBatches,
   getEnterpriseCdkPermission,
-  logEnterpriseCdkCopyUnused,
 } from './api'
 import type { CreateEnterpriseCdkBatchInput, EnterpriseCdkBatch } from './types'
 import {
   CDK_STATUS,
+  formatDateTimeLocal,
   formatQuota,
   formatTime,
   getCodeStatus,
@@ -495,6 +496,7 @@ export function EnterpriseCdkPage() {
                 <Label>过期时间</Label>
                 <Input
                   type='datetime-local'
+                  value={formatDateTimeLocal(form.expired_time)}
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
@@ -563,6 +565,7 @@ export function EnterpriseCdkBatchDetailPage({ batchId }: { batchId: number }) {
   const quotaPerUnit = status?.quota_per_unit
   const [statusFilter, setStatusFilter] = useState('all')
   const [keyword, setKeyword] = useState('')
+  const [page, setPage] = useState(1)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
 
   const detail = useQuery({
@@ -572,17 +575,19 @@ export function EnterpriseCdkBatchDetailPage({ batchId }: { batchId: number }) {
       batchId,
       statusFilter,
       keyword,
+      page,
     ],
     queryFn: () =>
       getEnterpriseCdkBatchDetail(batchId, {
+        p: page,
         status: statusFilter === 'all' ? '' : statusFilter,
         keyword,
       }),
   })
 
-  const codes = detail.data?.data?.cdks.items ?? []
+  const pageInfo = detail.data?.data?.cdks
+  const codes = pageInfo?.items ?? []
   const batch = detail.data?.data?.batch
-  const unusedCodes = codes.filter((code) => getCodeStatus(code) === '未兑换')
   const usedCount = batch?.used_count ?? batch?.stats?.used_count ?? 0
   const totalCount = batch?.count ?? 0
   const usedPercent =
@@ -597,10 +602,15 @@ export function EnterpriseCdkBatchDetailPage({ batchId }: { batchId: number }) {
   }
 
   const copyUnused = async () => {
-    const text = unusedCodes.map((code) => code.key).join('\n')
+    if (!batch) return
+    const res = await copyEnterpriseCdkUnusedCodes(batch.id)
+    if (!res.success || !res.data) {
+      toast.error(res.message || '复制失败')
+      return
+    }
+    const text = res.data.codes.join('\n')
     await navigator.clipboard.writeText(text)
-    if (batch) await logEnterpriseCdkCopyUnused(batch.id, unusedCodes.length)
-    toast.success(`已复制 ${unusedCodes.length} 个未兑换 CDK`)
+    toast.success(`已复制 ${res.data.count} 个未兑换 CDK`)
   }
 
   return (
@@ -612,11 +622,7 @@ export function EnterpriseCdkBatchDetailPage({ batchId }: { batchId: number }) {
         查看 CDK 状态、兑换人邮箱，并导出所选兑换码。
       </SectionPageLayout.Description>
       <SectionPageLayout.Actions>
-        <Button
-          variant='outline'
-          disabled={unusedCodes.length === 0}
-          onClick={copyUnused}
-        >
+        <Button variant='outline' disabled={!batch} onClick={copyUnused}>
           <Copy />
           一键复制未兑换
         </Button>
@@ -626,6 +632,16 @@ export function EnterpriseCdkBatchDetailPage({ batchId }: { batchId: number }) {
         >
           <Download />
           导出选中
+        </Button>
+        <Button
+          variant='outline'
+          disabled={!batch}
+          onClick={() =>
+            batch && exportEnterpriseCdkCodes({ batch_id: batch.id })
+          }
+        >
+          <Download />
+          导出全部
         </Button>
       </SectionPageLayout.Actions>
       <SectionPageLayout.Content>
@@ -662,7 +678,10 @@ export function EnterpriseCdkBatchDetailPage({ batchId }: { batchId: number }) {
                       key={item}
                       variant={statusFilter === item ? 'default' : 'outline'}
                       size='sm'
-                      onClick={() => setStatusFilter(item)}
+                      onClick={() => {
+                        setStatusFilter(item)
+                        setPage(1)
+                      }}
                     >
                       <ListFilter />
                       {statusLabel(item)}
@@ -675,7 +694,10 @@ export function EnterpriseCdkBatchDetailPage({ batchId }: { batchId: number }) {
                     className='pl-8'
                     placeholder='搜索 CDK'
                     value={keyword}
-                    onChange={(event) => setKeyword(event.target.value)}
+                    onChange={(event) => {
+                      setKeyword(event.target.value)
+                      setPage(1)
+                    }}
                   />
                 </div>
               </div>
@@ -719,6 +741,42 @@ export function EnterpriseCdkBatchDetailPage({ batchId }: { batchId: number }) {
                   ))}
                 </TableBody>
               </Table>
+              <div className='flex items-center justify-end gap-2 text-sm'>
+                <span className='text-muted-foreground'>
+                  第 {pageInfo?.page ?? page} 页，共{' '}
+                  {Math.max(
+                    1,
+                    Math.ceil(
+                      (pageInfo?.total ?? 0) / (pageInfo?.page_size || 100)
+                    )
+                  )}{' '}
+                  页
+                </span>
+                <Button
+                  variant='outline'
+                  size='sm'
+                  disabled={page <= 1}
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                >
+                  上一页
+                </Button>
+                <Button
+                  variant='outline'
+                  size='sm'
+                  disabled={
+                    page >=
+                    Math.max(
+                      1,
+                      Math.ceil(
+                        (pageInfo?.total ?? 0) / (pageInfo?.page_size || 100)
+                      )
+                    )
+                  }
+                  onClick={() => setPage((current) => current + 1)}
+                >
+                  下一页
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>

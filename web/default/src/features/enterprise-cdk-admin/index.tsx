@@ -44,10 +44,12 @@ import {
   adminGetEnterpriseCdkUserDetail,
   adminGetEnterpriseCdkWhitelist,
   adminRecycleEnterpriseCdkCodes,
+  adminSearchEnterpriseCdkUsers,
   adminSetEnterpriseCdkCodeDisabled,
   adminUpdateEnterpriseCdkLimit,
   adminUpdateEnterpriseCdkWhitelist,
 } from '@/features/enterprise-cdk/api'
+import type { EnterpriseCdkUserSearchResult } from '@/features/enterprise-cdk/types'
 import {
   CDK_STATUS,
   formatQuota,
@@ -61,30 +63,53 @@ export function EnterpriseCdkAdminPage() {
   const { status } = useStatus()
   const quotaPerUnit = status?.quota_per_unit
   const [whitelistUserId, setWhitelistUserId] = useState('')
+  const [whitelistSearch, setWhitelistSearch] = useState('')
   const [limitDraft, setLimitDraft] = useState<Record<number, number>>({})
+  const [balanceSearch, setBalanceSearch] = useState('')
   const [balanceForm, setBalanceForm] = useState({
     user_id: '',
     amount: '',
     type: 'admin_add',
     remark: '',
   })
+  const [balanceLogUserId, setBalanceLogUserId] = useState('')
   const [codeFilters, setCodeFilters] = useState({
     user_id: '',
     batch_id: '',
     status: '',
     keyword: '',
   })
+  const [codeCreatorSearch, setCodeCreatorSearch] = useState('')
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [recycleRemark, setRecycleRemark] = useState('')
   const [customerUserId, setCustomerUserId] = useState('')
+  const [customerSearch, setCustomerSearch] = useState('')
 
   const whitelist = useQuery({
     queryKey: ['enterprise-cdk-admin', 'whitelist'],
     queryFn: () => adminGetEnterpriseCdkWhitelist({ p: 1 }),
   })
+  const whitelistSearchQuery = useQuery({
+    queryKey: [
+      'enterprise-cdk-admin',
+      'user-search',
+      'whitelist',
+      whitelistSearch,
+    ],
+    queryFn: () => adminSearchEnterpriseCdkUsers(whitelistSearch.trim()),
+    enabled: whitelistSearch.trim().length > 0,
+  })
+  const balanceSearchQuery = useQuery({
+    queryKey: ['enterprise-cdk-admin', 'user-search', 'balance', balanceSearch],
+    queryFn: () => adminSearchEnterpriseCdkUsers(balanceSearch.trim()),
+    enabled: balanceSearch.trim().length > 0,
+  })
   const balanceLogs = useQuery({
-    queryKey: ['enterprise-cdk-admin', 'balance-logs'],
-    queryFn: () => adminGetEnterpriseCdkBalanceLogs(),
+    queryKey: ['enterprise-cdk-admin', 'balance-logs', balanceLogUserId],
+    queryFn: () =>
+      adminGetEnterpriseCdkBalanceLogs({
+        user_id: Number(balanceLogUserId) || undefined,
+      }),
   })
   const codes = useQuery({
     queryKey: ['enterprise-cdk-admin', 'codes', codeFilters],
@@ -96,6 +121,16 @@ export function EnterpriseCdkAdminPage() {
         keyword: codeFilters.keyword || undefined,
       }),
   })
+  const codeCreatorSearchQuery = useQuery({
+    queryKey: [
+      'enterprise-cdk-admin',
+      'user-search',
+      'codes',
+      codeCreatorSearch,
+    ],
+    queryFn: () => adminSearchEnterpriseCdkUsers(codeCreatorSearch.trim()),
+    enabled: codeCreatorSearch.trim().length > 0,
+  })
   const operationLogs = useQuery({
     queryKey: ['enterprise-cdk-admin', 'operation-logs'],
     queryFn: () => adminGetEnterpriseCdkOperationLogs(),
@@ -104,6 +139,16 @@ export function EnterpriseCdkAdminPage() {
     queryKey: ['enterprise-cdk-admin', 'customer', customerUserId],
     queryFn: () => adminGetEnterpriseCdkUserDetail(Number(customerUserId)),
     enabled: Number(customerUserId) > 0,
+  })
+  const customerSearchQuery = useQuery({
+    queryKey: [
+      'enterprise-cdk-admin',
+      'user-search',
+      'customer',
+      customerSearch,
+    ],
+    queryFn: () => adminSearchEnterpriseCdkUsers(customerSearch.trim()),
+    enabled: customerSearch.trim().length > 0,
   })
 
   const invalidateAdmin = () => {
@@ -223,10 +268,33 @@ export function EnterpriseCdkAdminPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className='space-y-4'>
-                <div className='flex flex-wrap gap-2'>
+                <div className='space-y-3'>
+                  <div className='flex flex-wrap gap-2'>
+                    <Input
+                      className='max-w-72'
+                      placeholder='搜索用户邮箱或 ID'
+                      value={whitelistSearch}
+                      onChange={(event) =>
+                        setWhitelistSearch(event.target.value)
+                      }
+                    />
+                  </div>
+                  <UserSearchResults
+                    users={whitelistSearchQuery.data?.data?.items ?? []}
+                    quotaPerUnit={quotaPerUnit}
+                    actionLabel='加入白名单'
+                    onSelect={(user) =>
+                      whitelistMutation.mutate({
+                        action: 'add',
+                        user_id: user.id,
+                      })
+                    }
+                  />
+                </div>
+                <div className='flex flex-wrap gap-2 border-t pt-4'>
                   <Input
                     className='max-w-64'
-                    placeholder='输入用户 ID'
+                    placeholder='直接输入用户 ID'
                     value={whitelistUserId}
                     onChange={(event) => setWhitelistUserId(event.target.value)}
                   />
@@ -323,102 +391,137 @@ export function EnterpriseCdkAdminPage() {
                   线下收款后手动增加或扣减企业 CDK 余额，备注必填。
                 </CardDescription>
               </CardHeader>
-              <CardContent className='grid gap-4 md:grid-cols-[220px_180px_180px_1fr_auto]'>
-                <div className='grid gap-2'>
-                  <Label>用户 ID</Label>
+              <CardContent className='space-y-4'>
+                <div className='space-y-3'>
                   <Input
-                    value={balanceForm.user_id}
-                    onChange={(event) =>
+                    className='max-w-72'
+                    placeholder='搜索用户邮箱或 ID'
+                    value={balanceSearch}
+                    onChange={(event) => setBalanceSearch(event.target.value)}
+                  />
+                  <UserSearchResults
+                    users={balanceSearchQuery.data?.data?.items ?? []}
+                    quotaPerUnit={quotaPerUnit}
+                    actionLabel='选择调整'
+                    onSelect={(user) =>
                       setBalanceForm((current) => ({
                         ...current,
-                        user_id: event.target.value,
+                        user_id: String(user.id),
                       }))
                     }
                   />
                 </div>
-                <div className='grid gap-2'>
-                  <Label>金额 USD</Label>
-                  <Input
-                    value={balanceForm.amount}
-                    onChange={(event) =>
-                      setBalanceForm((current) => ({
-                        ...current,
-                        amount: event.target.value,
-                      }))
-                    }
-                  />
-                </div>
-                <div className='grid gap-2'>
-                  <Label>类型</Label>
-                  <select
-                    className='border-input h-8 rounded-lg border bg-transparent px-2 text-sm'
-                    value={balanceForm.type}
-                    onChange={(event) =>
-                      setBalanceForm((current) => ({
-                        ...current,
-                        type: event.target.value,
-                      }))
-                    }
-                  >
-                    <option value='admin_add'>管理员充值</option>
-                    <option value='admin_deduct'>管理员扣减</option>
-                    <option value='admin_refund'>管理员退款</option>
-                  </select>
-                </div>
-                <div className='grid gap-2'>
-                  <Label>备注</Label>
-                  <Input
-                    placeholder='微信收款 ¥700，2026-07-03'
-                    value={balanceForm.remark}
-                    onChange={(event) =>
-                      setBalanceForm((current) => ({
-                        ...current,
-                        remark: event.target.value,
-                      }))
-                    }
-                  />
-                </div>
-                <div className='flex items-end'>
-                  <Button
-                    onClick={() =>
-                      balanceMutation.mutate({
-                        user_id: Number(balanceForm.user_id),
-                        amount: balanceForm.amount,
-                        type: balanceForm.type,
-                        remark: balanceForm.remark,
-                      })
-                    }
-                  >
-                    提交
-                  </Button>
+                <div className='grid gap-4 border-t pt-4 md:grid-cols-[220px_180px_180px_1fr_auto]'>
+                  <div className='grid gap-2'>
+                    <Label>用户 ID</Label>
+                    <Input
+                      value={balanceForm.user_id}
+                      onChange={(event) =>
+                        setBalanceForm((current) => ({
+                          ...current,
+                          user_id: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className='grid gap-2'>
+                    <Label>金额 USD</Label>
+                    <Input
+                      value={balanceForm.amount}
+                      onChange={(event) =>
+                        setBalanceForm((current) => ({
+                          ...current,
+                          amount: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className='grid gap-2'>
+                    <Label>类型</Label>
+                    <select
+                      className='border-input h-8 rounded-lg border bg-transparent px-2 text-sm'
+                      value={balanceForm.type}
+                      onChange={(event) =>
+                        setBalanceForm((current) => ({
+                          ...current,
+                          type: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value='admin_add'>管理员充值</option>
+                      <option value='admin_deduct'>管理员扣减</option>
+                      <option value='admin_refund'>管理员退款</option>
+                    </select>
+                  </div>
+                  <div className='grid gap-2'>
+                    <Label>备注</Label>
+                    <Input
+                      placeholder='微信收款 ¥700，2026-07-03'
+                      value={balanceForm.remark}
+                      onChange={(event) =>
+                        setBalanceForm((current) => ({
+                          ...current,
+                          remark: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className='flex items-end'>
+                    <Button
+                      onClick={() =>
+                        balanceMutation.mutate({
+                          user_id: Number(balanceForm.user_id),
+                          amount: balanceForm.amount,
+                          type: balanceForm.type,
+                          remark: balanceForm.remark,
+                        })
+                      }
+                    >
+                      提交
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value='logs'>
-            <DataTable
-              title='全局余额流水'
-              description='展示所有企业客户的 CDK 余额变动。'
-              headers={[
-                '时间',
-                '用户',
-                '类型',
-                '变动',
-                '变动前',
-                '变动后',
-                '备注',
-              ]}
-              rows={(balanceLogs.data?.data?.items ?? []).map((item) => [
-                formatTime(item.created_time),
-                item.user_email || item.user_id,
-                item.type,
-                formatQuota(item.amount, quotaPerUnit),
-                formatQuota(item.balance_before, quotaPerUnit),
-                formatQuota(item.balance_after, quotaPerUnit),
-                item.remark || '-',
-              ])}
-            />
+            <div className='space-y-3'>
+              <div className='flex flex-wrap gap-2'>
+                <Input
+                  className='max-w-48'
+                  placeholder='用户 ID'
+                  value={balanceLogUserId}
+                  onChange={(event) => setBalanceLogUserId(event.target.value)}
+                />
+                <Button variant='outline' onClick={() => balanceLogs.refetch()}>
+                  <RefreshCw />
+                  刷新
+                </Button>
+              </div>
+              <DataTable
+                title='全局余额流水'
+                description='展示所有企业客户的 CDK 余额变动。'
+                headers={[
+                  '时间',
+                  '用户',
+                  '类型',
+                  '变动',
+                  '变动前',
+                  '变动后',
+                  '备注',
+                ]}
+                rows={(balanceLogs.data?.data?.items ?? []).map((item) => [
+                  formatTime(item.created_time),
+                  item.user_email || item.user_id,
+                  item.type,
+                  formatQuota(item.amount, quotaPerUnit),
+                  formatQuota(item.balance_before, quotaPerUnit),
+                  formatQuota(item.balance_after, quotaPerUnit),
+                  item.remark || '-',
+                ])}
+              />
+            </div>
           </TabsContent>
 
           <TabsContent value='codes'>
@@ -430,6 +533,27 @@ export function EnterpriseCdkAdminPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className='space-y-4'>
+                <div className='space-y-3'>
+                  <Input
+                    className='max-w-72'
+                    placeholder='搜索创建人邮箱或 ID'
+                    value={codeCreatorSearch}
+                    onChange={(event) =>
+                      setCodeCreatorSearch(event.target.value)
+                    }
+                  />
+                  <UserSearchResults
+                    users={codeCreatorSearchQuery.data?.data?.items ?? []}
+                    quotaPerUnit={quotaPerUnit}
+                    actionLabel='设为筛选'
+                    onSelect={(user) =>
+                      setCodeFilters((current) => ({
+                        ...current,
+                        user_id: String(user.id),
+                      }))
+                    }
+                  />
+                </div>
                 <div className='flex flex-wrap gap-2'>
                   <Input
                     className='max-w-32'
@@ -614,7 +738,32 @@ export function EnterpriseCdkAdminPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className='space-y-4'>
-                <div className='flex gap-2'>
+                <div className='space-y-3'>
+                  <div className='flex flex-wrap gap-2'>
+                    <Input
+                      className='max-w-72'
+                      placeholder='搜索用户邮箱或 ID'
+                      value={customerSearch}
+                      onChange={(event) =>
+                        setCustomerSearch(event.target.value)
+                      }
+                    />
+                    <Button
+                      variant='outline'
+                      disabled={!Number(customerSearch)}
+                      onClick={() => setCustomerUserId(customerSearch)}
+                    >
+                      <Search />按 ID 查询
+                    </Button>
+                  </div>
+                  <UserSearchResults
+                    users={customerSearchQuery.data?.data?.items ?? []}
+                    quotaPerUnit={quotaPerUnit}
+                    actionLabel='查看详情'
+                    onSelect={(user) => setCustomerUserId(String(user.id))}
+                  />
+                </div>
+                <div className='flex gap-2 border-t pt-4'>
                   <Input
                     className='max-w-64'
                     placeholder='用户 ID'
@@ -638,7 +787,29 @@ export function EnterpriseCdkAdminPage() {
                     />
                     <MiniCard
                       title='批次数'
-                      value={String(customerDetail.data.data.batches.length)}
+                      value={String(
+                        customerDetail.data.data.customer_summary.batch_count
+                      )}
+                    />
+                    <MiniCard
+                      title='历史充值'
+                      value={formatQuota(
+                        customerDetail.data.data.quota_summary
+                          .total_charged_quota,
+                        quotaPerUnit
+                      )}
+                    />
+                    <MiniCard
+                      title='历史消耗'
+                      value={formatQuota(
+                        customerDetail.data.data.quota_summary
+                          .total_consumed_quota,
+                        quotaPerUnit
+                      )}
+                    />
+                    <MiniCard
+                      title='兑换进度'
+                      value={`${customerDetail.data.data.customer_summary.redeemed_cdks}/${customerDetail.data.data.customer_summary.total_cdks}`}
                     />
                   </div>
                 )}
@@ -696,6 +867,46 @@ export function EnterpriseCdkAdminPage() {
         </Tabs>
       </SectionPageLayout.Content>
     </SectionPageLayout>
+  )
+}
+
+function UserSearchResults({
+  users,
+  quotaPerUnit,
+  actionLabel,
+  onSelect,
+}: {
+  users: EnterpriseCdkUserSearchResult[]
+  quotaPerUnit?: number
+  actionLabel: string
+  onSelect: (user: EnterpriseCdkUserSearchResult) => void
+}) {
+  if (users.length === 0) {
+    return null
+  }
+
+  return (
+    <div className='border-border divide-border max-w-2xl divide-y rounded-md border'>
+      {users.map((user) => (
+        <div
+          key={user.id}
+          className='flex flex-wrap items-center gap-3 px-3 py-2'
+        >
+          <div className='min-w-0 flex-1'>
+            <div className='truncate text-sm font-medium'>
+              {user.email || user.username}
+            </div>
+            <div className='text-muted-foreground text-xs'>
+              ID: {user.id} · 当前 CDK 余额{' '}
+              {formatQuota(user.enterprise_cdk_quota ?? 0, quotaPerUnit)}
+            </div>
+          </div>
+          <Button size='sm' variant='outline' onClick={() => onSelect(user)}>
+            {actionLabel}
+          </Button>
+        </div>
+      ))}
+    </div>
   )
 }
 

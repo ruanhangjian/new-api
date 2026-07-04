@@ -234,6 +234,29 @@ func TestAdminRecycleEnterpriseCdkCodesRefundsOnlyEligibleCodes(t *testing.T) {
 	require.Equal(t, 100, user.EnterpriseCdkQuota)
 }
 
+func TestAdminDisableEnterpriseCdkCodeRejectsUsedCode(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 0)
+	batch := &model.EnterpriseCdkBatch{CreatorUserId: 1, Name: "batch", Quota: 100, Count: 1, TotalQuota: 100}
+	require.NoError(t, model.DB.Create(batch).Error)
+	used := &model.Redemption{UserId: 1, BatchId: batch.Id, Key: "used", Name: "batch", Quota: 100, Status: common.RedemptionCodeStatusUsed, UsedUserId: 2}
+	require.NoError(t, model.DB.Create(used).Error)
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPut, fmt.Sprintf("/api/admin/enterprise/codes/%d/disable", used.Id), gin.H{
+		"disabled": false,
+	}, 99)
+	ctx.Params = gin.Params{{Key: "id", Value: fmt.Sprintf("%d", used.Id)}}
+	AdminDisableEnterpriseCdkCode(ctx)
+
+	response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.False(t, response.Success)
+
+	var code model.Redemption
+	require.NoError(t, model.DB.First(&code, used.Id).Error)
+	require.Equal(t, common.RedemptionCodeStatusUsed, code.Status)
+	require.Equal(t, 2, code.UsedUserId)
+}
+
 func TestEnterpriseCdkExportWritesCSVWithBOMAndOperationLog(t *testing.T) {
 	setupEnterpriseCdkControllerTestDB(t)
 	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 0)
@@ -256,4 +279,36 @@ func TestEnterpriseCdkExportWritesCSVWithBOMAndOperationLog(t *testing.T) {
 	var logCount int64
 	require.NoError(t, model.DB.Model(&model.EnterpriseCdkOperationLog{}).Where("action = ?", model.EnterpriseCdkOperationExportUser).Count(&logCount).Error)
 	require.Equal(t, int64(1), logCount)
+}
+
+func TestEnterpriseCdkCopyUnusedReturnsAllUnusedCodes(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 0)
+	require.NoError(t, model.AddEnterpriseCdkWhitelist(1, 99))
+	batch := &model.EnterpriseCdkBatch{CreatorUserId: 1, Name: "batch", Quota: 100, Count: 105, TotalQuota: 10500}
+	require.NoError(t, model.DB.Create(batch).Error)
+	for i := 0; i < 105; i++ {
+		require.NoError(t, model.DB.Create(&model.Redemption{
+			UserId: 1, BatchId: batch.Id, Key: fmt.Sprintf("unused-%03d", i), Name: "batch", Quota: 100, Status: common.RedemptionCodeStatusEnabled,
+		}).Error)
+	}
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/enterprise/cdk/copy-unused-log", gin.H{
+		"batch_id": batch.Id,
+	}, 1)
+	EnterpriseCdkCopyUnusedLog(ctx)
+
+	response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.True(t, response.Success, response.Message)
+	var payload struct {
+		Codes []string `json:"codes"`
+		Count int      `json:"count"`
+	}
+	require.NoError(t, json.Unmarshal(response.Data, &payload))
+	require.Equal(t, 105, payload.Count)
+	require.Len(t, payload.Codes, 105)
+
+	var log model.EnterpriseCdkOperationLog
+	require.NoError(t, model.DB.First(&log, "action = ?", model.EnterpriseCdkOperationCopyUnused).Error)
+	require.Equal(t, 105, log.CdkCount)
 }

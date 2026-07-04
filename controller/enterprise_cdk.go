@@ -258,8 +258,7 @@ func EnterpriseCdkCopyUnusedLog(c *gin.Context) {
 		return
 	}
 	var req struct {
-		BatchId int `json:"batch_id"`
-		Count   int `json:"count"`
+		BatchId int `json:"batch_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		common.ApiError(c, err)
@@ -270,18 +269,30 @@ func EnterpriseCdkCopyUnusedLog(c *gin.Context) {
 		enterpriseCdkForbidden(c)
 		return
 	}
+	rows, err := model.GetUnusedEnterpriseCdkCodesForCopy(batch.Id)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	err = model.CreateEnterpriseCdkOperationLog(&model.EnterpriseCdkOperationLog{
 		OperatorId:   userId,
 		TargetUserId: userId,
 		Action:       model.EnterpriseCdkOperationCopyUnused,
 		BatchId:      batch.Id,
-		CdkCount:     req.Count,
+		CdkCount:     len(rows),
 	})
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	common.ApiSuccess(c, nil)
+	codes := make([]string, 0, len(rows))
+	for _, row := range rows {
+		codes = append(codes, row.Key)
+	}
+	common.ApiSuccess(c, gin.H{
+		"codes": codes,
+		"count": len(codes),
+	})
 }
 
 func AdminGetEnterpriseCdkWhitelist(c *gin.Context) {
@@ -306,21 +317,24 @@ func AdminUpdateEnterpriseCdkWhitelist(c *gin.Context) {
 		return
 	}
 	operatorId := c.GetInt("id")
-	switch req.Action {
-	case "add":
-		if err := service.AddEnterpriseCdkWhitelist(req.UserId, operatorId); err != nil {
-			common.ApiError(c, err)
-			return
-		}
-		_ = model.CreateEnterpriseCdkOperationLog(&model.EnterpriseCdkOperationLog{OperatorId: operatorId, TargetUserId: req.UserId, Action: model.EnterpriseCdkOperationWhitelistAdd})
-	case "remove":
-		if err := service.RemoveEnterpriseCdkWhitelist(req.UserId); err != nil {
-			common.ApiError(c, err)
-			return
-		}
-		_ = model.CreateEnterpriseCdkOperationLog(&model.EnterpriseCdkOperationLog{OperatorId: operatorId, TargetUserId: req.UserId, Action: model.EnterpriseCdkOperationWhitelistRemove})
-	default:
+	if req.Action != "add" && req.Action != "remove" {
 		common.ApiError(c, errors.New("action 必须为 add 或 remove"))
+		return
+	}
+	err := model.DB.Transaction(func(tx *gorm.DB) error {
+		if req.Action == "add" {
+			if err := model.AddEnterpriseCdkWhitelistTx(tx, req.UserId, operatorId); err != nil {
+				return err
+			}
+			return tx.Create(&model.EnterpriseCdkOperationLog{OperatorId: operatorId, TargetUserId: req.UserId, Action: model.EnterpriseCdkOperationWhitelistAdd}).Error
+		}
+		if err := model.RemoveEnterpriseCdkWhitelistTx(tx, req.UserId); err != nil {
+			return err
+		}
+		return tx.Create(&model.EnterpriseCdkOperationLog{OperatorId: operatorId, TargetUserId: req.UserId, Action: model.EnterpriseCdkOperationWhitelistRemove}).Error
+	})
+	if err != nil {
+		common.ApiError(c, err)
 		return
 	}
 	common.ApiSuccess(c, nil)
@@ -339,16 +353,29 @@ func AdminUpdateEnterpriseCdkWhitelistLimit(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	if err := model.UpdateEnterpriseCdkWhitelistLimit(userId, req.MaxBatchCreateCount); err != nil {
+	if req.MaxBatchCreateCount <= 0 {
+		common.ApiError(c, errors.New("单次创建数量上限必须大于 0"))
+		return
+	}
+	err = model.DB.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.EnterpriseCdkWhitelist{}).Where("user_id = ?", userId).Update("max_batch_create_count", req.MaxBatchCreateCount)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return errors.New("白名单用户不存在")
+		}
+		return tx.Create(&model.EnterpriseCdkOperationLog{
+			OperatorId:     c.GetInt("id"),
+			TargetUserId:   userId,
+			Action:         model.EnterpriseCdkOperationLimitUpdate,
+			RequestSummary: fmt.Sprintf("max_batch_create_count=%d", req.MaxBatchCreateCount),
+		}).Error
+	})
+	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	_ = model.CreateEnterpriseCdkOperationLog(&model.EnterpriseCdkOperationLog{
-		OperatorId:     c.GetInt("id"),
-		TargetUserId:   userId,
-		Action:         model.EnterpriseCdkOperationLimitUpdate,
-		RequestSummary: fmt.Sprintf("max_batch_create_count=%d", req.MaxBatchCreateCount),
-	})
 	common.ApiSuccess(c, nil)
 }
 
@@ -464,16 +491,30 @@ func AdminDisableEnterpriseCdkCode(c *gin.Context) {
 	if req.Disabled {
 		status = common.RedemptionCodeStatusDisabled
 	}
-	if err := model.DB.Model(&model.Redemption{}).Where("id = ? AND batch_id > 0", id).Update("status", status).Error; err != nil {
+	err = model.DB.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.Redemption{}).
+			Where("id = ? AND batch_id > 0 AND status IN ? AND used_user_id = 0 AND recycled_time = 0", id, []int{
+				common.RedemptionCodeStatusEnabled,
+				common.RedemptionCodeStatusDisabled,
+			}).
+			Update("status", status)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return errors.New("CDK 不存在或状态不可操作")
+		}
+		return tx.Create(&model.EnterpriseCdkOperationLog{
+			OperatorId:     c.GetInt("id"),
+			Action:         model.EnterpriseCdkOperationToggleCdk,
+			CdkCount:       1,
+			RequestSummary: fmt.Sprintf("id=%d disabled=%v", id, req.Disabled),
+		}).Error
+	})
+	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	_ = model.CreateEnterpriseCdkOperationLog(&model.EnterpriseCdkOperationLog{
-		OperatorId:     c.GetInt("id"),
-		Action:         model.EnterpriseCdkOperationToggleCdk,
-		CdkCount:       1,
-		RequestSummary: fmt.Sprintf("id=%d disabled=%v", id, req.Disabled),
-	})
 	common.ApiSuccess(c, nil)
 }
 
@@ -554,6 +595,16 @@ func AdminGetEnterpriseCdkUserDetail(c *gin.Context) {
 		return
 	}
 	policy, _ := model.GetEnterpriseCdkWhitelistPolicy(userId)
+	quotaSummary, err := model.GetEnterpriseCdkQuotaSummary(userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	userSummary, err := model.GetEnterpriseCdkUserSummary(userId)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	logs, _, err := model.GetEnterpriseCdkQuotaLogs(userId, 0, 20)
 	if err != nil {
 		common.ApiError(c, err)
@@ -572,9 +623,11 @@ func AdminGetEnterpriseCdkUserDetail(c *gin.Context) {
 			"enterprise_cdk_quota": user.EnterpriseCdkQuota,
 			"balance":              service.QuotaToUSDString(user.EnterpriseCdkQuota),
 		},
-		"whitelist": policy,
-		"logs":      logs,
-		"batches":   batches,
+		"whitelist":        policy,
+		"quota_summary":    quotaSummary,
+		"customer_summary": userSummary,
+		"logs":             logs,
+		"batches":          batches,
 	})
 }
 

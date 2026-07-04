@@ -68,22 +68,26 @@ func ListEnterpriseCdkWhitelist(startIdx, pageSize int) ([]*EnterpriseCdkWhiteli
 }
 
 func AddEnterpriseCdkWhitelist(userId, operatorId int) error {
+	return AddEnterpriseCdkWhitelistTx(DB, userId, operatorId)
+}
+
+func AddEnterpriseCdkWhitelistTx(tx *gorm.DB, userId, operatorId int) error {
 	if userId <= 0 {
 		return errors.New("user id 为空")
 	}
 	var user User
-	if err := DB.Select("id").First(&user, "id = ?", userId).Error; err != nil {
+	if err := tx.Select("id").First(&user, "id = ?", userId).Error; err != nil {
 		return err
 	}
 	var existing EnterpriseCdkWhitelist
-	err := DB.Where("user_id = ?", userId).First(&existing).Error
+	err := tx.Where("user_id = ?", userId).First(&existing).Error
 	if err == nil {
 		return nil
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
-	return DB.Create(&EnterpriseCdkWhitelist{
+	return tx.Create(&EnterpriseCdkWhitelist{
 		UserId:              userId,
 		OperatorId:          operatorId,
 		MaxBatchCreateCount: DefaultEnterpriseCdkMaxBatchCreateCount,
@@ -91,10 +95,14 @@ func AddEnterpriseCdkWhitelist(userId, operatorId int) error {
 }
 
 func RemoveEnterpriseCdkWhitelist(userId int) error {
+	return RemoveEnterpriseCdkWhitelistTx(DB, userId)
+}
+
+func RemoveEnterpriseCdkWhitelistTx(tx *gorm.DB, userId int) error {
 	if userId <= 0 {
 		return errors.New("user id 为空")
 	}
-	return DB.Where("user_id = ?", userId).Delete(&EnterpriseCdkWhitelist{}).Error
+	return tx.Where("user_id = ?", userId).Delete(&EnterpriseCdkWhitelist{}).Error
 }
 
 func UpdateEnterpriseCdkWhitelistLimit(userId, maxCount int) error {
