@@ -39,6 +39,7 @@ func TestMain(m *testing.M) {
 		&User{},
 		&Token{},
 		&Log{},
+		&Redemption{},
 		&Channel{},
 		&Ability{},
 		&TopUp{},
@@ -47,6 +48,10 @@ func TestMain(m *testing.M) {
 		&UserSubscription{},
 		&PerfMetric{},
 		&AffiliateRebateSettlement{},
+		&EnterpriseCdkWhitelist{},
+		&EnterpriseCdkBatch{},
+		&EnterpriseCdkQuotaLog{},
+		&EnterpriseCdkOperationLog{},
 	); err != nil {
 		panic("failed to migrate: " + err.Error())
 	}

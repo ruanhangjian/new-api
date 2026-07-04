@@ -287,6 +287,10 @@ func migrateDB() error {
 		&ChannelMonitorHistory{},
 		&ChannelMonitorDailyRollup{},
 		&ChannelMonitorTemplate{},
+		&EnterpriseCdkWhitelist{},
+		&EnterpriseCdkBatch{},
+		&EnterpriseCdkQuotaLog{},
+		&EnterpriseCdkOperationLog{},
 	)
 	if err != nil {
 		return err
@@ -345,6 +349,10 @@ func migrateDBFast() error {
 		{&ChannelMonitorHistory{}, "ChannelMonitorHistory"},
 		{&ChannelMonitorDailyRollup{}, "ChannelMonitorDailyRollup"},
 		{&ChannelMonitorTemplate{}, "ChannelMonitorTemplate"},
+		{&EnterpriseCdkWhitelist{}, "EnterpriseCdkWhitelist"},
+		{&EnterpriseCdkBatch{}, "EnterpriseCdkBatch"},
+		{&EnterpriseCdkQuotaLog{}, "EnterpriseCdkQuotaLog"},
+		{&EnterpriseCdkOperationLog{}, "EnterpriseCdkOperationLog"},
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大
 	errChan := make(chan error, len(migrations))
