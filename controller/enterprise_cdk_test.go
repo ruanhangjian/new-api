@@ -101,6 +101,76 @@ func TestEnterpriseCdkBalanceRejectsNonWhitelistUserWithHTTP403(t *testing.T) {
 	require.False(t, response.Success)
 }
 
+func TestEnterpriseCdkUserEndpointsRejectNonWhitelistUsers(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 1000)
+
+	tests := []struct {
+		name   string
+		method string
+		target string
+		body   gin.H
+		run    func(*gin.Context)
+	}{
+		{
+			name:   "batch list",
+			method: http.MethodGet,
+			target: "/api/enterprise/cdk/batches",
+			run:    EnterpriseCdkBatches,
+		},
+		{
+			name:   "create batch",
+			method: http.MethodPost,
+			target: "/api/enterprise/cdk/batches",
+			body: gin.H{
+				"name":  "blocked",
+				"quota": "1.00",
+				"count": 1,
+			},
+			run: CreateEnterpriseCdkBatch,
+		},
+		{
+			name:   "export",
+			method: http.MethodPost,
+			target: "/api/enterprise/cdk/export",
+			body: gin.H{
+				"batch_id": 1,
+			},
+			run: EnterpriseCdkExport,
+		},
+		{
+			name:   "copy unused",
+			method: http.MethodPost,
+			target: "/api/enterprise/cdk/copy-unused-log",
+			body: gin.H{
+				"batch_id": 1,
+			},
+			run: EnterpriseCdkCopyUnusedLog,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, recorder := newAuthenticatedContext(t, test.method, test.target, test.body, 1)
+			test.run(ctx)
+
+			require.Equal(t, http.StatusForbidden, recorder.Code)
+			response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+			require.False(t, response.Success)
+		})
+	}
+
+	var batchCount int64
+	require.NoError(t, model.DB.Model(&model.EnterpriseCdkBatch{}).Count(&batchCount).Error)
+	require.Equal(t, int64(0), batchCount)
+	var codeCount int64
+	require.NoError(t, model.DB.Model(&model.Redemption{}).Count(&codeCount).Error)
+	require.Equal(t, int64(0), codeCount)
+	var operationLogCount int64
+	require.NoError(t, model.DB.Model(&model.EnterpriseCdkOperationLog{}).Count(&operationLogCount).Error)
+	require.Equal(t, int64(0), operationLogCount)
+}
+
 func TestEnterpriseCdkPermissionReturnsCreateLimit(t *testing.T) {
 	setupEnterpriseCdkControllerTestDB(t)
 	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 1000)
@@ -254,6 +324,34 @@ func TestEnterpriseCdkCreateBatchRejectsOverflowedQuota(t *testing.T) {
 	require.Equal(t, int64(0), codeCount)
 }
 
+func TestEnterpriseCdkCreateBatchRejectsCountAboveHardLimit(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 2_000_000)
+	require.NoError(t, model.DB.Create(&model.EnterpriseCdkWhitelist{
+		UserId:              1,
+		OperatorId:          99,
+		MaxBatchCreateCount: 10001,
+	}).Error)
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/enterprise/cdk/batches", gin.H{
+		"name":  "too many",
+		"quota": "1.00",
+		"count": 10001,
+	}, 1)
+	CreateEnterpriseCdkBatch(ctx)
+
+	response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.False(t, response.Success)
+	require.Contains(t, response.Message, "单次创建数量不能超过")
+
+	var batchCount int64
+	require.NoError(t, model.DB.Model(&model.EnterpriseCdkBatch{}).Count(&batchCount).Error)
+	require.Equal(t, int64(0), batchCount)
+	var codeCount int64
+	require.NoError(t, model.DB.Model(&model.Redemption{}).Count(&codeCount).Error)
+	require.Equal(t, int64(0), codeCount)
+}
+
 func TestEnterpriseCdkBatchDetailRejectsOtherUsersBatch(t *testing.T) {
 	setupEnterpriseCdkControllerTestDB(t)
 	seedEnterpriseCdkControllerUser(t, 1, "enterprise-a", 1000)
@@ -382,6 +480,26 @@ func TestAdminDisableEnterpriseCdkCodeRequiresDisabledField(t *testing.T) {
 	var updated model.Redemption
 	require.NoError(t, model.DB.First(&updated, code.Id).Error)
 	require.Equal(t, common.RedemptionCodeStatusDisabled, updated.Status)
+}
+
+func TestAdminUpdateEnterpriseCdkWhitelistLimitRejectsCountAboveHardLimit(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 0)
+	require.NoError(t, model.AddEnterpriseCdkWhitelist(1, 99))
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPut, "/api/admin/enterprise/whitelist/1/limit", gin.H{
+		"max_batch_create_count": 10001,
+	}, 99)
+	ctx.Params = gin.Params{{Key: "user_id", Value: "1"}}
+	AdminUpdateEnterpriseCdkWhitelistLimit(ctx)
+
+	response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.False(t, response.Success)
+	require.Contains(t, response.Message, "单次创建数量不能超过")
+
+	policy, err := model.GetEnterpriseCdkWhitelistPolicy(1)
+	require.NoError(t, err)
+	require.Equal(t, model.DefaultEnterpriseCdkMaxBatchCreateCount, policy.MaxBatchCreateCount)
 }
 
 func TestAdminDisableEnterpriseCdkCodeWritesStructuredOperationLog(t *testing.T) {

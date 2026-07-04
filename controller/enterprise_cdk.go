@@ -168,6 +168,10 @@ func CreateEnterpriseCdkBatch(c *gin.Context) {
 		common.ApiError(c, errors.New("创建数量必须大于 0"))
 		return
 	}
+	if req.Count > model.EnterpriseCdkHardMaxBatchCreateCount {
+		common.ApiError(c, fmt.Errorf("单次创建数量不能超过 %d", model.EnterpriseCdkHardMaxBatchCreateCount))
+		return
+	}
 	if req.ExpiredTime != 0 && req.ExpiredTime < common.GetTimestamp() {
 		common.ApiError(c, errors.New("过期时间不能早于当前时间"))
 		return
@@ -374,6 +378,10 @@ func AdminUpdateEnterpriseCdkWhitelistLimit(c *gin.Context) {
 	}
 	if req.MaxBatchCreateCount <= 0 {
 		common.ApiError(c, errors.New("单次创建数量上限必须大于 0"))
+		return
+	}
+	if req.MaxBatchCreateCount > model.EnterpriseCdkHardMaxBatchCreateCount {
+		common.ApiError(c, fmt.Errorf("单次创建数量不能超过 %d", model.EnterpriseCdkHardMaxBatchCreateCount))
 		return
 	}
 	err = model.DB.Transaction(func(tx *gorm.DB) error {

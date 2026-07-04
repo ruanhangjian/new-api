@@ -57,6 +57,7 @@ import type {
 } from '@/features/enterprise-cdk/types'
 import {
   CDK_STATUS,
+  ENTERPRISE_CDK_HARD_MAX_BATCH_CREATE_COUNT,
   formatEnterpriseCdkOperationAction,
   formatEnterpriseCdkQuotaLogType,
   formatQuota,
@@ -70,7 +71,6 @@ export function EnterpriseCdkAdminPage() {
   const queryClient = useQueryClient()
   const { status } = useStatus()
   const quotaPerUnit = status?.quota_per_unit
-  const [whitelistUserId, setWhitelistUserId] = useState('')
   const [whitelistSearch, setWhitelistSearch] = useState('')
   const [limitDraft, setLimitDraft] = useState<Record<number, number>>({})
   const [balanceSearch, setBalanceSearch] = useState('')
@@ -227,7 +227,7 @@ export function EnterpriseCdkAdminPage() {
     onSuccess: (res) => {
       if (!res.success) return
       toast.success('白名单已更新')
-      setWhitelistUserId('')
+      setWhitelistSearch('')
       invalidateAdmin()
     },
   })
@@ -375,24 +375,6 @@ export function EnterpriseCdkAdminPage() {
                     }
                   />
                 </div>
-                <div className='flex flex-wrap gap-2 border-t pt-4'>
-                  <Input
-                    className='max-w-64'
-                    placeholder='直接输入用户 ID'
-                    value={whitelistUserId}
-                    onChange={(event) => setWhitelistUserId(event.target.value)}
-                  />
-                  <Button
-                    onClick={() =>
-                      whitelistMutation.mutate({
-                        action: 'add',
-                        user_id: Number(whitelistUserId),
-                      })
-                    }
-                  >
-                    添加白名单
-                  </Button>
-                </div>
                 <Table className='min-w-[920px]'>
                   <TableHeader>
                     <TableRow>
@@ -417,6 +399,8 @@ export function EnterpriseCdkAdminPage() {
                           <Input
                             className='w-24'
                             type='number'
+                            min='1'
+                            max={ENTERPRISE_CDK_HARD_MAX_BATCH_CREATE_COUNT}
                             value={
                               limitDraft[item.user_id] ??
                               item.max_batch_create_count
@@ -434,6 +418,13 @@ export function EnterpriseCdkAdminPage() {
                             <Button
                               variant='outline'
                               size='sm'
+                              disabled={
+                                (limitDraft[item.user_id] ??
+                                  item.max_batch_create_count) <= 0 ||
+                                (limitDraft[item.user_id] ??
+                                  item.max_batch_create_count) >
+                                  ENTERPRISE_CDK_HARD_MAX_BATCH_CREATE_COUNT
+                              }
                               onClick={() =>
                                 limitMutation.mutate({
                                   userId: item.user_id,
@@ -463,6 +454,10 @@ export function EnterpriseCdkAdminPage() {
                     ))}
                   </TableBody>
                 </Table>
+                <p className='text-muted-foreground text-xs'>
+                  单个用户单次创建数量上限范围为 1-
+                  {ENTERPRISE_CDK_HARD_MAX_BATCH_CREATE_COUNT}。
+                </p>
                 <PaginationControls
                   page={whitelist.data?.data?.page ?? whitelistPage}
                   pageSize={whitelist.data?.data?.page_size}
@@ -1003,8 +998,35 @@ export function EnterpriseCdkAdminPage() {
                 {customerDetail.data?.data && (
                   <div className='grid gap-3 md:grid-cols-3'>
                     <MiniCard
+                      title='用户 ID'
+                      value={String(customerDetail.data.data.user.id)}
+                    />
+                    <MiniCard
                       title='用户邮箱'
                       value={customerDetail.data.data.user.email || '-'}
+                    />
+                    <MiniCard
+                      title='白名单状态'
+                      value={
+                        customerDetail.data.data.whitelist
+                          ? '已加入白名单'
+                          : '未加入白名单'
+                      }
+                    />
+                    <MiniCard
+                      title='白名单加入时间'
+                      value={formatTime(
+                        customerDetail.data.data.whitelist?.created_time
+                      )}
+                    />
+                    <MiniCard
+                      title='单次创建上限'
+                      value={
+                        customerDetail.data.data.whitelist
+                          ?.max_batch_create_count
+                          ? `${customerDetail.data.data.whitelist.max_batch_create_count} 个`
+                          : '-'
+                      }
                     />
                     <MiniCard
                       title='当前余额'

@@ -6,7 +6,10 @@ import (
 	"gorm.io/gorm"
 )
 
-const DefaultEnterpriseCdkMaxBatchCreateCount = 500
+const (
+	DefaultEnterpriseCdkMaxBatchCreateCount = 500
+	EnterpriseCdkHardMaxBatchCreateCount    = 10000
+)
 
 type EnterpriseCdkWhitelist struct {
 	Id                  int   `json:"id" gorm:"primaryKey;autoIncrement"`
@@ -111,6 +114,9 @@ func UpdateEnterpriseCdkWhitelistLimit(userId, maxCount int) error {
 	}
 	if maxCount <= 0 {
 		return errors.New("单次创建数量上限必须大于 0")
+	}
+	if maxCount > EnterpriseCdkHardMaxBatchCreateCount {
+		return errors.New("单次创建数量不能超过 10000")
 	}
 	return DB.Model(&EnterpriseCdkWhitelist{}).Where("user_id = ?", userId).Update("max_batch_create_count", maxCount).Error
 }

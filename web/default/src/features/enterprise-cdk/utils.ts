@@ -6,6 +6,8 @@ export const CDK_STATUS = {
   used: 3,
 } as const
 
+export const ENTERPRISE_CDK_HARD_MAX_BATCH_CREATE_COUNT = 10000
+
 export function formatTime(timestamp?: number, emptyText = '-') {
   if (!timestamp) return emptyText
   return new Date(timestamp * 1000).toLocaleString()

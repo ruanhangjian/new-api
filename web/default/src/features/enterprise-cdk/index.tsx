@@ -58,6 +58,7 @@ import { PaginationControls } from './pagination-controls'
 import type { CreateEnterpriseCdkBatchInput, EnterpriseCdkBatch } from './types'
 import {
   CDK_STATUS,
+  ENTERPRISE_CDK_HARD_MAX_BATCH_CREATE_COUNT,
   formatEnterpriseCdkQuotaLogType,
   formatDateTimeLocal,
   formatQuota,
@@ -143,6 +144,8 @@ export function EnterpriseCdkPage() {
   const maxBatchCreateCount =
     permission.data?.data?.max_batch_create_count ?? 500
   const exceedsCreateLimit = formCount > maxBatchCreateCount
+  const exceedsHardCreateLimit =
+    formCount > ENTERPRISE_CDK_HARD_MAX_BATCH_CREATE_COUNT
   const createDisabled =
     createMutation.isPending ||
     !hasValidName ||
@@ -150,7 +153,8 @@ export function EnterpriseCdkPage() {
     !hasValidQuota ||
     !hasValidCount ||
     insufficient ||
-    exceedsCreateLimit
+    exceedsCreateLimit ||
+    exceedsHardCreateLimit
 
   const openCreate = (template?: EnterpriseCdkBatch) => {
     if (template) {
@@ -561,6 +565,7 @@ export function EnterpriseCdkPage() {
                 <Input
                   type='number'
                   min='1'
+                  max={ENTERPRISE_CDK_HARD_MAX_BATCH_CREATE_COUNT}
                   value={form.count}
                   onChange={(event) =>
                     setForm((current) => ({
@@ -615,6 +620,12 @@ export function EnterpriseCdkPage() {
               {exceedsCreateLimit && (
                 <p className='text-destructive mt-2 text-xs'>
                   当前账号单次最多创建 {maxBatchCreateCount} 个 CDK。
+                </p>
+              )}
+              {exceedsHardCreateLimit && (
+                <p className='text-destructive mt-2 text-xs'>
+                  系统单次最多创建{' '}
+                  {ENTERPRISE_CDK_HARD_MAX_BATCH_CREATE_COUNT} 个 CDK。
                 </p>
               )}
             </div>
@@ -712,17 +723,25 @@ export function EnterpriseCdkBatchDetailPage({ batchId }: { batchId: number }) {
       return
     }
     const text = res.data.codes.join('\n')
-    await navigator.clipboard.writeText(text)
-    toast.success(`已复制 ${res.data.count} 个未兑换 CDK`)
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success(`已复制 ${res.data.count} 个未兑换 CDK`)
+    } catch {
+      toast.error('复制失败，请手动选择')
+    }
   }
 
   const copySelected = async () => {
     const selectedCodes = codes.filter((code) => selectedIds.includes(code.id))
     if (selectedCodes.length === 0) return
-    await navigator.clipboard.writeText(
-      selectedCodes.map((code) => code.key).join('\n')
-    )
-    toast.success(`已复制 ${selectedCodes.length} 个选中 CDK`)
+    try {
+      await navigator.clipboard.writeText(
+        selectedCodes.map((code) => code.key).join('\n')
+      )
+      toast.success(`已复制 ${selectedCodes.length} 个选中 CDK`)
+    } catch {
+      toast.error('复制失败，请手动选择')
+    }
   }
 
   return (
