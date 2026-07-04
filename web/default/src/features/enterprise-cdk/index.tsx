@@ -58,8 +58,10 @@ import { PaginationControls } from './pagination-controls'
 import type { CreateEnterpriseCdkBatchInput, EnterpriseCdkBatch } from './types'
 import {
   CDK_STATUS,
+  formatEnterpriseCdkQuotaLogType,
   formatDateTimeLocal,
   formatQuota,
+  formatSignedQuota,
   formatTime,
   getCodeStatus,
   getCodeStatusTone,
@@ -263,6 +265,13 @@ export function EnterpriseCdkPage() {
                             />
                             <MobileFact label='数量' value={batch.count} />
                             <MobileFact
+                              label='总面额'
+                              value={formatQuota(
+                                batch.total_quota,
+                                quotaPerUnit
+                              )}
+                            />
+                            <MobileFact
                               label='未兑换'
                               value={
                                 batch.unused_count ??
@@ -275,6 +284,26 @@ export function EnterpriseCdkPage() {
                               value={
                                 batch.used_count ?? batch.stats?.used_count ?? 0
                               }
+                            />
+                            <MobileFact
+                              label='已过期'
+                              value={
+                                batch.expired_count ??
+                                batch.stats?.expired_count ??
+                                0
+                              }
+                            />
+                            <MobileFact
+                              label='已禁用'
+                              value={
+                                batch.disabled_count ??
+                                batch.stats?.disabled_count ??
+                                0
+                              }
+                            />
+                            <MobileFact
+                              label='创建时间'
+                              value={formatTime(batch.created_time)}
                             />
                             <MobileFact
                               label='过期时间'
@@ -310,14 +339,18 @@ export function EnterpriseCdkPage() {
                       )}
                     </div>
                     <div className='hidden md:block'>
-                      <Table className='min-w-[760px]'>
+                      <Table className='min-w-[1040px]'>
                         <TableHeader>
                           <TableRow>
                             <TableHead>批次名称</TableHead>
                             <TableHead>面额</TableHead>
                             <TableHead>数量</TableHead>
+                            <TableHead>总面额</TableHead>
                             <TableHead>未兑换</TableHead>
                             <TableHead>已兑换</TableHead>
+                            <TableHead>已过期</TableHead>
+                            <TableHead>已禁用</TableHead>
+                            <TableHead>创建时间</TableHead>
                             <TableHead>过期时间</TableHead>
                             <TableHead className='text-right'>操作</TableHead>
                           </TableRow>
@@ -339,6 +372,9 @@ export function EnterpriseCdkPage() {
                               </TableCell>
                               <TableCell>{batch.count}</TableCell>
                               <TableCell>
+                                {formatQuota(batch.total_quota, quotaPerUnit)}
+                              </TableCell>
+                              <TableCell>
                                 {batch.unused_count ??
                                   batch.stats?.unused_count ??
                                   0}
@@ -347,6 +383,19 @@ export function EnterpriseCdkPage() {
                                 {batch.used_count ??
                                   batch.stats?.used_count ??
                                   0}
+                              </TableCell>
+                              <TableCell>
+                                {batch.expired_count ??
+                                  batch.stats?.expired_count ??
+                                  0}
+                              </TableCell>
+                              <TableCell>
+                                {batch.disabled_count ??
+                                  batch.stats?.disabled_count ??
+                                  0}
+                              </TableCell>
+                              <TableCell>
+                                {formatTime(batch.created_time)}
                               </TableCell>
                               <TableCell>
                                 {formatTime(batch.expired_time, '永不过期')}
@@ -380,7 +429,7 @@ export function EnterpriseCdkPage() {
                           {batchItems.length === 0 && (
                             <TableRow>
                               <TableCell
-                                colSpan={7}
+                                colSpan={11}
                                 className='text-muted-foreground py-10 text-center'
                               >
                                 暂无批次
@@ -425,9 +474,11 @@ export function EnterpriseCdkPage() {
                             <TableCell>
                               {formatTime(log.created_time)}
                             </TableCell>
-                            <TableCell>{log.type}</TableCell>
                             <TableCell>
-                              {formatQuota(log.amount, quotaPerUnit)}
+                              {formatEnterpriseCdkQuotaLogType(log.type)}
+                            </TableCell>
+                            <TableCell>
+                              {formatSignedQuota(log.amount, quotaPerUnit)}
                             </TableCell>
                             <TableCell>
                               {formatQuota(log.balance_after, quotaPerUnit)}
@@ -665,6 +716,15 @@ export function EnterpriseCdkBatchDetailPage({ batchId }: { batchId: number }) {
     toast.success(`已复制 ${res.data.count} 个未兑换 CDK`)
   }
 
+  const copySelected = async () => {
+    const selectedCodes = codes.filter((code) => selectedIds.includes(code.id))
+    if (selectedCodes.length === 0) return
+    await navigator.clipboard.writeText(
+      selectedCodes.map((code) => code.key).join('\n')
+    )
+    toast.success(`已复制 ${selectedCodes.length} 个选中 CDK`)
+  }
+
   return (
     <SectionPageLayout>
       <SectionPageLayout.Title>
@@ -677,6 +737,14 @@ export function EnterpriseCdkBatchDetailPage({ batchId }: { batchId: number }) {
         <Button variant='outline' disabled={!batch} onClick={copyUnused}>
           <Copy />
           一键复制未兑换
+        </Button>
+        <Button
+          variant='outline'
+          disabled={selectedIds.length === 0}
+          onClick={copySelected}
+        >
+          <Copy />
+          复制选中
         </Button>
         <Button
           disabled={selectedIds.length === 0}
@@ -733,6 +801,7 @@ export function EnterpriseCdkBatchDetailPage({ batchId }: { batchId: number }) {
                       onClick={() => {
                         setStatusFilter(item)
                         setPage(1)
+                        setSelectedIds([])
                       }}
                     >
                       <ListFilter />
@@ -749,6 +818,7 @@ export function EnterpriseCdkBatchDetailPage({ batchId }: { batchId: number }) {
                     onChange={(event) => {
                       setKeyword(event.target.value)
                       setPage(1)
+                      setSelectedIds([])
                     }}
                   />
                 </div>
@@ -808,7 +878,10 @@ export function EnterpriseCdkBatchDetailPage({ batchId }: { batchId: number }) {
                   variant='outline'
                   size='sm'
                   disabled={page <= 1}
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  onClick={() => {
+                    setSelectedIds([])
+                    setPage((current) => Math.max(1, current - 1))
+                  }}
                 >
                   上一页
                 </Button>
@@ -824,7 +897,10 @@ export function EnterpriseCdkBatchDetailPage({ batchId }: { batchId: number }) {
                       )
                     )
                   }
-                  onClick={() => setPage((current) => current + 1)}
+                  onClick={() => {
+                    setSelectedIds([])
+                    setPage((current) => current + 1)
+                  }}
                 >
                   下一页
                 </Button>

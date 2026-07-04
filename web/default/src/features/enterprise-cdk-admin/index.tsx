@@ -57,7 +57,10 @@ import type {
 } from '@/features/enterprise-cdk/types'
 import {
   CDK_STATUS,
+  formatEnterpriseCdkOperationAction,
+  formatEnterpriseCdkQuotaLogType,
   formatQuota,
+  formatSignedQuota,
   formatTime,
   getCodeStatus,
   getCodeStatusTone,
@@ -605,8 +608,8 @@ export function EnterpriseCdkAdminPage() {
                 rows={(balanceLogs.data?.data?.items ?? []).map((item) => [
                   formatTime(item.created_time),
                   item.user_email || item.user_id,
-                  item.type,
-                  formatQuota(item.amount, quotaPerUnit),
+                  formatEnterpriseCdkQuotaLogType(item.type),
+                  formatSignedQuota(item.amount, quotaPerUnit),
                   formatQuota(item.balance_before, quotaPerUnit),
                   formatQuota(item.balance_after, quotaPerUnit),
                   item.remark || '-',
@@ -662,7 +665,7 @@ export function EnterpriseCdkAdminPage() {
               <DataTable
                 title='全局批次列表'
                 description='按企业负责人查看所有企业 CDK 批次及兑换统计。'
-                minWidth={960}
+                minWidth={1080}
                 headers={[
                   '批次 ID',
                   '批次名称',
@@ -672,6 +675,7 @@ export function EnterpriseCdkAdminPage() {
                   '未兑换',
                   '已兑换',
                   '已过期',
+                  '已禁用',
                   '总面额',
                   '创建时间',
                 ]}
@@ -684,6 +688,7 @@ export function EnterpriseCdkAdminPage() {
                   item.unused_count ?? item.stats?.unused_count ?? 0,
                   item.used_count ?? item.stats?.used_count ?? 0,
                   item.expired_count ?? item.stats?.expired_count ?? 0,
+                  item.disabled_count ?? item.stats?.disabled_count ?? 0,
                   formatQuota(item.total_quota, quotaPerUnit),
                   formatTime(item.created_time),
                 ])}
@@ -848,7 +853,7 @@ export function EnterpriseCdkAdminPage() {
                     回收选中
                   </Button>
                 </div>
-                <Table className='min-w-[1120px]'>
+                <Table className='min-w-[1280px]'>
                   <TableHeader>
                     <TableRow>
                       <TableHead></TableHead>
@@ -859,6 +864,8 @@ export function EnterpriseCdkAdminPage() {
                       <TableHead>状态</TableHead>
                       <TableHead>兑换人</TableHead>
                       <TableHead>创建时间</TableHead>
+                      <TableHead>过期时间</TableHead>
+                      <TableHead>兑换时间</TableHead>
                       <TableHead className='text-right'>操作</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -896,6 +903,12 @@ export function EnterpriseCdkAdminPage() {
                             {code.used_user_email || code.used_user_id || '-'}
                           </TableCell>
                           <TableCell>{formatTime(code.created_time)}</TableCell>
+                          <TableCell>
+                            {formatTime(code.expired_time, '永不过期')}
+                          </TableCell>
+                          <TableCell>
+                            {formatTime(code.redeemed_time)}
+                          </TableCell>
                           <TableCell>
                             <div className='flex justify-end'>
                               <Button
@@ -1061,8 +1074,8 @@ export function EnterpriseCdkAdminPage() {
                     []
                   ).map((item) => [
                     formatTime(item.created_time),
-                    item.type,
-                    formatQuota(item.amount, quotaPerUnit),
+                    formatEnterpriseCdkQuotaLogType(item.type),
+                    formatSignedQuota(item.amount, quotaPerUnit),
                     formatQuota(item.balance_after, quotaPerUnit),
                     item.remark || '-',
                   ])}
@@ -1097,7 +1110,7 @@ export function EnterpriseCdkAdminPage() {
               ]}
               rows={(operationLogs.data?.data?.items ?? []).map((item) => [
                 formatTime(item.created_time),
-                item.action,
+                formatEnterpriseCdkOperationAction(item.action),
                 item.operator_email || item.operator_id,
                 item.target_user_email || item.target_user_id || '-',
                 item.batch_name || item.batch_id || '-',

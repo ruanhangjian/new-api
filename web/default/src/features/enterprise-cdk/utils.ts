@@ -21,7 +21,58 @@ export function formatDateTimeLocal(timestamp?: number) {
 export function formatQuota(quota: number | undefined, quotaPerUnit?: number) {
   const unit = quotaPerUnit && quotaPerUnit > 0 ? quotaPerUnit : undefined
   if (!unit) return '$0.00'
-  return `$${((quota ?? 0) / unit).toFixed(2)}`
+  const amount = (quota ?? 0) / unit
+  const sign = amount < 0 ? '-' : ''
+  return `${sign}$${Math.abs(amount).toFixed(2)}`
+}
+
+export function formatSignedQuota(
+  quota: number | undefined,
+  quotaPerUnit?: number
+) {
+  const amount = quota ?? 0
+  if (amount > 0) return `+${formatQuota(amount, quotaPerUnit)}`
+  return formatQuota(amount, quotaPerUnit)
+}
+
+export function formatEnterpriseCdkQuotaLogType(type: string) {
+  switch (type) {
+    case 'admin_add':
+      return '管理员充值'
+    case 'admin_deduct':
+      return '管理员扣减'
+    case 'admin_refund':
+      return '管理员退款'
+    case 'create_cdk':
+      return '创建批次扣减'
+    default:
+      return type || '-'
+  }
+}
+
+export function formatEnterpriseCdkOperationAction(action: string) {
+  switch (action) {
+    case 'export_user':
+      return '用户导出'
+    case 'export_admin':
+      return '管理员导出'
+    case 'view_admin':
+      return '管理员查看'
+    case 'copy_unused':
+      return '复制未兑换'
+    case 'recycle_cdks':
+      return '回收 CDK'
+    case 'toggle_cdk':
+      return '启用/禁用 CDK'
+    case 'whitelist_add':
+      return '加入白名单'
+    case 'whitelist_remove':
+      return '移出白名单'
+    case 'limit_update':
+      return '更新创建上限'
+    default:
+      return action || '-'
+  }
 }
 
 export function getCodeStatus(code: EnterpriseCdkCode) {
