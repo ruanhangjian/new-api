@@ -3266,6 +3266,8 @@
     "Redemption code updated successfully": "兑换码更新成功",
     "Redemption code(s) created successfully": "兑换码创建成功",
     "Redemption Codes": "兑换码",
+    "Enterprise CDK": "企业 CDK",
+    "Enterprise CDK Management": "企业 CDK 管理",
     "Redemption codes are disabled until the administrator confirms compliance terms.": "兑换码功能已禁用，管理员需先确认合规声明。",
     "redemption codes.": "兑换码。",
     "Redemption failed": "兑换失败",

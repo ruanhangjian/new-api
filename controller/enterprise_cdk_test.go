@@ -90,6 +90,26 @@ func TestEnterpriseCdkBalanceRejectsNonWhitelistUserWithHTTP403(t *testing.T) {
 	require.False(t, response.Success)
 }
 
+func TestEnterpriseCdkPermissionReturnsCreateLimit(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 1000)
+	require.NoError(t, model.AddEnterpriseCdkWhitelist(1, 99))
+	require.NoError(t, model.UpdateEnterpriseCdkWhitelistLimit(1, 7))
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodGet, "/api/enterprise/cdk/permission", nil, 1)
+	EnterpriseCdkPermission(ctx)
+
+	response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.True(t, response.Success, response.Message)
+	var payload struct {
+		HasPermission       bool `json:"has_permission"`
+		MaxBatchCreateCount int  `json:"max_batch_create_count"`
+	}
+	require.NoError(t, json.Unmarshal(response.Data, &payload))
+	require.True(t, payload.HasPermission)
+	require.Equal(t, 7, payload.MaxBatchCreateCount)
+}
+
 func TestEnterpriseCdkCreateBatchDeductsBalanceAndCreatesCodes(t *testing.T) {
 	setupEnterpriseCdkControllerTestDB(t)
 	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 1000)

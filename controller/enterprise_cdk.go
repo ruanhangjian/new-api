@@ -42,9 +42,17 @@ func enterpriseCdkForbidden(c *gin.Context) {
 
 func EnterpriseCdkPermission(c *gin.Context) {
 	userId := c.GetInt("id")
-	common.ApiSuccess(c, gin.H{
-		"has_permission": service.IsEnterpriseCdkUser(userId),
-	})
+	hasPermission := service.IsEnterpriseCdkUser(userId)
+	data := gin.H{"has_permission": hasPermission}
+	if hasPermission {
+		policy, err := service.GetEnterpriseCdkWhitelistPolicy(userId)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		data["max_batch_create_count"] = policy.MaxBatchCreateCount
+	}
+	common.ApiSuccess(c, data)
 }
 
 func EnterpriseCdkBalance(c *gin.Context) {

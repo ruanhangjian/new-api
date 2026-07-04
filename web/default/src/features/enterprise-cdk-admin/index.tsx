@@ -1,0 +1,762 @@
+import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  Download,
+  History,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  Settings2,
+  ShieldCheck,
+  Ticket,
+  Wallet,
+} from 'lucide-react'
+import { toast } from 'sonner'
+import { useStatus } from '@/hooks/use-status'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Textarea } from '@/components/ui/textarea'
+import { SectionPageLayout } from '@/components/layout'
+import {
+  adminAdjustEnterpriseCdkBalance,
+  adminExportEnterpriseCdkCodes,
+  adminGetEnterpriseCdkBalanceLogs,
+  adminGetEnterpriseCdkCodes,
+  adminGetEnterpriseCdkOperationLogs,
+  adminGetEnterpriseCdkUserDetail,
+  adminGetEnterpriseCdkWhitelist,
+  adminRecycleEnterpriseCdkCodes,
+  adminSetEnterpriseCdkCodeDisabled,
+  adminUpdateEnterpriseCdkLimit,
+  adminUpdateEnterpriseCdkWhitelist,
+} from '@/features/enterprise-cdk/api'
+import {
+  CDK_STATUS,
+  formatQuota,
+  formatTime,
+  getCodeStatus,
+  getCodeStatusTone,
+} from '@/features/enterprise-cdk/utils'
+
+export function EnterpriseCdkAdminPage() {
+  const queryClient = useQueryClient()
+  const { status } = useStatus()
+  const quotaPerUnit = status?.quota_per_unit
+  const [whitelistUserId, setWhitelistUserId] = useState('')
+  const [limitDraft, setLimitDraft] = useState<Record<number, number>>({})
+  const [balanceForm, setBalanceForm] = useState({
+    user_id: '',
+    amount: '',
+    type: 'admin_add',
+    remark: '',
+  })
+  const [codeFilters, setCodeFilters] = useState({
+    user_id: '',
+    batch_id: '',
+    status: '',
+    keyword: '',
+  })
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [recycleRemark, setRecycleRemark] = useState('')
+  const [customerUserId, setCustomerUserId] = useState('')
+
+  const whitelist = useQuery({
+    queryKey: ['enterprise-cdk-admin', 'whitelist'],
+    queryFn: () => adminGetEnterpriseCdkWhitelist({ p: 1 }),
+  })
+  const balanceLogs = useQuery({
+    queryKey: ['enterprise-cdk-admin', 'balance-logs'],
+    queryFn: () => adminGetEnterpriseCdkBalanceLogs(),
+  })
+  const codes = useQuery({
+    queryKey: ['enterprise-cdk-admin', 'codes', codeFilters],
+    queryFn: () =>
+      adminGetEnterpriseCdkCodes({
+        user_id: codeFilters.user_id || undefined,
+        batch_id: codeFilters.batch_id || undefined,
+        status: codeFilters.status || undefined,
+        keyword: codeFilters.keyword || undefined,
+      }),
+  })
+  const operationLogs = useQuery({
+    queryKey: ['enterprise-cdk-admin', 'operation-logs'],
+    queryFn: () => adminGetEnterpriseCdkOperationLogs(),
+  })
+  const customerDetail = useQuery({
+    queryKey: ['enterprise-cdk-admin', 'customer', customerUserId],
+    queryFn: () => adminGetEnterpriseCdkUserDetail(Number(customerUserId)),
+    enabled: Number(customerUserId) > 0,
+  })
+
+  const invalidateAdmin = () => {
+    queryClient.invalidateQueries({ queryKey: ['enterprise-cdk-admin'] })
+  }
+
+  const whitelistMutation = useMutation({
+    mutationFn: adminUpdateEnterpriseCdkWhitelist,
+    onSuccess: (res) => {
+      if (!res.success) return
+      toast.success('白名单已更新')
+      setWhitelistUserId('')
+      invalidateAdmin()
+    },
+  })
+  const limitMutation = useMutation({
+    mutationFn: ({ userId, max }: { userId: number; max: number }) =>
+      adminUpdateEnterpriseCdkLimit(userId, max),
+    onSuccess: (res) => {
+      if (!res.success) return
+      toast.success('创建上限已更新')
+      invalidateAdmin()
+    },
+  })
+  const balanceMutation = useMutation({
+    mutationFn: adminAdjustEnterpriseCdkBalance,
+    onSuccess: (res) => {
+      if (!res.success) return
+      toast.success('CDK 余额已调整')
+      setBalanceForm({ user_id: '', amount: '', type: 'admin_add', remark: '' })
+      invalidateAdmin()
+    },
+  })
+  const recycleMutation = useMutation({
+    mutationFn: adminRecycleEnterpriseCdkCodes,
+    onSuccess: (res) => {
+      if (!res.success) return
+      toast.success(`已回收 ${res.data?.refunded_count ?? 0} 个 CDK`)
+      setSelectedIds([])
+      setRecycleRemark('')
+      invalidateAdmin()
+    },
+  })
+  const disableMutation = useMutation({
+    mutationFn: ({ id, disabled }: { id: number; disabled: boolean }) =>
+      adminSetEnterpriseCdkCodeDisabled(id, disabled),
+    onSuccess: (res) => {
+      if (!res.success) return
+      toast.success('CDK 状态已更新')
+      invalidateAdmin()
+    },
+  })
+
+  const codeItems = codes.data?.data?.items ?? []
+  const selectedCodes = codeItems.filter((code) =>
+    selectedIds.includes(code.id)
+  )
+  const selectedRefundQuota = selectedCodes.reduce(
+    (sum, code) => sum + code.quota,
+    0
+  )
+  const exportCodeFilters = () => ({
+    user_id: Number(codeFilters.user_id) || undefined,
+    batch_id: Number(codeFilters.batch_id) || undefined,
+    status: codeFilters.status || undefined,
+    keyword: codeFilters.keyword || undefined,
+  })
+  const toggleSelected = (id: number) => {
+    setSelectedIds((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id]
+    )
+  }
+
+  return (
+    <SectionPageLayout>
+      <SectionPageLayout.Title>企业 CDK 管理</SectionPageLayout.Title>
+      <SectionPageLayout.Description>
+        管理白名单、CDK 余额、全局 CDK、回收返还和操作审计。
+      </SectionPageLayout.Description>
+      <SectionPageLayout.Content>
+        <Tabs defaultValue='whitelist'>
+          <TabsList variant='line' className='mb-4 flex-wrap'>
+            <TabsTrigger value='whitelist'>
+              <ShieldCheck />
+              白名单
+            </TabsTrigger>
+            <TabsTrigger value='balance'>
+              <Wallet />
+              余额
+            </TabsTrigger>
+            <TabsTrigger value='logs'>
+              <History />
+              余额流水
+            </TabsTrigger>
+            <TabsTrigger value='codes'>
+              <Ticket />
+              全局 CDK
+            </TabsTrigger>
+            <TabsTrigger value='customer'>
+              <Search />
+              客户详情
+            </TabsTrigger>
+            <TabsTrigger value='operations'>
+              <Settings2 />
+              操作日志
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value='whitelist'>
+            <Card>
+              <CardHeader>
+                <CardTitle>白名单配置</CardTitle>
+                <CardDescription>
+                  第一版采用白名单控制企业 CDK 自助创建权限。
+                </CardDescription>
+              </CardHeader>
+              <CardContent className='space-y-4'>
+                <div className='flex flex-wrap gap-2'>
+                  <Input
+                    className='max-w-64'
+                    placeholder='输入用户 ID'
+                    value={whitelistUserId}
+                    onChange={(event) => setWhitelistUserId(event.target.value)}
+                  />
+                  <Button
+                    onClick={() =>
+                      whitelistMutation.mutate({
+                        action: 'add',
+                        user_id: Number(whitelistUserId),
+                      })
+                    }
+                  >
+                    添加白名单
+                  </Button>
+                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>用户</TableHead>
+                      <TableHead>邮箱</TableHead>
+                      <TableHead>当前余额</TableHead>
+                      <TableHead>加入时间</TableHead>
+                      <TableHead>单次上限</TableHead>
+                      <TableHead className='text-right'>操作</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(whitelist.data?.data?.items ?? []).map((item) => (
+                      <TableRow key={item.user_id}>
+                        <TableCell>{item.user_id}</TableCell>
+                        <TableCell>{item.email || item.username}</TableCell>
+                        <TableCell>
+                          {formatQuota(item.enterprise_cdk_quota, quotaPerUnit)}
+                        </TableCell>
+                        <TableCell>{formatTime(item.created_time)}</TableCell>
+                        <TableCell>
+                          <Input
+                            className='w-24'
+                            type='number'
+                            value={
+                              limitDraft[item.user_id] ??
+                              item.max_batch_create_count
+                            }
+                            onChange={(event) =>
+                              setLimitDraft((current) => ({
+                                ...current,
+                                [item.user_id]: Number(event.target.value),
+                              }))
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <div className='flex justify-end gap-2'>
+                            <Button
+                              variant='outline'
+                              size='sm'
+                              onClick={() =>
+                                limitMutation.mutate({
+                                  userId: item.user_id,
+                                  max:
+                                    limitDraft[item.user_id] ??
+                                    item.max_batch_create_count,
+                                })
+                              }
+                            >
+                              保存上限
+                            </Button>
+                            <Button
+                              variant='destructive'
+                              size='sm'
+                              onClick={() =>
+                                whitelistMutation.mutate({
+                                  action: 'remove',
+                                  user_id: item.user_id,
+                                })
+                              }
+                            >
+                              移除
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value='balance'>
+            <Card>
+              <CardHeader>
+                <CardTitle>CDK 余额管理</CardTitle>
+                <CardDescription>
+                  线下收款后手动增加或扣减企业 CDK 余额，备注必填。
+                </CardDescription>
+              </CardHeader>
+              <CardContent className='grid gap-4 md:grid-cols-[220px_180px_180px_1fr_auto]'>
+                <div className='grid gap-2'>
+                  <Label>用户 ID</Label>
+                  <Input
+                    value={balanceForm.user_id}
+                    onChange={(event) =>
+                      setBalanceForm((current) => ({
+                        ...current,
+                        user_id: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className='grid gap-2'>
+                  <Label>金额 USD</Label>
+                  <Input
+                    value={balanceForm.amount}
+                    onChange={(event) =>
+                      setBalanceForm((current) => ({
+                        ...current,
+                        amount: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className='grid gap-2'>
+                  <Label>类型</Label>
+                  <select
+                    className='border-input h-8 rounded-lg border bg-transparent px-2 text-sm'
+                    value={balanceForm.type}
+                    onChange={(event) =>
+                      setBalanceForm((current) => ({
+                        ...current,
+                        type: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value='admin_add'>管理员充值</option>
+                    <option value='admin_deduct'>管理员扣减</option>
+                    <option value='admin_refund'>管理员退款</option>
+                  </select>
+                </div>
+                <div className='grid gap-2'>
+                  <Label>备注</Label>
+                  <Input
+                    placeholder='微信收款 ¥700，2026-07-03'
+                    value={balanceForm.remark}
+                    onChange={(event) =>
+                      setBalanceForm((current) => ({
+                        ...current,
+                        remark: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className='flex items-end'>
+                  <Button
+                    onClick={() =>
+                      balanceMutation.mutate({
+                        user_id: Number(balanceForm.user_id),
+                        amount: balanceForm.amount,
+                        type: balanceForm.type,
+                        remark: balanceForm.remark,
+                      })
+                    }
+                  >
+                    提交
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value='logs'>
+            <DataTable
+              title='全局余额流水'
+              description='展示所有企业客户的 CDK 余额变动。'
+              headers={[
+                '时间',
+                '用户',
+                '类型',
+                '变动',
+                '变动前',
+                '变动后',
+                '备注',
+              ]}
+              rows={(balanceLogs.data?.data?.items ?? []).map((item) => [
+                formatTime(item.created_time),
+                item.user_email || item.user_id,
+                item.type,
+                formatQuota(item.amount, quotaPerUnit),
+                formatQuota(item.balance_before, quotaPerUnit),
+                formatQuota(item.balance_after, quotaPerUnit),
+                item.remark || '-',
+              ])}
+            />
+          </TabsContent>
+
+          <TabsContent value='codes'>
+            <Card>
+              <CardHeader>
+                <CardTitle>全局 CDK 列表</CardTitle>
+                <CardDescription>
+                  按创建人、批次、状态或 CDK 码筛选，并支持导出和回收。
+                </CardDescription>
+              </CardHeader>
+              <CardContent className='space-y-4'>
+                <div className='flex flex-wrap gap-2'>
+                  <Input
+                    className='max-w-32'
+                    placeholder='用户 ID'
+                    value={codeFilters.user_id}
+                    onChange={(event) =>
+                      setCodeFilters((current) => ({
+                        ...current,
+                        user_id: event.target.value,
+                      }))
+                    }
+                  />
+                  <Input
+                    className='max-w-32'
+                    placeholder='批次 ID'
+                    value={codeFilters.batch_id}
+                    onChange={(event) =>
+                      setCodeFilters((current) => ({
+                        ...current,
+                        batch_id: event.target.value,
+                      }))
+                    }
+                  />
+                  <select
+                    className='border-input h-8 rounded-lg border bg-transparent px-2 text-sm'
+                    value={codeFilters.status}
+                    onChange={(event) =>
+                      setCodeFilters((current) => ({
+                        ...current,
+                        status: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value=''>全部状态</option>
+                    <option value='unused'>未兑换</option>
+                    <option value='used'>已兑换</option>
+                    <option value='expired'>已过期</option>
+                    <option value='disabled'>已禁用</option>
+                  </select>
+                  <Input
+                    className='max-w-56'
+                    placeholder='搜索 CDK'
+                    value={codeFilters.keyword}
+                    onChange={(event) =>
+                      setCodeFilters((current) => ({
+                        ...current,
+                        keyword: event.target.value,
+                      }))
+                    }
+                  />
+                  <Button variant='outline' onClick={() => codes.refetch()}>
+                    <RefreshCw />
+                    刷新
+                  </Button>
+                  <Button
+                    onClick={() =>
+                      adminExportEnterpriseCdkCodes(exportCodeFilters())
+                    }
+                  >
+                    <Download />
+                    导出
+                  </Button>
+                  <Button
+                    variant='outline'
+                    disabled={selectedIds.length === 0}
+                    onClick={() =>
+                      adminExportEnterpriseCdkCodes({ cdk_ids: selectedIds })
+                    }
+                  >
+                    <Download />
+                    导出选中
+                  </Button>
+                </div>
+                <div className='flex flex-wrap items-end gap-2'>
+                  <Textarea
+                    className='max-w-md'
+                    placeholder='回收备注'
+                    value={recycleRemark}
+                    onChange={(event) => setRecycleRemark(event.target.value)}
+                  />
+                  <div className='text-muted-foreground min-w-48 text-sm'>
+                    已选 {selectedIds.length} 个，预计返还{' '}
+                    {formatQuota(selectedRefundQuota, quotaPerUnit)}
+                  </div>
+                  <Button
+                    variant='destructive'
+                    disabled={
+                      selectedIds.length === 0 || recycleRemark.trim() === ''
+                    }
+                    onClick={() =>
+                      recycleMutation.mutate({
+                        cdk_ids: selectedIds,
+                        remark: recycleRemark,
+                      })
+                    }
+                  >
+                    <RotateCcw />
+                    回收选中
+                  </Button>
+                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead></TableHead>
+                      <TableHead>CDK</TableHead>
+                      <TableHead>创建人</TableHead>
+                      <TableHead>批次</TableHead>
+                      <TableHead>面额</TableHead>
+                      <TableHead>状态</TableHead>
+                      <TableHead>兑换人</TableHead>
+                      <TableHead>创建时间</TableHead>
+                      <TableHead className='text-right'>操作</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {codeItems.map((code) => (
+                      <TableRow key={code.id}>
+                        <TableCell>
+                          <input
+                            type='checkbox'
+                            checked={selectedIds.includes(code.id)}
+                            disabled={getCodeStatus(code) !== '未兑换'}
+                            onChange={() => toggleSelected(code.id)}
+                          />
+                        </TableCell>
+                        <TableCell className='font-mono'>{code.key}</TableCell>
+                        <TableCell>
+                          {code.creator_email || code.user_id}
+                        </TableCell>
+                        <TableCell>
+                          {code.batch_name || code.batch_id}
+                        </TableCell>
+                        <TableCell>
+                          {formatQuota(code.quota, quotaPerUnit)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getCodeStatusTone(code)}>
+                            {getCodeStatus(code)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {code.used_user_email || code.used_user_id || '-'}
+                        </TableCell>
+                        <TableCell>{formatTime(code.created_time)}</TableCell>
+                        <TableCell>
+                          <div className='flex justify-end'>
+                            <Button
+                              variant='outline'
+                              size='sm'
+                              disabled={
+                                disableMutation.isPending ||
+                                (code.status !== CDK_STATUS.enabled &&
+                                  code.status !== CDK_STATUS.disabled)
+                              }
+                              onClick={() =>
+                                disableMutation.mutate({
+                                  id: code.id,
+                                  disabled: code.status !== CDK_STATUS.disabled,
+                                })
+                              }
+                            >
+                              {code.status === CDK_STATUS.disabled
+                                ? '启用'
+                                : '禁用'}
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value='customer'>
+            <Card>
+              <CardHeader>
+                <CardTitle>企业客户详情</CardTitle>
+                <CardDescription>
+                  输入用户 ID 查看余额、流水和批次概览。
+                </CardDescription>
+              </CardHeader>
+              <CardContent className='space-y-4'>
+                <div className='flex gap-2'>
+                  <Input
+                    className='max-w-64'
+                    placeholder='用户 ID'
+                    value={customerUserId}
+                    onChange={(event) => setCustomerUserId(event.target.value)}
+                  />
+                  <Button onClick={() => customerDetail.refetch()}>
+                    <Search />
+                    查询
+                  </Button>
+                </div>
+                {customerDetail.data?.data && (
+                  <div className='grid gap-3 md:grid-cols-3'>
+                    <MiniCard
+                      title='用户邮箱'
+                      value={customerDetail.data.data.user.email || '-'}
+                    />
+                    <MiniCard
+                      title='当前余额'
+                      value={customerDetail.data.data.user.balance}
+                    />
+                    <MiniCard
+                      title='批次数'
+                      value={String(customerDetail.data.data.batches.length)}
+                    />
+                  </div>
+                )}
+                <DataTable
+                  title='客户最近批次'
+                  headers={['批次', '数量', '总面额', '创建时间']}
+                  rows={(customerDetail.data?.data?.batches ?? []).map(
+                    (item) => [
+                      item.name,
+                      item.count,
+                      formatQuota(item.total_quota, quotaPerUnit),
+                      formatTime(item.created_time),
+                    ]
+                  )}
+                />
+                <DataTable
+                  title='客户余额流水'
+                  headers={['时间', '类型', '变动', '变动后', '备注']}
+                  rows={(customerDetail.data?.data?.logs ?? []).map((item) => [
+                    formatTime(item.created_time),
+                    item.type,
+                    formatQuota(item.amount, quotaPerUnit),
+                    formatQuota(item.balance_after, quotaPerUnit),
+                    item.remark || '-',
+                  ])}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value='operations'>
+            <DataTable
+              title='操作日志'
+              description='导出、复制、回收、白名单和上限变更都会进入审计。'
+              headers={[
+                '时间',
+                '操作',
+                '管理员',
+                '目标用户',
+                '批次',
+                '数量',
+                '备注',
+              ]}
+              rows={(operationLogs.data?.data?.items ?? []).map((item) => [
+                formatTime(item.created_time),
+                item.action,
+                item.operator_email || item.operator_id,
+                item.target_user_email || item.target_user_id || '-',
+                item.batch_name || item.batch_id || '-',
+                item.cdk_count,
+                item.remark || item.request_summary || '-',
+              ])}
+            />
+          </TabsContent>
+        </Tabs>
+      </SectionPageLayout.Content>
+    </SectionPageLayout>
+  )
+}
+
+function MiniCard({ title, value }: { title: string; value: string }) {
+  return (
+    <Card size='sm'>
+      <CardContent>
+        <div className='text-muted-foreground text-xs'>{title}</div>
+        <div className='mt-1 text-lg font-medium'>{value}</div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function DataTable({
+  title,
+  description,
+  headers,
+  rows,
+}: {
+  title: string
+  description?: string
+  headers: string[]
+  rows: Array<Array<string | number>>
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        {description && <CardDescription>{description}</CardDescription>}
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {headers.map((header) => (
+                <TableHead key={header}>{header}</TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row, index) => (
+              <TableRow key={index}>
+                {row.map((cell, cellIndex) => (
+                  <TableCell key={cellIndex}>{cell}</TableCell>
+                ))}
+              </TableRow>
+            ))}
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell
+                  colSpan={headers.length}
+                  className='text-muted-foreground py-10 text-center'
+                >
+                  暂无数据
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  )
+}
