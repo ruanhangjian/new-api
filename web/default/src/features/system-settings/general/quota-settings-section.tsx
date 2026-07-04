@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 import { FormDirtyIndicator } from '../components/form-dirty-indicator'
 import { FormNavigationGuard } from '../components/form-navigation-guard'
 import { SettingsSection } from '../components/settings-section'
@@ -46,6 +47,7 @@ const quotaSchema = z.object({
   QuotaForInviter: z.coerce.number().min(0),
   QuotaForInvitee: z.coerce.number().min(0),
   TopUpLink: z.string(),
+  EnterpriseCdkContactMessage: z.string(),
   general_setting: z.object({
     docs_link: z.string(),
   }),
@@ -249,6 +251,33 @@ export function QuotaSettingsSection({
                 </FormControl>
                 <FormDescription>
                   {t('External link for users to purchase quota')}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='EnterpriseCdkContactMessage'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  {t('Enterprise CDK Insufficient Balance Message')}
+                </FormLabel>
+                <FormControl>
+                  <Textarea
+                    rows={3}
+                    placeholder={t(
+                      '余额不足。如需充值，请联系管理员线下收款后授信。'
+                    )}
+                    {...field}
+                  />
+                </FormControl>
+                <FormDescription>
+                  {t(
+                    'Message shown to enterprise CDK users when their CDK balance is insufficient.'
+                  )}
                 </FormDescription>
                 <FormMessage />
               </FormItem>

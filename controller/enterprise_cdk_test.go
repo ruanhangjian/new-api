@@ -110,6 +110,25 @@ func TestEnterpriseCdkPermissionReturnsCreateLimit(t *testing.T) {
 	require.Equal(t, 7, payload.MaxBatchCreateCount)
 }
 
+func TestEnterpriseCdkContactMessageIsExposedInStatus(t *testing.T) {
+	originalMap := common.OptionMap
+	common.OptionMap = map[string]string{
+		"EnterpriseCdkContactMessage": "请微信联系企业专员充值",
+	}
+	t.Cleanup(func() { common.OptionMap = originalMap })
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodGet, "/api/status", nil, 0)
+	GetStatus(ctx)
+
+	response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.True(t, response.Success, response.Message)
+	var payload struct {
+		EnterpriseCdkContactMessage string `json:"enterprise_cdk_contact_message"`
+	}
+	require.NoError(t, json.Unmarshal(response.Data, &payload))
+	require.Equal(t, "请微信联系企业专员充值", payload.EnterpriseCdkContactMessage)
+}
+
 func TestEnterpriseCdkCreateBatchDeductsBalanceAndCreatesCodes(t *testing.T) {
 	setupEnterpriseCdkControllerTestDB(t)
 	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 1000)

@@ -76,6 +76,11 @@ export function EnterpriseCdkPage() {
   const queryClient = useQueryClient()
   const { status } = useStatus()
   const quotaPerUnit = status?.quota_per_unit
+  const enterpriseCdkContactMessage =
+    typeof status?.enterprise_cdk_contact_message === 'string' &&
+    status.enterprise_cdk_contact_message.trim()
+      ? status.enterprise_cdk_contact_message
+      : '余额不足。如需充值，请联系管理员线下收款后授信。'
   const [createOpen, setCreateOpen] = useState(false)
   const [form, setForm] = useState<CreateEnterpriseCdkBatchInput>(emptyForm)
 
@@ -531,7 +536,7 @@ export function EnterpriseCdkPage() {
               </div>
               {insufficient && (
                 <p className='text-destructive mt-2 text-xs'>
-                  余额不足。如需充值，请联系管理员线下收款后授信。
+                  {enterpriseCdkContactMessage}
                 </p>
               )}
               {exceedsCreateLimit && (
