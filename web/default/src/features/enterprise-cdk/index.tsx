@@ -621,6 +621,28 @@ export function EnterpriseCdkBatchDetailPage({ batchId }: { batchId: number }) {
   const usedPercent =
     totalCount > 0 ? Math.round((usedCount / totalCount) * 100) : 0
 
+  if (detail.isLoading) {
+    return <SectionPageLayout>加载批次详情...</SectionPageLayout>
+  }
+
+  if (detail.data && !detail.data.success) {
+    return (
+      <SectionPageLayout>
+        <Card className='mx-auto mt-12 max-w-lg'>
+          <CardHeader>
+            <CardTitle className='flex items-center gap-2'>
+              <ShieldAlert className='size-5' />
+              暂无企业 CDK 权限
+            </CardTitle>
+            <CardDescription>
+              当前账号无权查看该批次，请确认账号白名单或批次归属。
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </SectionPageLayout>
+    )
+  }
+
   const toggleSelected = (id: number) => {
     setSelectedIds((current) =>
       current.includes(id)

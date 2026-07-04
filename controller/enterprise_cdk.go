@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -184,9 +185,9 @@ func CreateEnterpriseCdkBatch(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	totalQuota := unitQuota * req.Count
-	if unitQuota != 0 && totalQuota/unitQuota != req.Count {
-		common.ApiError(c, errors.New("创建总面额过大"))
+	totalQuota, err := checkedEnterpriseCdkTotalQuota(unitQuota, req.Count)
+	if err != nil {
+		common.ApiError(c, err)
 		return
 	}
 
@@ -241,7 +242,9 @@ func EnterpriseCdkExport(c *gin.Context) {
 		return
 	}
 	var req enterpriseCdkExportRequest
-	_ = c.ShouldBindJSON(&req)
+	if !bindEnterpriseCdkExportRequest(c, &req) {
+		return
+	}
 	rows, err := model.GetRedemptionsForExport(userId, req.BatchId, req.CdkIds, false)
 	if err != nil {
 		common.ApiError(c, err)
@@ -580,7 +583,9 @@ func AdminGetEnterpriseCdkOperationLogs(c *gin.Context) {
 
 func AdminEnterpriseCdkExport(c *gin.Context) {
 	var req enterpriseCdkExportRequest
-	_ = c.ShouldBindJSON(&req)
+	if !bindEnterpriseCdkExportRequest(c, &req) {
+		return
+	}
 	var rows []*model.EnterpriseCdkExportRow
 	var err error
 	if req.UserId > 0 || req.Status != "" || req.Keyword != "" || req.CreatedStart > 0 || req.CreatedEnd > 0 {
@@ -713,6 +718,9 @@ func writeEnterpriseCdkCSV(c *gin.Context, rows []*model.EnterpriseCdkExportRow,
 }
 
 func enterpriseCdkStatusText(row *model.EnterpriseCdkExportRow) string {
+	if row.RecycledTime > 0 {
+		return "已回收"
+	}
 	switch row.Status {
 	case common.RedemptionCodeStatusUsed:
 		return "已兑换"
@@ -730,4 +738,29 @@ func formatEnterpriseCdkTime(ts int64) string {
 		return ""
 	}
 	return time.Unix(ts, 0).Format("2006-01-02 15:04:05")
+}
+
+func checkedEnterpriseCdkTotalQuota(unitQuota int, count int) (int, error) {
+	if unitQuota <= 0 || count <= 0 {
+		return 0, errors.New("创建总面额必须大于 0")
+	}
+	maxInt := int(^uint(0) >> 1)
+	if unitQuota > maxInt/count {
+		return 0, errors.New("创建总面额过大")
+	}
+	return unitQuota * count, nil
+}
+
+func bindEnterpriseCdkExportRequest(c *gin.Context, req *enterpriseCdkExportRequest) bool {
+	if c.Request == nil || c.Request.Body == nil || c.Request.ContentLength == 0 {
+		return true
+	}
+	if err := c.ShouldBindJSON(req); err != nil {
+		if errors.Is(err, io.EOF) {
+			return true
+		}
+		common.ApiError(c, err)
+		return false
+	}
+	return true
 }

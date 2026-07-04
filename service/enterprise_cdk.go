@@ -39,6 +39,9 @@ func USDStringToQuota(raw string) (int, error) {
 	if !quota.Equal(quota.Truncate(0)) {
 		return 0, errors.New("金额精度过高")
 	}
+	if quota.GreaterThan(decimal.NewFromInt(int64(maxIntValue()))) {
+		return 0, errors.New("金额过大")
+	}
 	return int(quota.IntPart()), nil
 }
 
@@ -55,4 +58,8 @@ func quotaPerUnitDecimal() decimal.Decimal {
 		return decimal.NewFromInt(1)
 	}
 	return quotaPerUnit
+}
+
+func maxIntValue() int {
+	return int(^uint(0) >> 1)
 }

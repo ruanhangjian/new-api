@@ -59,7 +59,10 @@ func AdjustEnterpriseCdkQuota(tx *gorm.DB, userId int, operatorId int, logType s
 		return err
 	}
 
-	newBalance := user.EnterpriseCdkQuota + amount
+	newBalance, err := checkedEnterpriseCdkQuotaAdd(user.EnterpriseCdkQuota, amount)
+	if err != nil {
+		return err
+	}
 	if newBalance < 0 {
 		return errors.New("CDK 余额不足")
 	}
@@ -79,6 +82,18 @@ func AdjustEnterpriseCdkQuota(tx *gorm.DB, userId int, operatorId int, logType s
 		Remark:          remark,
 	}
 	return tx.Create(log).Error
+}
+
+func checkedEnterpriseCdkQuotaAdd(balance int, amount int) (int, error) {
+	maxInt := int(^uint(0) >> 1)
+	minInt := -maxInt - 1
+	if amount > 0 && balance > maxInt-amount {
+		return 0, errors.New("CDK 余额过大")
+	}
+	if amount < 0 && balance < minInt-amount {
+		return 0, errors.New("CDK 余额变动过大")
+	}
+	return balance + amount, nil
 }
 
 func isValidEnterpriseCdkQuotaLogType(logType string) bool {

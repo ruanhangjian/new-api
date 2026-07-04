@@ -140,7 +140,8 @@ func RecycleEnterpriseCdkCodes(cdkIds []int, operatorId int, remark string) (int
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		var codes []Redemption
 		now := common.GetTimestamp()
-		query := tx.Where("id IN ? AND batch_id > 0 AND status = ? AND used_user_id = 0 AND recycled_time = 0 AND (expired_time = 0 OR expired_time >= ?)", cdkIds, common.RedemptionCodeStatusEnabled, now)
+		eligibleStatuses := []int{common.RedemptionCodeStatusEnabled, common.RedemptionCodeStatusDisabled}
+		query := tx.Where("id IN ? AND batch_id > 0 AND status IN ? AND used_user_id = 0 AND redeemed_time = 0 AND recycled_time = 0 AND quota > 0", cdkIds, eligibleStatuses)
 		if !common.UsingSQLite {
 			query = query.Clauses(clause.Locking{Strength: "UPDATE"})
 		}
@@ -157,22 +158,37 @@ func RecycleEnterpriseCdkCodes(cdkIds []int, operatorId int, remark string) (int
 		}
 		byUser := make(map[int]refundBucket)
 		for _, code := range codes {
+			result := tx.Model(&Redemption{}).
+				Where("id = ? AND batch_id > 0 AND user_id = ? AND quota = ? AND status IN ? AND used_user_id = 0 AND redeemed_time = 0 AND recycled_time = 0", code.Id, code.UserId, code.Quota, eligibleStatuses).
+				Updates(map[string]any{
+					"status":                 common.RedemptionCodeStatusDisabled,
+					"recycled_time":          now,
+					"recycle_operator_id":    operatorId,
+					"recycle_quota_returned": gorm.Expr("quota"),
+				})
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected == 0 {
+				continue
+			}
 			eligibleIds = append(eligibleIds, code.Id)
 			refundedCount++
-			refundedQuota += code.Quota
+			var err error
+			refundedQuota, err = checkedEnterpriseCdkQuotaAdd(refundedQuota, code.Quota)
+			if err != nil {
+				return err
+			}
 			bucket := byUser[code.UserId]
-			bucket.quota += code.Quota
+			bucket.quota, err = checkedEnterpriseCdkQuotaAdd(bucket.quota, code.Quota)
+			if err != nil {
+				return err
+			}
 			bucket.count++
 			byUser[code.UserId] = bucket
 		}
-
-		if err := tx.Model(&Redemption{}).Where("id IN ?", eligibleIds).Updates(map[string]any{
-			"status":                 common.RedemptionCodeStatusDisabled,
-			"recycled_time":          now,
-			"recycle_operator_id":    operatorId,
-			"recycle_quota_returned": gorm.Expr("quota"),
-		}).Error; err != nil {
-			return err
+		if refundedCount == 0 {
+			return nil
 		}
 
 		for userId, bucket := range byUser {

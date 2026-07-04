@@ -130,7 +130,48 @@ func TestRecycleEnterpriseCdkCodesCannotRefundTwice(t *testing.T) {
 	require.Equal(t, 100, user.EnterpriseCdkQuota)
 }
 
-func TestRecycleEnterpriseCdkCodesDoesNotRefundExpiredCodes(t *testing.T) {
+func TestRecycleEnterpriseCdkCodesRefundsDisabledAndExpiredUnredeemedCodes(t *testing.T) {
+	resetEnterpriseCdkTables(t)
+	seedEnterpriseCdkUser(t, 1, "enterprise", 0)
+	batch := &EnterpriseCdkBatch{
+		CreatorUserId: 1,
+		Name:          "July batch",
+		Quota:         100,
+		Count:         2,
+		TotalQuota:    300,
+	}
+	require.NoError(t, DB.Create(batch).Error)
+	expired := &Redemption{
+		UserId:      1,
+		BatchId:     batch.Id,
+		Key:         "expired-cdk",
+		Name:        batch.Name,
+		Quota:       100,
+		Status:      common.RedemptionCodeStatusEnabled,
+		ExpiredTime: common.GetTimestamp() - 60,
+	}
+	disabled := &Redemption{
+		UserId:  1,
+		BatchId: batch.Id,
+		Key:     "disabled-cdk",
+		Name:    batch.Name,
+		Quota:   200,
+		Status:  common.RedemptionCodeStatusDisabled,
+	}
+	require.NoError(t, DB.Create(expired).Error)
+	require.NoError(t, DB.Create(disabled).Error)
+
+	refunded, amount, err := RecycleEnterpriseCdkCodes([]int{expired.Id, disabled.Id}, 99, "manual refund")
+	require.NoError(t, err)
+	require.Equal(t, 2, refunded)
+	require.Equal(t, 300, amount)
+
+	var user User
+	require.NoError(t, DB.First(&user, 1).Error)
+	require.Equal(t, 300, user.EnterpriseCdkQuota)
+}
+
+func TestRecycleEnterpriseCdkCodesDoesNotRefundCodeChangedAfterSelection(t *testing.T) {
 	resetEnterpriseCdkTables(t)
 	seedEnterpriseCdkUser(t, 1, "enterprise", 0)
 	batch := &EnterpriseCdkBatch{
@@ -144,22 +185,46 @@ func TestRecycleEnterpriseCdkCodesDoesNotRefundExpiredCodes(t *testing.T) {
 	code := &Redemption{
 		UserId:      1,
 		BatchId:     batch.Id,
-		Key:         "expired-cdk",
+		Key:         "race-cdk",
 		Name:        batch.Name,
 		Quota:       100,
 		Status:      common.RedemptionCodeStatusEnabled,
-		ExpiredTime: common.GetTimestamp() - 60,
+		CreatedTime: common.GetTimestamp(),
 	}
 	require.NoError(t, DB.Create(code).Error)
 
+	callbackName := "enterprise_cdk_mark_used_after_query"
+	fired := false
+	require.NoError(t, DB.Callback().Query().After("gorm:after_query").Register(callbackName, func(tx *gorm.DB) {
+		if fired || tx.Statement.Schema == nil || tx.Statement.Schema.Table != "redemptions" {
+			return
+		}
+		fired = true
+		mutationTx := tx.Session(&gorm.Session{NewDB: true})
+		require.NoError(t, mutationTx.Exec("UPDATE redemptions SET status = ?, used_user_id = ?, redeemed_time = ? WHERE id = ?", common.RedemptionCodeStatusUsed, 2, common.GetTimestamp(), code.Id).Error)
+		var status int
+		require.NoError(t, mutationTx.Raw("SELECT status FROM redemptions WHERE id = ?", code.Id).Scan(&status).Error)
+		require.Equal(t, common.RedemptionCodeStatusUsed, status)
+	}))
+	t.Cleanup(func() {
+		_ = DB.Callback().Query().Remove(callbackName)
+	})
+
 	refunded, amount, err := RecycleEnterpriseCdkCodes([]int{code.Id}, 99, "manual refund")
 	require.NoError(t, err)
+	require.True(t, fired)
 	require.Equal(t, 0, refunded)
 	require.Equal(t, 0, amount)
 
 	var user User
 	require.NoError(t, DB.First(&user, 1).Error)
 	require.Equal(t, 0, user.EnterpriseCdkQuota)
+
+	var updated Redemption
+	require.NoError(t, DB.First(&updated, code.Id).Error)
+	require.Equal(t, common.RedemptionCodeStatusUsed, updated.Status)
+	require.Equal(t, 2, updated.UsedUserId)
+	require.Equal(t, int64(0), updated.RecycledTime)
 }
 
 func TestGetRedemptionsForExportFiltersByCreatorForNonAdminUsers(t *testing.T) {
@@ -294,4 +359,28 @@ func TestDeleteInvalidRedemptionsKeepsEnterpriseCdkHistory(t *testing.T) {
 	var enterpriseCount int64
 	require.NoError(t, DB.Model(&Redemption{}).Where("batch_id = ?", batch.Id).Count(&enterpriseCount).Error)
 	require.Equal(t, int64(1), enterpriseCount)
+}
+
+func TestDeleteInvalidRedemptionsRemovesLegacyNullBatchOrdinaryCodes(t *testing.T) {
+	resetEnterpriseCdkTables(t)
+	seedEnterpriseCdkUser(t, 1, "enterprise-a", 0)
+	require.NoError(t, DB.Exec(
+		"INSERT INTO redemptions (user_id, batch_id, `key`, status, name, quota, created_time) VALUES (?, NULL, ?, ?, ?, ?, ?)",
+		1,
+		"legacy-null-batch",
+		common.RedemptionCodeStatusUsed,
+		"legacy",
+		100,
+		common.GetTimestamp(),
+	).Error)
+
+	deleted, err := DeleteInvalidRedemptions()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), deleted)
+
+	var count int64
+	require.NoError(t, DB.Unscoped().Model(&Redemption{}).Where("`key` = ?", "legacy-null-batch").Count(&count).Error)
+	require.Equal(t, int64(1), count)
+	require.NoError(t, DB.Model(&Redemption{}).Where("`key` = ?", "legacy-null-batch").Count(&count).Error)
+	require.Equal(t, int64(0), count)
 }

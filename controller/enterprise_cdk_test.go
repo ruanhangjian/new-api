@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -76,6 +77,16 @@ func decodeEnterpriseCdkAPIResponse(t *testing.T, body []byte) enterpriseCdkAPIR
 	var response enterpriseCdkAPIResponse
 	require.NoError(t, json.Unmarshal(body, &response))
 	return response
+}
+
+func newEnterpriseCdkRawJSONContext(t *testing.T, method string, target string, rawBody string, userID int) (*gin.Context, *httptest.ResponseRecorder) {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(method, target, strings.NewReader(rawBody))
+	ctx.Request.Header.Set("Content-Type", "application/json")
+	ctx.Set("id", userID)
+	return ctx, recorder
 }
 
 func TestEnterpriseCdkBalanceRejectsNonWhitelistUserWithHTTP403(t *testing.T) {
@@ -206,6 +217,34 @@ func TestEnterpriseCdkCreateBatchInsufficientBalanceRollsBack(t *testing.T) {
 	var user model.User
 	require.NoError(t, model.DB.First(&user, 1).Error)
 	require.Equal(t, 100, user.EnterpriseCdkQuota)
+
+	var batchCount int64
+	require.NoError(t, model.DB.Model(&model.EnterpriseCdkBatch{}).Count(&batchCount).Error)
+	require.Equal(t, int64(0), batchCount)
+	var codeCount int64
+	require.NoError(t, model.DB.Model(&model.Redemption{}).Count(&codeCount).Error)
+	require.Equal(t, int64(0), codeCount)
+}
+
+func TestEnterpriseCdkCreateBatchRejectsOverflowedQuota(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	common.QuotaPerUnit = 1
+	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 0)
+	require.NoError(t, model.AddEnterpriseCdkWhitelist(1, 99))
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/enterprise/cdk/batches", gin.H{
+		"name":  "overflow",
+		"quota": "9223372036854775809",
+		"count": 1,
+	}, 1)
+	CreateEnterpriseCdkBatch(ctx)
+
+	response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.False(t, response.Success)
+
+	var user model.User
+	require.NoError(t, model.DB.First(&user, 1).Error)
+	require.Equal(t, 0, user.EnterpriseCdkQuota)
 
 	var batchCount int64
 	require.NoError(t, model.DB.Model(&model.EnterpriseCdkBatch{}).Count(&batchCount).Error)
@@ -443,6 +482,16 @@ func TestAdminEnterpriseCdkExportFiltersByCreatedTime(t *testing.T) {
 	require.NotContains(t, body, "too-early")
 }
 
+func TestAdminEnterpriseCdkExportRejectsMalformedJSON(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+
+	ctx, recorder := newEnterpriseCdkRawJSONContext(t, http.MethodPost, "/api/admin/enterprise/export", "{", 99)
+	AdminEnterpriseCdkExport(ctx)
+
+	response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.False(t, response.Success)
+}
+
 func TestEnterpriseCdkExportWritesCSVWithBOMAndOperationLog(t *testing.T) {
 	setupEnterpriseCdkControllerTestDB(t)
 	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 0)
@@ -465,6 +514,31 @@ func TestEnterpriseCdkExportWritesCSVWithBOMAndOperationLog(t *testing.T) {
 	var logCount int64
 	require.NoError(t, model.DB.Model(&model.EnterpriseCdkOperationLog{}).Where("action = ?", model.EnterpriseCdkOperationExportUser).Count(&logCount).Error)
 	require.Equal(t, int64(1), logCount)
+}
+
+func TestEnterpriseCdkExportRejectsMalformedJSON(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 0)
+	require.NoError(t, model.AddEnterpriseCdkWhitelist(1, 99))
+
+	ctx, recorder := newEnterpriseCdkRawJSONContext(t, http.MethodPost, "/api/enterprise/cdk/export", "{", 1)
+	EnterpriseCdkExport(ctx)
+
+	response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.False(t, response.Success)
+
+	var logCount int64
+	require.NoError(t, model.DB.Model(&model.EnterpriseCdkOperationLog{}).Count(&logCount).Error)
+	require.Equal(t, int64(0), logCount)
+}
+
+func TestEnterpriseCdkStatusTextReportsRecycled(t *testing.T) {
+	row := &model.EnterpriseCdkExportRow{
+		Status:       common.RedemptionCodeStatusDisabled,
+		RecycledTime: common.GetTimestamp(),
+	}
+
+	require.Equal(t, "已回收", enterpriseCdkStatusText(row))
 }
 
 func TestEnterpriseCdkCopyUnusedReturnsAllUnusedCodes(t *testing.T) {
