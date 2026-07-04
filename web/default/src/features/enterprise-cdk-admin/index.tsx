@@ -89,6 +89,8 @@ export function EnterpriseCdkAdminPage() {
   const [balanceLogsPage, setBalanceLogsPage] = useState(1)
   const [codesPage, setCodesPage] = useState(1)
   const [operationLogsPage, setOperationLogsPage] = useState(1)
+  const [customerLogsPage, setCustomerLogsPage] = useState(1)
+  const [customerBatchesPage, setCustomerBatchesPage] = useState(1)
 
   const whitelist = useQuery({
     queryKey: ['enterprise-cdk-admin', 'whitelist', whitelistPage],
@@ -148,8 +150,18 @@ export function EnterpriseCdkAdminPage() {
     queryFn: () => adminGetEnterpriseCdkOperationLogs({ p: operationLogsPage }),
   })
   const customerDetail = useQuery({
-    queryKey: ['enterprise-cdk-admin', 'customer', customerUserId],
-    queryFn: () => adminGetEnterpriseCdkUserDetail(Number(customerUserId)),
+    queryKey: [
+      'enterprise-cdk-admin',
+      'customer',
+      customerUserId,
+      customerLogsPage,
+      customerBatchesPage,
+    ],
+    queryFn: () =>
+      adminGetEnterpriseCdkUserDetail(Number(customerUserId), {
+        logs_p: customerLogsPage,
+        batches_p: customerBatchesPage,
+      }),
     enabled: Number(customerUserId) > 0,
   })
   const customerSearchQuery = useQuery({
@@ -165,6 +177,12 @@ export function EnterpriseCdkAdminPage() {
 
   const invalidateAdmin = () => {
     queryClient.invalidateQueries({ queryKey: ['enterprise-cdk-admin'] })
+  }
+
+  const selectCustomerUser = (userId: string) => {
+    setCustomerUserId(userId)
+    setCustomerLogsPage(1)
+    setCustomerBatchesPage(1)
   }
 
   const whitelistMutation = useMutation({
@@ -698,60 +716,69 @@ export function EnterpriseCdkAdminPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {codeItems.map((code) => (
-                      <TableRow key={code.id}>
-                        <TableCell>
-                          <input
-                            type='checkbox'
-                            checked={selectedIds.includes(code.id)}
-                            disabled={getCodeStatus(code) !== '未兑换'}
-                            onChange={() => toggleSelected(code.id)}
-                          />
-                        </TableCell>
-                        <TableCell className='font-mono'>{code.key}</TableCell>
-                        <TableCell>
-                          {code.creator_email || code.user_id}
-                        </TableCell>
-                        <TableCell>
-                          {code.batch_name || code.batch_id}
-                        </TableCell>
-                        <TableCell>
-                          {formatQuota(code.quota, quotaPerUnit)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={getCodeStatusTone(code)}>
-                            {getCodeStatus(code)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {code.used_user_email || code.used_user_id || '-'}
-                        </TableCell>
-                        <TableCell>{formatTime(code.created_time)}</TableCell>
-                        <TableCell>
-                          <div className='flex justify-end'>
-                            <Button
-                              variant='outline'
-                              size='sm'
-                              disabled={
-                                disableMutation.isPending ||
-                                (code.status !== CDK_STATUS.enabled &&
-                                  code.status !== CDK_STATUS.disabled)
-                              }
-                              onClick={() =>
-                                disableMutation.mutate({
-                                  id: code.id,
-                                  disabled: code.status !== CDK_STATUS.disabled,
-                                })
-                              }
-                            >
-                              {code.status === CDK_STATUS.disabled
-                                ? '启用'
-                                : '禁用'}
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {codeItems.map((code) => {
+                      const isRecycled = (code.recycled_time ?? 0) > 0
+                      return (
+                        <TableRow key={code.id}>
+                          <TableCell>
+                            <input
+                              type='checkbox'
+                              checked={selectedIds.includes(code.id)}
+                              disabled={getCodeStatus(code) !== '未兑换'}
+                              onChange={() => toggleSelected(code.id)}
+                            />
+                          </TableCell>
+                          <TableCell className='font-mono'>
+                            {code.key}
+                          </TableCell>
+                          <TableCell>
+                            {code.creator_email || code.user_id}
+                          </TableCell>
+                          <TableCell>
+                            {code.batch_name || code.batch_id}
+                          </TableCell>
+                          <TableCell>
+                            {formatQuota(code.quota, quotaPerUnit)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={getCodeStatusTone(code)}>
+                              {getCodeStatus(code)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {code.used_user_email || code.used_user_id || '-'}
+                          </TableCell>
+                          <TableCell>{formatTime(code.created_time)}</TableCell>
+                          <TableCell>
+                            <div className='flex justify-end'>
+                              <Button
+                                variant='outline'
+                                size='sm'
+                                disabled={
+                                  isRecycled ||
+                                  disableMutation.isPending ||
+                                  (code.status !== CDK_STATUS.enabled &&
+                                    code.status !== CDK_STATUS.disabled)
+                                }
+                                onClick={() =>
+                                  disableMutation.mutate({
+                                    id: code.id,
+                                    disabled:
+                                      code.status !== CDK_STATUS.disabled,
+                                  })
+                                }
+                              >
+                                {isRecycled
+                                  ? '已回收'
+                                  : code.status === CDK_STATUS.disabled
+                                    ? '启用'
+                                    : '禁用'}
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
                 <PaginationControls
@@ -789,7 +816,7 @@ export function EnterpriseCdkAdminPage() {
                     <Button
                       variant='outline'
                       disabled={!Number(customerSearch)}
-                      onClick={() => setCustomerUserId(customerSearch)}
+                      onClick={() => selectCustomerUser(customerSearch)}
                     >
                       <Search />按 ID 查询
                     </Button>
@@ -798,7 +825,7 @@ export function EnterpriseCdkAdminPage() {
                     users={customerSearchQuery.data?.data?.items ?? []}
                     quotaPerUnit={quotaPerUnit}
                     actionLabel='查看详情'
-                    onSelect={(user) => setCustomerUserId(String(user.id))}
+                    onSelect={(user) => selectCustomerUser(String(user.id))}
                   />
                 </div>
                 <div className='flex gap-2 border-t pt-4'>
@@ -806,7 +833,9 @@ export function EnterpriseCdkAdminPage() {
                     className='max-w-64'
                     placeholder='用户 ID'
                     value={customerUserId}
-                    onChange={(event) => setCustomerUserId(event.target.value)}
+                    onChange={(event) =>
+                      selectCustomerUser(event.target.value)
+                    }
                   />
                   <Button onClick={() => customerDetail.refetch()}>
                     <Search />
@@ -854,25 +883,55 @@ export function EnterpriseCdkAdminPage() {
                 <DataTable
                   title='客户最近批次'
                   headers={['批次', '数量', '总面额', '创建时间']}
-                  rows={(customerDetail.data?.data?.batches ?? []).map(
-                    (item) => [
-                      item.name,
-                      item.count,
-                      formatQuota(item.total_quota, quotaPerUnit),
-                      formatTime(item.created_time),
-                    ]
-                  )}
+                  rows={(
+                    customerDetail.data?.data?.batches_page?.items ??
+                    customerDetail.data?.data?.batches ??
+                    []
+                  ).map((item) => [
+                    item.name,
+                    item.count,
+                    formatQuota(item.total_quota, quotaPerUnit),
+                    formatTime(item.created_time),
+                  ])}
+                  footer={
+                    <PaginationControls
+                      page={
+                        customerDetail.data?.data?.batches_page?.page ??
+                        customerBatchesPage
+                      }
+                      pageSize={
+                        customerDetail.data?.data?.batches_page?.page_size
+                      }
+                      total={customerDetail.data?.data?.batches_page?.total}
+                      onPageChange={setCustomerBatchesPage}
+                    />
+                  }
                 />
                 <DataTable
                   title='客户余额流水'
                   headers={['时间', '类型', '变动', '变动后', '备注']}
-                  rows={(customerDetail.data?.data?.logs ?? []).map((item) => [
+                  rows={(
+                    customerDetail.data?.data?.logs_page?.items ??
+                    customerDetail.data?.data?.logs ??
+                    []
+                  ).map((item) => [
                     formatTime(item.created_time),
                     item.type,
                     formatQuota(item.amount, quotaPerUnit),
                     formatQuota(item.balance_after, quotaPerUnit),
                     item.remark || '-',
                   ])}
+                  footer={
+                    <PaginationControls
+                      page={
+                        customerDetail.data?.data?.logs_page?.page ??
+                        customerLogsPage
+                      }
+                      pageSize={customerDetail.data?.data?.logs_page?.page_size}
+                      total={customerDetail.data?.data?.logs_page?.total}
+                      onPageChange={setCustomerLogsPage}
+                    />
+                  }
                 />
               </CardContent>
             </Card>

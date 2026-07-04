@@ -15,6 +15,7 @@ type EnterpriseCdkOperationLog struct {
 const (
 	EnterpriseCdkOperationExportUser      = "export_user"
 	EnterpriseCdkOperationExportAdmin     = "export_admin"
+	EnterpriseCdkOperationViewAdmin       = "view_admin"
 	EnterpriseCdkOperationCopyUnused      = "copy_unused"
 	EnterpriseCdkOperationRecycleCdks     = "recycle_cdks"
 	EnterpriseCdkOperationToggleCdk       = "toggle_cdk"

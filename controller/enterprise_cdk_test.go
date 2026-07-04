@@ -305,6 +305,82 @@ func TestAdminDisableEnterpriseCdkCodeRejectsUsedCode(t *testing.T) {
 	require.Equal(t, 2, code.UsedUserId)
 }
 
+func TestAdminEnterpriseCdkUserDetailReturnsPaginatedLogsAndBatches(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 1000)
+	require.NoError(t, model.AddEnterpriseCdkWhitelist(1, 99))
+	for i := 0; i < 25; i++ {
+		require.NoError(t, model.DB.Create(&model.EnterpriseCdkBatch{
+			CreatorUserId: 1,
+			Name:          fmt.Sprintf("batch-%02d", i),
+			Quota:         100,
+			Count:         1,
+			TotalQuota:    100,
+		}).Error)
+		require.NoError(t, model.DB.Create(&model.EnterpriseCdkQuotaLog{
+			UserId:        1,
+			OperatorId:    99,
+			Type:          model.CdkQuotaLogTypeAdminAdd,
+			Amount:        100,
+			BalanceBefore: i * 100,
+			BalanceAfter:  (i + 1) * 100,
+		}).Error)
+	}
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodGet, "/api/admin/enterprise/users/1?logs_p=2&batches_p=3&page_size=10", nil, 99)
+	ctx.Params = gin.Params{{Key: "user_id", Value: "1"}}
+	AdminGetEnterpriseCdkUserDetail(ctx)
+
+	response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.True(t, response.Success, response.Message)
+	var payload struct {
+		LogsPage struct {
+			Page  int             `json:"page"`
+			Total int             `json:"total"`
+			Items json.RawMessage `json:"items"`
+		} `json:"logs_page"`
+		BatchesPage struct {
+			Page  int             `json:"page"`
+			Total int             `json:"total"`
+			Items json.RawMessage `json:"items"`
+		} `json:"batches_page"`
+	}
+	require.NoError(t, json.Unmarshal(response.Data, &payload))
+	require.Equal(t, 2, payload.LogsPage.Page)
+	require.Equal(t, 25, payload.LogsPage.Total)
+	require.Equal(t, 3, payload.BatchesPage.Page)
+	require.Equal(t, 25, payload.BatchesPage.Total)
+	var logs []model.EnterpriseCdkQuotaLogRow
+	var batches []model.EnterpriseCdkBatchRow
+	require.NoError(t, json.Unmarshal(payload.LogsPage.Items, &logs))
+	require.NoError(t, json.Unmarshal(payload.BatchesPage.Items, &batches))
+	require.Len(t, logs, 10)
+	require.Len(t, batches, 5)
+}
+
+func TestAdminGetEnterpriseCdkCodesWritesViewOperationLog(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 0)
+	batch := &model.EnterpriseCdkBatch{CreatorUserId: 1, Name: "batch", Quota: 100, Count: 1, TotalQuota: 100}
+	require.NoError(t, model.DB.Create(batch).Error)
+	require.NoError(t, model.DB.Create(&model.Redemption{UserId: 1, BatchId: batch.Id, Key: "view-code", Name: "batch", Quota: 100, Status: common.RedemptionCodeStatusEnabled}).Error)
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodGet, fmt.Sprintf("/api/admin/enterprise/codes?user_id=1&batch_id=%d&status=unused&keyword=view&p=1&page_size=10", batch.Id), nil, 99)
+	AdminGetEnterpriseCdkCodes(ctx)
+
+	response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.True(t, response.Success, response.Message)
+
+	var log model.EnterpriseCdkOperationLog
+	require.NoError(t, model.DB.First(&log, "action = ?", "view_admin").Error)
+	require.Equal(t, 99, log.OperatorId)
+	require.Equal(t, 1, log.TargetUserId)
+	require.Equal(t, batch.Id, log.BatchId)
+	require.Equal(t, 1, log.CdkCount)
+	require.Contains(t, log.RequestSummary, "status=unused")
+	require.Contains(t, log.RequestSummary, "keyword=view")
+}
+
 func TestEnterpriseCdkExportWritesCSVWithBOMAndOperationLog(t *testing.T) {
 	setupEnterpriseCdkControllerTestDB(t)
 	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 0)

@@ -124,13 +124,27 @@ export function EnterpriseCdkPage() {
   const usedTotal = balance.data?.data?.used_quota ?? 0
   const unusedTotal = balance.data?.data?.unused_quota ?? 0
 
+  const formQuota = Number(form.quota)
+  const formCount = Number(form.count)
+  const hasValidName = form.name.trim().length > 0
+  const hasValidQuota = Number.isFinite(formQuota) && formQuota > 0
+  const hasValidCount = Number.isInteger(formCount) && formCount > 0
   const totalQuota =
-    Number(form.quota || 0) * Number(form.count || 0) * (quotaPerUnit || 500000)
+    Math.max(0, Number.isFinite(formQuota) ? formQuota : 0) *
+    Math.max(0, Number.isFinite(formCount) ? formCount : 0) *
+    (quotaPerUnit || 500000)
   const remainingQuota = (balance.data?.data?.balance_quota ?? 0) - totalQuota
   const insufficient = remainingQuota < 0
   const maxBatchCreateCount =
     permission.data?.data?.max_batch_create_count ?? 500
-  const exceedsCreateLimit = Number(form.count || 0) > maxBatchCreateCount
+  const exceedsCreateLimit = formCount > maxBatchCreateCount
+  const createDisabled =
+    createMutation.isPending ||
+    !hasValidName ||
+    !hasValidQuota ||
+    !hasValidCount ||
+    insufficient ||
+    exceedsCreateLimit
 
   const openCreate = (template?: EnterpriseCdkBatch) => {
     if (template) {
@@ -555,10 +569,13 @@ export function EnterpriseCdkPage() {
               取消
             </Button>
             <Button
-              disabled={
-                createMutation.isPending || insufficient || exceedsCreateLimit
+              disabled={createDisabled}
+              onClick={() =>
+                createMutation.mutate({
+                  ...form,
+                  name: form.name.trim(),
+                })
               }
-              onClick={() => createMutation.mutate(form)}
             >
               创建
             </Button>

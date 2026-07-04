@@ -24,6 +24,7 @@ export function formatQuota(quota: number | undefined, quotaPerUnit?: number) {
 }
 
 export function getCodeStatus(code: EnterpriseCdkCode) {
+  if (code.recycled_time && code.recycled_time > 0) return '已回收'
   if (code.status === CDK_STATUS.used) return '已兑换'
   if (code.status === CDK_STATUS.disabled) return '已禁用'
   if (code.expired_time && code.expired_time < Date.now() / 1000)
@@ -33,6 +34,7 @@ export function getCodeStatus(code: EnterpriseCdkCode) {
 
 export function getCodeStatusTone(code: EnterpriseCdkCode) {
   const status = getCodeStatus(code)
+  if (status === '已回收') return 'outline'
   if (status === '已兑换') return 'secondary'
   if (status === '已禁用') return 'destructive'
   if (status === '已过期') return 'outline'

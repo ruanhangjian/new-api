@@ -215,7 +215,10 @@ export async function adminGetEnterpriseCdkOperationLogs(
   return res.data
 }
 
-export async function adminGetEnterpriseCdkUserDetail(userId: number) {
+export async function adminGetEnterpriseCdkUserDetail(
+  userId: number,
+  params: Record<string, unknown> = {}
+) {
   const res = await api.get<
     ApiResponse<{
       user: {
@@ -229,9 +232,13 @@ export async function adminGetEnterpriseCdkUserDetail(userId: number) {
       quota_summary: EnterpriseCdkQuotaSummary
       customer_summary: EnterpriseCdkCustomerSummary
       logs: EnterpriseCdkQuotaLog[]
+      logs_page?: PageData<EnterpriseCdkQuotaLog>
       batches: EnterpriseCdkBatch[]
+      batches_page?: PageData<EnterpriseCdkBatch>
     }>
-  >(`/api/admin/enterprise/users/${userId}`)
+  >(`/api/admin/enterprise/users/${userId}`, {
+    params: { page_size: 10, ...params },
+  })
   return res.data
 }
 

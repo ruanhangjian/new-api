@@ -30,6 +30,8 @@ type Redemption struct {
 	RecycleQuotaReturned int            `json:"recycle_quota_returned" gorm:"default:0"`
 }
 
+const ordinaryRedemptionCondition = "(batch_id = 0 OR batch_id IS NULL)"
+
 func GetAllRedemptions(startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
 	// 开始事务
 	tx := DB.Begin()
@@ -43,14 +45,14 @@ func GetAllRedemptions(startIdx int, num int) (redemptions []*Redemption, total 
 	}()
 
 	// 获取总数
-	err = tx.Model(&Redemption{}).Count(&total).Error
+	err = tx.Model(&Redemption{}).Where(ordinaryRedemptionCondition).Count(&total).Error
 	if err != nil {
 		tx.Rollback()
 		return nil, 0, err
 	}
 
 	// 获取分页数据
-	err = tx.Order("id desc").Limit(num).Offset(startIdx).Find(&redemptions).Error
+	err = tx.Where(ordinaryRedemptionCondition).Order("id desc").Limit(num).Offset(startIdx).Find(&redemptions).Error
 	if err != nil {
 		tx.Rollback()
 		return nil, 0, err
@@ -76,11 +78,11 @@ func SearchRedemptions(keyword string, startIdx int, num int) (redemptions []*Re
 	}()
 
 	// Build query based on keyword type
-	query := tx.Model(&Redemption{})
+	query := tx.Model(&Redemption{}).Where(ordinaryRedemptionCondition)
 
 	// Only try to convert to ID if the string represents a valid integer
 	if id, err := strconv.Atoi(keyword); err == nil {
-		query = query.Where("id = ? OR name LIKE ?", id, keyword+"%")
+		query = query.Where("(id = ? OR name LIKE ?)", id, keyword+"%")
 	} else {
 		query = query.Where("name LIKE ?", keyword+"%")
 	}
@@ -112,7 +114,7 @@ func GetRedemptionById(id int) (*Redemption, error) {
 	}
 	redemption := Redemption{Id: id}
 	var err error = nil
-	err = DB.First(&redemption, "id = ?", id).Error
+	err = DB.Where("id = ?", id).Where(ordinaryRedemptionCondition).First(&redemption).Error
 	return &redemption, err
 }
 
@@ -137,6 +139,12 @@ func Redeem(key string, userId int) (quota int, err error) {
 		}
 		if redemption.Status != common.RedemptionCodeStatusEnabled {
 			return errors.New("该兑换码已被使用")
+		}
+		if redemption.UsedUserId != 0 || redemption.RedeemedTime != 0 {
+			return errors.New("该兑换码已被使用")
+		}
+		if redemption.RecycledTime != 0 {
+			return errors.New("该兑换码已被回收")
 		}
 		if redemption.ExpiredTime != 0 && redemption.ExpiredTime < common.GetTimestamp() {
 			return errors.New("该兑换码已过期")
@@ -172,6 +180,9 @@ func (redemption *Redemption) SelectUpdate() error {
 
 // Update Make sure your token's fields is completed, because this will update non-zero values
 func (redemption *Redemption) Update() error {
+	if redemption.BatchId > 0 {
+		return errors.New("企业 CDK 不能通过普通兑换码接口管理")
+	}
 	var err error
 	err = DB.Model(redemption).Select("name", "status", "quota", "redeemed_time", "expired_time").Updates(redemption).Error
 	return err
@@ -188,7 +199,7 @@ func DeleteRedemptionById(id int) (err error) {
 		return errors.New("id 为空！")
 	}
 	redemption := Redemption{Id: id}
-	err = DB.Where(redemption).First(&redemption).Error
+	err = DB.Where("id = ?", id).Where(ordinaryRedemptionCondition).First(&redemption).Error
 	if err != nil {
 		return err
 	}

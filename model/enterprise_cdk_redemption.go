@@ -90,6 +90,7 @@ func enterpriseCdkRedemptionRowsQuery() *gorm.DB {
 		Joins("LEFT JOIN enterprise_cdk_batches AS b ON b.id = r.batch_id").
 		Joins("LEFT JOIN users AS creator ON creator.id = r.user_id").
 		Joins("LEFT JOIN users AS used ON used.id = r.used_user_id").
+		Where("r.deleted_at IS NULL").
 		Select(fmt.Sprintf(`r.id, r.user_id, r.batch_id, b.name AS batch_name, creator.email AS creator_email,
 			%s AS key, r.name, r.quota, r.status, r.created_time, r.redeemed_time, r.expired_time,
 			r.used_user_id, used.email AS used_user_email, r.recycled_time, r.recycle_operator_id,

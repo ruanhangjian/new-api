@@ -480,6 +480,17 @@ func AdminGetEnterpriseCdkCodes(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if err := model.CreateEnterpriseCdkOperationLog(&model.EnterpriseCdkOperationLog{
+		OperatorId:     c.GetInt("id"),
+		TargetUserId:   creatorUserId,
+		Action:         model.EnterpriseCdkOperationViewAdmin,
+		BatchId:        batchId,
+		CdkCount:       len(rows),
+		RequestSummary: fmt.Sprintf("page=%d page_size=%d user_id=%d batch_id=%d status=%s keyword=%s", pageInfo.GetPage(), pageInfo.GetPageSize(), creatorUserId, batchId, c.Query("status"), c.Query("keyword")),
+	}); err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(rows)
 	common.ApiSuccess(c, pageInfo)
@@ -591,6 +602,21 @@ func AdminEnterpriseCdkExport(c *gin.Context) {
 	writeEnterpriseCdkCSV(c, rows, true)
 }
 
+func enterpriseCdkNamedPageQuery(c *gin.Context, pageParam string) *common.PageInfo {
+	page, _ := strconv.Atoi(c.Query(pageParam))
+	if page < 1 {
+		page = 1
+	}
+	pageSize, _ := strconv.Atoi(c.Query("page_size"))
+	if pageSize <= 0 {
+		pageSize = common.ItemsPerPage
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	return &common.PageInfo{Page: page, PageSize: pageSize}
+}
+
 func AdminGetEnterpriseCdkUserDetail(c *gin.Context) {
 	userId, err := strconv.Atoi(c.Param("user_id"))
 	if err != nil {
@@ -613,16 +639,24 @@ func AdminGetEnterpriseCdkUserDetail(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	logs, _, err := model.GetEnterpriseCdkQuotaLogs(userId, 0, 20)
+	logsPage := enterpriseCdkNamedPageQuery(c, "logs_p")
+	logs, logsTotal, err := model.GetEnterpriseCdkQuotaLogs(userId, logsPage.GetStartIdx(), logsPage.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
-	batches, _, err := model.GetEnterpriseCdkBatchesByUser(userId, 0, 20)
+	logsPage.SetTotal(int(logsTotal))
+	logsPage.SetItems(logs)
+
+	batchesPage := enterpriseCdkNamedPageQuery(c, "batches_p")
+	batches, batchesTotal, err := model.GetEnterpriseCdkBatchesByUser(userId, batchesPage.GetStartIdx(), batchesPage.GetPageSize())
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
+	batchesPage.SetTotal(int(batchesTotal))
+	batchesPage.SetItems(batches)
+
 	common.ApiSuccess(c, gin.H{
 		"user": gin.H{
 			"id":                   user.Id,
@@ -635,7 +669,9 @@ func AdminGetEnterpriseCdkUserDetail(c *gin.Context) {
 		"quota_summary":    quotaSummary,
 		"customer_summary": userSummary,
 		"logs":             logs,
+		"logs_page":        logsPage,
 		"batches":          batches,
+		"batches_page":     batchesPage,
 	})
 }
 

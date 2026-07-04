@@ -185,6 +185,100 @@ func TestGetRedemptionsForExportFiltersByCreatorForNonAdminUsers(t *testing.T) {
 	require.Len(t, adminRows, 2)
 }
 
+func TestEnterpriseCdkQueriesExcludeSoftDeletedRedemptions(t *testing.T) {
+	resetEnterpriseCdkTables(t)
+	seedEnterpriseCdkUser(t, 1, "enterprise-a", 0)
+	batch := &EnterpriseCdkBatch{CreatorUserId: 1, Name: "A", Quota: 100, Count: 2, TotalQuota: 200}
+	require.NoError(t, DB.Create(batch).Error)
+	active := &Redemption{UserId: 1, BatchId: batch.Id, Key: "active-enterprise", Name: "A", Quota: 100, Status: common.RedemptionCodeStatusEnabled}
+	deleted := &Redemption{UserId: 1, BatchId: batch.Id, Key: "deleted-enterprise", Name: "A", Quota: 100, Status: common.RedemptionCodeStatusEnabled}
+	require.NoError(t, DB.Create(active).Error)
+	require.NoError(t, DB.Create(deleted).Error)
+	require.NoError(t, DB.Delete(deleted).Error)
+
+	exportRows, err := GetRedemptionsForExport(1, batch.Id, nil, false)
+	require.NoError(t, err)
+	require.Len(t, exportRows, 1)
+	require.Equal(t, active.Id, exportRows[0].Id)
+
+	copyRows, err := GetUnusedEnterpriseCdkCodesForCopy(batch.Id)
+	require.NoError(t, err)
+	require.Len(t, copyRows, 1)
+	require.Equal(t, active.Id, copyRows[0].Id)
+
+	detailRows, detailTotal, err := GetRedemptionsByBatch(batch.Id, "", "", 0, 20)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), detailTotal)
+	require.Len(t, detailRows, 1)
+	require.Equal(t, active.Id, detailRows[0].Id)
+
+	adminRows, adminTotal, err := GetEnterpriseCdkRedemptions(0, 20, 1, batch.Id, "", "")
+	require.NoError(t, err)
+	require.Equal(t, int64(1), adminTotal)
+	require.Len(t, adminRows, 1)
+	require.Equal(t, active.Id, adminRows[0].Id)
+}
+
+func TestOrdinaryRedemptionManagementExcludesEnterpriseCdks(t *testing.T) {
+	resetEnterpriseCdkTables(t)
+	seedEnterpriseCdkUser(t, 1, "enterprise-a", 0)
+	batch := &EnterpriseCdkBatch{CreatorUserId: 1, Name: "A", Quota: 100, Count: 1, TotalQuota: 100}
+	require.NoError(t, DB.Create(batch).Error)
+	ordinary := &Redemption{UserId: 1, BatchId: 0, Key: "ordinary", Name: "ordinary", Quota: 100, Status: common.RedemptionCodeStatusEnabled}
+	enterprise := &Redemption{UserId: 1, BatchId: batch.Id, Key: "enterprise", Name: "enterprise", Quota: 100, Status: common.RedemptionCodeStatusEnabled}
+	require.NoError(t, DB.Create(ordinary).Error)
+	require.NoError(t, DB.Create(enterprise).Error)
+
+	all, total, err := GetAllRedemptions(0, 20)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), total)
+	require.Len(t, all, 1)
+	require.Equal(t, ordinary.Id, all[0].Id)
+
+	search, searchTotal, err := SearchRedemptions("enterprise", 0, 20)
+	require.NoError(t, err)
+	require.Equal(t, int64(0), searchTotal)
+	require.Empty(t, search)
+
+	_, err = GetRedemptionById(enterprise.Id)
+	require.Error(t, err)
+
+	enterprise.Name = "updated-enterprise"
+	require.Error(t, enterprise.Update())
+
+	require.Error(t, DeleteRedemptionById(enterprise.Id))
+	var enterpriseCount int64
+	require.NoError(t, DB.Model(&Redemption{}).Where("id = ?", enterprise.Id).Count(&enterpriseCount).Error)
+	require.Equal(t, int64(1), enterpriseCount)
+}
+
+func TestRedeemRejectsRecycledEnterpriseCdk(t *testing.T) {
+	resetEnterpriseCdkTables(t)
+	seedEnterpriseCdkUser(t, 1, "enterprise-a", 0)
+	seedEnterpriseCdkUser(t, 2, "redeemer", 0)
+	batch := &EnterpriseCdkBatch{CreatorUserId: 1, Name: "A", Quota: 100, Count: 1, TotalQuota: 100}
+	require.NoError(t, DB.Create(batch).Error)
+	code := &Redemption{
+		UserId:               1,
+		BatchId:              batch.Id,
+		Key:                  "recycled-enterprise",
+		Name:                 "enterprise",
+		Quota:                100,
+		Status:               common.RedemptionCodeStatusEnabled,
+		RecycledTime:         common.GetTimestamp(),
+		RecycleQuotaReturned: 100,
+	}
+	require.NoError(t, DB.Create(code).Error)
+
+	quota, err := Redeem(code.Key, 2)
+	require.ErrorIs(t, err, ErrRedeemFailed)
+	require.Equal(t, 0, quota)
+
+	var redeemer User
+	require.NoError(t, DB.First(&redeemer, 2).Error)
+	require.Equal(t, 0, redeemer.Quota)
+}
+
 func TestDeleteInvalidRedemptionsKeepsEnterpriseCdkHistory(t *testing.T) {
 	resetEnterpriseCdkTables(t)
 	seedEnterpriseCdkUser(t, 1, "enterprise-a", 0)
