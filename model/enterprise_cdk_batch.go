@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 )
@@ -53,21 +54,29 @@ type EnterpriseCdkBatchRow struct {
 	DisabledCount int                     `json:"disabled_count"`
 }
 
-func GetEnterpriseCdkBatchesByUser(userId, startIdx, pageSize int) ([]*EnterpriseCdkBatchRow, int64, error) {
-	return listEnterpriseCdkBatches(userId, startIdx, pageSize)
+func GetEnterpriseCdkBatchesByUser(userId, startIdx, pageSize int, keyword string) ([]*EnterpriseCdkBatchRow, int64, error) {
+	return listEnterpriseCdkBatches(userId, startIdx, pageSize, keyword)
 }
 
-func GetAllEnterpriseCdkBatches(startIdx, pageSize int, creatorUserId int) ([]*EnterpriseCdkBatchRow, int64, error) {
-	return listEnterpriseCdkBatches(creatorUserId, startIdx, pageSize)
+func GetAllEnterpriseCdkBatches(startIdx, pageSize int, creatorUserId int, keyword string) ([]*EnterpriseCdkBatchRow, int64, error) {
+	return listEnterpriseCdkBatches(creatorUserId, startIdx, pageSize, keyword)
 }
 
-func listEnterpriseCdkBatches(creatorUserId, startIdx, pageSize int) ([]*EnterpriseCdkBatchRow, int64, error) {
+func listEnterpriseCdkBatches(creatorUserId, startIdx, pageSize int, keyword string) ([]*EnterpriseCdkBatchRow, int64, error) {
 	var batches []*EnterpriseCdkBatchRow
 	var total int64
 	query := DB.Table("enterprise_cdk_batches AS b").
 		Joins("LEFT JOIN users AS u ON u.id = b.creator_user_id")
 	if creatorUserId > 0 {
 		query = query.Where("b.creator_user_id = ?", creatorUserId)
+	}
+	if keyword = strings.TrimSpace(keyword); keyword != "" {
+		pattern := enterpriseCdkBatchKeywordPattern(keyword)
+		query = query.Where(
+			"(LOWER(b.name) LIKE ? ESCAPE '!' OR LOWER(b.remark) LIKE ? ESCAPE '!')",
+			pattern,
+			pattern,
+		)
 	}
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -92,6 +101,14 @@ func listEnterpriseCdkBatches(creatorUserId, startIdx, pageSize int) ([]*Enterpr
 		batch.DisabledCount = stats.DisabledCount
 	}
 	return batches, total, nil
+}
+
+func enterpriseCdkBatchKeywordPattern(keyword string) string {
+	keyword = strings.ToLower(strings.TrimSpace(keyword))
+	keyword = strings.ReplaceAll(keyword, "!", "!!")
+	keyword = strings.ReplaceAll(keyword, "%", "!%")
+	keyword = strings.ReplaceAll(keyword, "_", "!_")
+	return "%" + keyword + "%"
 }
 
 func GetEnterpriseCdkBatchById(batchId, requesterUserId int, isAdmin bool) (*EnterpriseCdkBatchRow, error) {

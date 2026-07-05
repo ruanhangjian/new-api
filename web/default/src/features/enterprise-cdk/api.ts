@@ -31,7 +31,9 @@ export async function getEnterpriseCdkBalance() {
   return res.data
 }
 
-export async function getEnterpriseCdkBalanceLogs(params = { p: 1 }) {
+export async function getEnterpriseCdkBalanceLogs(
+  params: Record<string, unknown> = { p: 1 }
+) {
   const res = await api.get<ApiResponse<PageData<EnterpriseCdkQuotaLog>>>(
     '/api/enterprise/cdk/balance/logs',
     { params: { page_size: 20, ...params } }
@@ -39,7 +41,9 @@ export async function getEnterpriseCdkBalanceLogs(params = { p: 1 }) {
   return res.data
 }
 
-export async function getEnterpriseCdkBatches(params = { p: 1 }) {
+export async function getEnterpriseCdkBatches(
+  params: Record<string, unknown> = { p: 1 }
+) {
   const res = await api.get<ApiResponse<PageData<EnterpriseCdkBatch>>>(
     '/api/enterprise/cdk/batches',
     { params: { page_size: 20, ...params } }
@@ -99,6 +103,9 @@ export interface EnterpriseCdkWhitelistUser {
   created_time: number
   operator_id: number
   max_batch_create_count: number
+  total_charged_quota: number
+  total_consumed_quota: number
+  last_charged_time: number
 }
 
 export async function adminGetEnterpriseCdkWhitelist(params = { p: 1 }) {

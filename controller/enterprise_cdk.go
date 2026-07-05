@@ -91,7 +91,7 @@ func EnterpriseCdkBalanceLogs(c *gin.Context) {
 		return
 	}
 	pageInfo := common.GetPageQuery(c)
-	logs, total, err := model.GetEnterpriseCdkQuotaLogs(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	logs, total, err := model.GetEnterpriseCdkQuotaLogs(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), c.Query("type"))
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -108,7 +108,7 @@ func EnterpriseCdkBatches(c *gin.Context) {
 		return
 	}
 	pageInfo := common.GetPageQuery(c)
-	batches, total, err := model.GetEnterpriseCdkBatchesByUser(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	batches, total, err := model.GetEnterpriseCdkBatchesByUser(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), c.Query("keyword"))
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -471,7 +471,7 @@ func AdminAdjustEnterpriseCdkBalance(c *gin.Context) {
 func AdminGetEnterpriseCdkBalanceLogs(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	userId, _ := strconv.Atoi(c.Query("user_id"))
-	logs, total, err := model.GetEnterpriseCdkQuotaLogs(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize())
+	logs, total, err := model.GetEnterpriseCdkQuotaLogs(userId, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), c.Query("type"))
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -484,7 +484,7 @@ func AdminGetEnterpriseCdkBalanceLogs(c *gin.Context) {
 func AdminGetEnterpriseCdkBatches(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
 	creatorUserId, _ := strconv.Atoi(c.Query("user_id"))
-	batches, total, err := model.GetAllEnterpriseCdkBatches(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), creatorUserId)
+	batches, total, err := model.GetAllEnterpriseCdkBatches(pageInfo.GetStartIdx(), pageInfo.GetPageSize(), creatorUserId, c.Query("keyword"))
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -687,7 +687,7 @@ func AdminGetEnterpriseCdkUserDetail(c *gin.Context) {
 		return
 	}
 	logsPage := enterpriseCdkNamedPageQuery(c, "logs_p")
-	logs, logsTotal, err := model.GetEnterpriseCdkQuotaLogs(userId, logsPage.GetStartIdx(), logsPage.GetPageSize())
+	logs, logsTotal, err := model.GetEnterpriseCdkQuotaLogs(userId, logsPage.GetStartIdx(), logsPage.GetPageSize(), "")
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -696,7 +696,7 @@ func AdminGetEnterpriseCdkUserDetail(c *gin.Context) {
 	logsPage.SetItems(logs)
 
 	batchesPage := enterpriseCdkNamedPageQuery(c, "batches_p")
-	batches, batchesTotal, err := model.GetEnterpriseCdkBatchesByUser(userId, batchesPage.GetStartIdx(), batchesPage.GetPageSize())
+	batches, batchesTotal, err := model.GetEnterpriseCdkBatchesByUser(userId, batchesPage.GetStartIdx(), batchesPage.GetPageSize(), "")
 	if err != nil {
 		common.ApiError(c, err)
 		return

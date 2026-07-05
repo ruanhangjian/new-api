@@ -93,6 +93,45 @@ func TestEnterpriseCdkWhitelistDuplicateAddIsIdempotentAndDefaultsLimit(t *testi
 	require.Equal(t, 99, policy.OperatorId)
 }
 
+func TestListEnterpriseCdkWhitelistIncludesBalanceSummary(t *testing.T) {
+	resetEnterpriseCdkTables(t)
+	seedEnterpriseCdkUser(t, 1, "enterprise", 850)
+
+	require.NoError(t, AddEnterpriseCdkWhitelist(1, 99))
+	require.NoError(t, DB.Create(&EnterpriseCdkQuotaLog{
+		UserId:      1,
+		Type:        CdkQuotaLogTypeAdminAdd,
+		Amount:      1000,
+		CreatedTime: 100,
+	}).Error)
+	require.NoError(t, DB.Create(&EnterpriseCdkQuotaLog{
+		UserId:      1,
+		Type:        CdkQuotaLogTypeCreateCdk,
+		Amount:      -250,
+		CreatedTime: 200,
+	}).Error)
+	require.NoError(t, DB.Create(&EnterpriseCdkQuotaLog{
+		UserId:      1,
+		Type:        CdkQuotaLogTypeAdminRefund,
+		Amount:      50,
+		CreatedTime: 300,
+	}).Error)
+	require.NoError(t, DB.Create(&EnterpriseCdkQuotaLog{
+		UserId:      1,
+		Type:        CdkQuotaLogTypeAdminAdd,
+		Amount:      500,
+		CreatedTime: 400,
+	}).Error)
+
+	users, total, err := ListEnterpriseCdkWhitelist(0, 20)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), total)
+	require.Len(t, users, 1)
+	require.Equal(t, 1500, users[0].TotalChargedQuota)
+	require.Equal(t, 250, users[0].TotalConsumedQuota)
+	require.Equal(t, int64(400), users[0].LastChargedTime)
+}
+
 func TestRecycleEnterpriseCdkCodesCannotRefundTwice(t *testing.T) {
 	resetEnterpriseCdkTables(t)
 	seedEnterpriseCdkUser(t, 1, "enterprise", 0)

@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"gorm.io/gorm"
@@ -105,7 +106,7 @@ func isValidEnterpriseCdkQuotaLogType(logType string) bool {
 	}
 }
 
-func GetEnterpriseCdkQuotaLogs(userId int, startIdx, pageSize int) ([]*EnterpriseCdkQuotaLogRow, int64, error) {
+func GetEnterpriseCdkQuotaLogs(userId int, startIdx, pageSize int, logType string) ([]*EnterpriseCdkQuotaLogRow, int64, error) {
 	var logs []*EnterpriseCdkQuotaLogRow
 	var total int64
 	query := DB.Table("enterprise_cdk_quota_logs AS l").
@@ -114,6 +115,12 @@ func GetEnterpriseCdkQuotaLogs(userId int, startIdx, pageSize int) ([]*Enterpris
 		Joins("LEFT JOIN enterprise_cdk_batches AS b ON b.id = l.related_batch_id")
 	if userId > 0 {
 		query = query.Where("l.user_id = ?", userId)
+	}
+	if logType = strings.TrimSpace(logType); logType != "" {
+		if !isValidEnterpriseCdkQuotaLogType(logType) {
+			return nil, 0, errors.New("无效的 CDK 余额流水类型")
+		}
+		query = query.Where("l.type = ?", logType)
 	}
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err

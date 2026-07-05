@@ -8,6 +8,34 @@ export const CDK_STATUS = {
 
 export const ENTERPRISE_CDK_HARD_MAX_BATCH_CREATE_COUNT = 10000
 
+export const ENTERPRISE_CDK_QUOTA_LOG_TYPE_OPTIONS = [
+  { value: 'all', label: '全部类型' },
+  { value: 'admin_add', label: '管理员充值' },
+  { value: 'create_cdk', label: '创建批次扣减' },
+  { value: 'admin_deduct', label: '管理员扣减' },
+  { value: 'admin_refund', label: '管理员退款' },
+] as const
+
+export type EnterpriseCdkExpiryPreset = 'never' | '1_month' | '1_week' | '1_day'
+
+export function getEnterpriseCdkExpiryPresetDate(
+  preset: EnterpriseCdkExpiryPreset,
+  baseDate = new Date()
+) {
+  if (preset === 'never') return undefined
+
+  const date = new Date(baseDate)
+  date.setSeconds(0, 0)
+  if (preset === '1_month') {
+    date.setMonth(date.getMonth() + 1)
+  } else if (preset === '1_week') {
+    date.setDate(date.getDate() + 7)
+  } else {
+    date.setDate(date.getDate() + 1)
+  }
+  return date
+}
+
 export function formatTime(timestamp?: number, emptyText = '-') {
   if (!timestamp) return emptyText
   return new Date(timestamp * 1000).toLocaleString()
@@ -35,6 +63,31 @@ export function formatSignedQuota(
   const amount = quota ?? 0
   if (amount > 0) return `+${formatQuota(amount, quotaPerUnit)}`
   return formatQuota(amount, quotaPerUnit)
+}
+
+export function formatEnterpriseCdkAuthorizedCount(total?: number) {
+  const normalizedTotal =
+    typeof total === 'number' && Number.isFinite(total) && total > 0
+      ? Math.floor(total)
+      : 0
+  return `共 ${normalizedTotal} 位企业用户已获授权`
+}
+
+export function formatEnterpriseCdkBalanceActionLabel(quota?: number) {
+  return (quota ?? 0) > 0 ? '调整余额' : '充值'
+}
+
+export function calculateEnterpriseCdkAdjustedBalance(
+  currentQuota: number,
+  amountUsd: string,
+  type: string,
+  quotaPerUnit?: number
+) {
+  const unit = quotaPerUnit && quotaPerUnit > 0 ? quotaPerUnit : 1
+  const amount = Number(amountUsd)
+  const delta = Number.isFinite(amount) ? Math.round(amount * unit) : 0
+  if (type === 'admin_deduct') return currentQuota - delta
+  return currentQuota + delta
 }
 
 export function formatEnterpriseCdkQuotaLogType(type: string) {

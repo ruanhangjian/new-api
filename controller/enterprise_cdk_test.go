@@ -239,6 +239,87 @@ func TestEnterpriseCdkBalanceReturnsGlobalQuotaTotals(t *testing.T) {
 	require.Equal(t, 100, payload.UnusedQuota)
 }
 
+func TestEnterpriseCdkBalanceLogsFiltersByType(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 1000)
+	require.NoError(t, model.AddEnterpriseCdkWhitelist(1, 99))
+	require.NoError(t, model.DB.Create(&model.EnterpriseCdkQuotaLog{
+		UserId:        1,
+		OperatorId:    99,
+		Type:          model.CdkQuotaLogTypeAdminAdd,
+		Amount:        500,
+		BalanceBefore: 1000,
+		BalanceAfter:  1500,
+		Remark:        "wechat received",
+	}).Error)
+	require.NoError(t, model.DB.Create(&model.EnterpriseCdkQuotaLog{
+		UserId:          1,
+		Type:            model.CdkQuotaLogTypeCreateCdk,
+		Amount:          -200,
+		BalanceBefore:   1500,
+		BalanceAfter:    1300,
+		RelatedBatchId:  10,
+		RelatedCdkCount: 2,
+	}).Error)
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodGet, "/api/enterprise/cdk/balance/logs?type=admin_add&p=1&page_size=20", nil, 1)
+	EnterpriseCdkBalanceLogs(ctx)
+
+	response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.True(t, response.Success, response.Message)
+	var payload struct {
+		Total int                           `json:"total"`
+		Items []model.EnterpriseCdkQuotaLog `json:"items"`
+	}
+	require.NoError(t, json.Unmarshal(response.Data, &payload))
+	require.Equal(t, 1, payload.Total)
+	require.Len(t, payload.Items, 1)
+	require.Equal(t, model.CdkQuotaLogTypeAdminAdd, payload.Items[0].Type)
+}
+
+func TestEnterpriseCdkBatchesFiltersByKeyword(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	seedEnterpriseCdkControllerUser(t, 1, "enterprise-a", 1000)
+	seedEnterpriseCdkControllerUser(t, 2, "enterprise-b", 1000)
+	require.NoError(t, model.AddEnterpriseCdkWhitelist(1, 99))
+	require.NoError(t, model.AddEnterpriseCdkWhitelist(2, 99))
+	require.NoError(t, model.DB.Create(&model.EnterpriseCdkBatch{
+		CreatorUserId: 1,
+		Name:          "Alpha Renewal",
+		Quota:         100,
+		Count:         1,
+		TotalQuota:    100,
+	}).Error)
+	require.NoError(t, model.DB.Create(&model.EnterpriseCdkBatch{
+		CreatorUserId: 1,
+		Name:          "Beta Pilot",
+		Quota:         100,
+		Count:         1,
+		TotalQuota:    100,
+	}).Error)
+	require.NoError(t, model.DB.Create(&model.EnterpriseCdkBatch{
+		CreatorUserId: 2,
+		Name:          "Alpha Other Owner",
+		Quota:         100,
+		Count:         1,
+		TotalQuota:    100,
+	}).Error)
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodGet, "/api/enterprise/cdk/batches?keyword=Alpha&p=1&page_size=20", nil, 1)
+	EnterpriseCdkBatches(ctx)
+
+	response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.True(t, response.Success, response.Message)
+	var payload struct {
+		Total int                           `json:"total"`
+		Items []model.EnterpriseCdkBatchRow `json:"items"`
+	}
+	require.NoError(t, json.Unmarshal(response.Data, &payload))
+	require.Equal(t, 1, payload.Total)
+	require.Len(t, payload.Items, 1)
+	require.Equal(t, "Alpha Renewal", payload.Items[0].Name)
+}
+
 func TestEnterpriseCdkCreateBatchDeductsBalanceAndCreatesCodes(t *testing.T) {
 	setupEnterpriseCdkControllerTestDB(t)
 	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 1000)
