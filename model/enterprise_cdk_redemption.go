@@ -23,6 +23,7 @@ type EnterpriseCdkExportRow struct {
 	ExpiredTime          int64  `json:"expired_time"`
 	UsedUserId           int    `json:"used_user_id"`
 	UsedUserEmail        string `json:"used_user_email"`
+	UsedUserDisplay      string `json:"used_user_display"`
 	RecycledTime         int64  `json:"recycled_time"`
 	RecycleOperatorId    int    `json:"recycle_operator_id"`
 	RecycleQuotaReturned int    `json:"recycle_quota_returned"`
@@ -114,7 +115,9 @@ func enterpriseCdkRedemptionRowsQuery() *gorm.DB {
 		Where("r.deleted_at IS NULL").
 		Select(fmt.Sprintf(`r.id, r.user_id, r.batch_id, b.name AS batch_name, creator.email AS creator_email,
 			%s AS key, r.name, r.quota, r.status, r.created_time, r.redeemed_time, r.expired_time,
-			r.used_user_id, used.email AS used_user_email, r.recycled_time, r.recycle_operator_id,
+			r.used_user_id, used.email AS used_user_email,
+			COALESCE(NULLIF(TRIM(used.profile_remark), ''), NULLIF(TRIM(used.email), ''), NULLIF(TRIM(used.username), '')) AS used_user_display,
+			r.recycled_time, r.recycle_operator_id,
 			r.recycle_quota_returned`, keyExpr))
 }
 

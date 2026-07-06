@@ -727,13 +727,16 @@ func writeEnterpriseCdkCSV(c *gin.Context, rows []*model.EnterpriseCdkExportRow,
 	c.Header("Content-Disposition", `attachment; filename="enterprise-cdks.csv"`)
 	_, _ = c.Writer.Write([]byte{0xEF, 0xBB, 0xBF})
 	writer := csv.NewWriter(c.Writer)
-	header := []string{"批次名称", "CDK", "面额(USD)", "状态", "创建时间", "过期时间", "兑换时间", "兑换用户邮箱"}
+	header := []string{"批次名称", "CDK", "面额(USD)", "状态", "创建时间", "过期时间", "兑换时间", "兑换用户"}
 	if includeCreator {
-		header = []string{"创建人邮箱", "批次名称", "CDK", "面额(USD)", "状态", "创建时间", "过期时间", "兑换时间", "兑换用户邮箱"}
+		header = []string{"创建人邮箱", "批次名称", "CDK", "面额(USD)", "状态", "创建时间", "过期时间", "兑换时间", "兑换用户"}
 	}
 	_ = writer.Write(header)
 	for _, row := range rows {
-		redeemer := row.UsedUserEmail
+		redeemer := row.UsedUserDisplay
+		if redeemer == "" {
+			redeemer = row.UsedUserEmail
+		}
 		if redeemer == "" && row.UsedUserId > 0 {
 			redeemer = strconv.Itoa(row.UsedUserId)
 		}

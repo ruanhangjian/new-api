@@ -27,7 +27,7 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
 import { PasswordInput } from '@/components/password-input'
-import { updateUserSettings } from '../../api'
+import { updateUserProfile, updateUserSettings } from '../../api'
 import {
   DEFAULT_QUOTA_WARNING_THRESHOLD,
   NOTIFICATION_METHODS,
@@ -55,6 +55,8 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
   const { t } = useTranslation()
   const isAdmin = (profile?.role ?? 0) >= ROLE.ADMIN
   const [loading, setLoading] = useState(false)
+  const [remarkLoading, setRemarkLoading] = useState(false)
+  const [profileRemark, setProfileRemark] = useState('')
   const [settings, setSettings] = useState<UserSettings>({
     notify_type: 'email',
     quota_warning_threshold: DEFAULT_QUOTA_WARNING_THRESHOLD,
@@ -101,6 +103,30 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
     }
   }, [profile])
 
+  useEffect(() => {
+    setProfileRemark(profile?.profile_remark ?? '')
+  }, [profile?.profile_remark])
+
+  const handleSaveProfileRemark = async () => {
+    try {
+      setRemarkLoading(true)
+      const response = await updateUserProfile({
+        profile_remark: profileRemark.trim(),
+      })
+
+      if (response.success) {
+        toast.success(t('Remark saved successfully'))
+        onUpdate()
+      } else {
+        toast.error(response.message || t('Failed to save remark'))
+      }
+    } catch (_error) {
+      toast.error(t('Failed to save remark'))
+    } finally {
+      setRemarkLoading(false)
+    }
+  }
+
   const handleSave = async () => {
     try {
       setLoading(true)
@@ -121,6 +147,42 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
 
   return (
     <div className='space-y-4 sm:space-y-6'>
+      {/* Account Remark */}
+      <div className='space-y-3 rounded-lg border p-3 sm:p-4'>
+        <div className='space-y-1'>
+          <Label htmlFor='profileRemark'>{t('Account Remark')}</Label>
+          <p className='text-muted-foreground text-xs sm:text-sm'>
+            {t(
+              'Enterprise CDK redemption records will show this remark first. Leave it empty to show email or username.'
+            )}
+          </p>
+        </div>
+        <div className='flex flex-col gap-2 sm:flex-row'>
+          <Input
+            id='profileRemark'
+            className='h-9'
+            maxLength={100}
+            value={profileRemark}
+            onChange={(event) => setProfileRemark(event.target.value)}
+            placeholder={t('Example: Zhang San / Marketing - Li Lei')}
+          />
+          <Button
+            type='button'
+            className='shrink-0'
+            onClick={handleSaveProfileRemark}
+            disabled={remarkLoading}
+          >
+            {remarkLoading && (
+              <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+            )}
+            {remarkLoading ? t('Saving...') : t('Save Remark')}
+          </Button>
+        </div>
+        <p className='text-muted-foreground text-xs'>
+          {profileRemark.length}/100
+        </p>
+      </div>
+
       {/* Notification Type */}
       <div className='space-y-2.5'>
         <Label>{t('Notification Method')}</Label>

@@ -67,6 +67,7 @@ export interface EnterpriseCdkCode {
   expired_time: number
   used_user_id: number
   used_user_email?: string
+  used_user_display?: string
   recycled_time?: number
   recycle_operator_id?: number
   recycle_quota_returned?: number

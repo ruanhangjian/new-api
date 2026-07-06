@@ -79,6 +79,63 @@ func decodeEnterpriseCdkAPIResponse(t *testing.T, body []byte) enterpriseCdkAPIR
 	return response
 }
 
+func TestUpdateSelfSavesAndReturnsProfileRemark(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 0)
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPut, "/api/user/self", gin.H{
+		"profile_remark": "  张三 / 市场部  ",
+	}, 1)
+	UpdateSelf(ctx)
+
+	response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.True(t, response.Success, response.Message)
+
+	var user model.User
+	require.NoError(t, model.DB.First(&user, 1).Error)
+	require.Equal(t, "张三 / 市场部", user.ProfileRemark)
+
+	ctx, recorder = newAuthenticatedContext(t, http.MethodGet, "/api/user/self", nil, 1)
+	ctx.Set("role", common.RoleCommonUser)
+	GetSelf(ctx)
+
+	response = decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.True(t, response.Success, response.Message)
+	var payload struct {
+		ProfileRemark string `json:"profile_remark"`
+	}
+	require.NoError(t, json.Unmarshal(response.Data, &payload))
+	require.Equal(t, "张三 / 市场部", payload.ProfileRemark)
+}
+
+func TestUpdateSelfClearsProfileRemark(t *testing.T) {
+	setupEnterpriseCdkControllerTestDB(t)
+	require.NoError(t, model.DB.Create(&model.User{
+		Id:            1,
+		PublicId:      "2000000001",
+		Username:      "enterprise",
+		Password:      "hashed",
+		DisplayName:   "enterprise",
+		Email:         "enterprise@example.com",
+		AffCode:       "enterprise_aff",
+		Role:          common.RoleCommonUser,
+		Status:        common.UserStatusEnabled,
+		ProfileRemark: "旧备注",
+	}).Error)
+
+	ctx, recorder := newAuthenticatedContext(t, http.MethodPut, "/api/user/self", gin.H{
+		"profile_remark": "   ",
+	}, 1)
+	UpdateSelf(ctx)
+
+	response := decodeEnterpriseCdkAPIResponse(t, recorder.Body.Bytes())
+	require.True(t, response.Success, response.Message)
+
+	var user model.User
+	require.NoError(t, model.DB.First(&user, 1).Error)
+	require.Equal(t, "", user.ProfileRemark)
+}
+
 func newEnterpriseCdkRawJSONContext(t *testing.T, method string, target string, rawBody string, userID int) (*gin.Context, *httptest.ResponseRecorder) {
 	t.Helper()
 	recorder := httptest.NewRecorder()
@@ -790,10 +847,12 @@ func TestAdminEnterpriseCdkExportRejectsMalformedJSON(t *testing.T) {
 func TestEnterpriseCdkExportWritesCSVWithBOMAndOperationLog(t *testing.T) {
 	setupEnterpriseCdkControllerTestDB(t)
 	seedEnterpriseCdkControllerUser(t, 1, "enterprise", 0)
+	seedEnterpriseCdkControllerUser(t, 2, "redeemer", 0)
+	require.NoError(t, model.UpdateUserProfileRemark(2, "张三 / 市场部"))
 	require.NoError(t, model.AddEnterpriseCdkWhitelist(1, 99))
 	batch := &model.EnterpriseCdkBatch{CreatorUserId: 1, Name: "batch", Quota: 100, Count: 1, TotalQuota: 100}
 	require.NoError(t, model.DB.Create(batch).Error)
-	require.NoError(t, model.DB.Create(&model.Redemption{UserId: 1, BatchId: batch.Id, Key: "export-me", Name: "batch", Quota: 100, Status: common.RedemptionCodeStatusEnabled}).Error)
+	require.NoError(t, model.DB.Create(&model.Redemption{UserId: 1, BatchId: batch.Id, Key: "export-me", Name: "batch", Quota: 100, Status: common.RedemptionCodeStatusUsed, UsedUserId: 2}).Error)
 
 	ctx, recorder := newAuthenticatedContext(t, http.MethodPost, "/api/enterprise/cdk/export", gin.H{
 		"batch_id": batch.Id,
@@ -805,6 +864,8 @@ func TestEnterpriseCdkExportWritesCSVWithBOMAndOperationLog(t *testing.T) {
 	require.GreaterOrEqual(t, len(body), 3)
 	require.Equal(t, []byte{0xEF, 0xBB, 0xBF}, body[:3])
 	require.Contains(t, string(body), "export-me")
+	require.Contains(t, string(body), "兑换用户")
+	require.Contains(t, string(body), "张三 / 市场部")
 
 	var logCount int64
 	require.NoError(t, model.DB.Model(&model.EnterpriseCdkOperationLog{}).Where("action = ?", model.EnterpriseCdkOperationExportUser).Count(&logCount).Error)

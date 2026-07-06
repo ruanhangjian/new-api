@@ -54,6 +54,7 @@ import {
   formatEnterpriseCdkBalanceActionLabel,
   formatEnterpriseCdkOperationAction,
   formatEnterpriseCdkQuotaLogType,
+  formatEnterpriseCdkRedeemerDisplay,
   formatQuota,
   formatSignedQuota,
   formatTime,
@@ -1223,7 +1224,7 @@ export function EnterpriseCdkAdminPage() {
                             {formatTime(code.redeemed_time)}
                           </AdminTableCell>
                           <AdminTableCell className='text-[12.5px]'>
-                            {code.used_user_email || code.used_user_id || '-'}
+                            {formatEnterpriseCdkRedeemerDisplay(code)}
                           </AdminTableCell>
                           <AdminTableCell>
                             <AdminActionButton

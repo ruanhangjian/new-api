@@ -54,6 +54,7 @@ import {
   ENTERPRISE_CDK_QUOTA_LOG_TYPE_OPTIONS,
   type EnterpriseCdkExpiryPreset,
   formatEnterpriseCdkQuotaLogType,
+  formatEnterpriseCdkRedeemerDisplay,
   formatQuota,
   formatSignedQuota,
   getCodeStatus,
@@ -1206,7 +1207,7 @@ export function EnterpriseCdkBatchDetailPage({ batchId }: { batchId: number }) {
                       {formatMinuteTime(code.redeemed_time)}
                     </td>
                     <td className='border-b border-[#e2e8f0] dark:border-border px-[14px] py-[11px] align-middle text-[13.5px] leading-5 whitespace-nowrap text-[#0f172a] dark:text-foreground'>
-                      {code.used_user_email || code.used_user_id || '-'}
+                      {formatEnterpriseCdkRedeemerDisplay(code)}
                     </td>
                   </tr>
                 )

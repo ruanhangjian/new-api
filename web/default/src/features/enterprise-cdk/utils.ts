@@ -130,6 +130,19 @@ export function formatEnterpriseCdkOperationAction(action: string) {
   }
 }
 
+export function formatEnterpriseCdkRedeemerDisplay(
+  code: Pick<
+    Partial<EnterpriseCdkCode>,
+    'used_user_display' | 'used_user_email' | 'used_user_id'
+  >
+) {
+  const display =
+    code.used_user_display?.trim() || code.used_user_email?.trim()
+  if (display) return display
+  if (code.used_user_id) return String(code.used_user_id)
+  return '-'
+}
+
 export function getCodeStatus(code: EnterpriseCdkCode) {
   if (code.recycled_time && code.recycled_time > 0) return '已回收'
   if (code.status === CDK_STATUS.used) return '已兑换'

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import {
   calculateEnterpriseCdkAdjustedBalance,
+  formatEnterpriseCdkRedeemerDisplay,
   formatEnterpriseCdkBalanceActionLabel,
   formatEnterpriseCdkAuthorizedCount,
   getEnterpriseCdkExpiryPresetDate,
@@ -69,5 +70,30 @@ describe('calculateEnterpriseCdkAdjustedBalance', () => {
       calculateEnterpriseCdkAdjustedBalance(1000, '10', 'admin_deduct', 100),
       0
     )
+  })
+})
+
+describe('formatEnterpriseCdkRedeemerDisplay', () => {
+  test('uses backend display field before legacy fields', () => {
+    assert.equal(
+      formatEnterpriseCdkRedeemerDisplay({
+        used_user_display: '张三 / 市场部',
+        used_user_email: 'zhang@example.com',
+        used_user_id: 12,
+      }),
+      '张三 / 市场部'
+    )
+  })
+
+  test('falls back to email then user id', () => {
+    assert.equal(
+      formatEnterpriseCdkRedeemerDisplay({
+        used_user_email: 'li@example.com',
+        used_user_id: 13,
+      }),
+      'li@example.com'
+    )
+    assert.equal(formatEnterpriseCdkRedeemerDisplay({ used_user_id: 14 }), '14')
+    assert.equal(formatEnterpriseCdkRedeemerDisplay({}), '-')
   })
 })

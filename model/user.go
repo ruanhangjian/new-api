@@ -31,6 +31,7 @@ type User struct {
 	Password           string         `json:"password" gorm:"not null;" validate:"min=8,max=20"`
 	OriginalPassword   string         `json:"original_password" gorm:"-:all"` // this field is only for Password change verification, don't save it to database!
 	DisplayName        string         `json:"display_name" gorm:"index" validate:"max=20"`
+	ProfileRemark      string         `json:"profile_remark" gorm:"type:varchar(100);column:profile_remark" validate:"max=100"`
 	Role               int            `json:"role" gorm:"type:int;default:1"`   // admin, common
 	Status             int            `json:"status" gorm:"type:int;default:1"` // enabled, disabled
 	Email              string         `json:"email" gorm:"index" validate:"max=50"`
@@ -628,6 +629,18 @@ func (user *User) Edit(updatePassword bool) error {
 
 	// Update cache
 	return updateUserCache(*user)
+}
+
+func UpdateUserProfileRemark(userId int, profileRemark string) error {
+	user := User{}
+	if err := DB.First(&user, userId).Error; err != nil {
+		return err
+	}
+	if err := DB.Model(&user).Update("profile_remark", profileRemark).Error; err != nil {
+		return err
+	}
+	user.ProfileRemark = profileRemark
+	return updateUserCache(user)
 }
 
 func (user *User) ClearBinding(bindingType string) error {

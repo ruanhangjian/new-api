@@ -318,6 +318,32 @@ func TestGetRedemptionsForExportFiltersByCreatorForNonAdminUsers(t *testing.T) {
 	require.Len(t, adminRows, 2)
 }
 
+func TestEnterpriseCdkRedemptionRowsUseRedeemerDisplayFallback(t *testing.T) {
+	resetEnterpriseCdkTables(t)
+	require.NoError(t, DB.Create(&User{Id: 1, PublicId: "2000000001", Username: "enterprise", Password: "hashed", DisplayName: "Enterprise", Email: "enterprise@example.com", AffCode: "enterprise_aff", Role: common.RoleCommonUser, Status: common.UserStatusEnabled}).Error)
+	require.NoError(t, DB.Create(&User{Id: 2, PublicId: "2000000002", Username: "with-remark", Password: "hashed", DisplayName: "With Remark", Email: "remark@example.com", ProfileRemark: "张三 / 市场部", AffCode: "with_remark_aff", Role: common.RoleCommonUser, Status: common.UserStatusEnabled}).Error)
+	require.NoError(t, DB.Create(&User{Id: 3, PublicId: "2000000003", Username: "with-email", Password: "hashed", DisplayName: "With Email", Email: "email@example.com", AffCode: "with_email_aff", Role: common.RoleCommonUser, Status: common.UserStatusEnabled}).Error)
+	require.NoError(t, DB.Create(&User{Id: 4, PublicId: "2000000004", Username: "username-only", Password: "hashed", DisplayName: "Username Only", AffCode: "username_only_aff", Role: common.RoleCommonUser, Status: common.UserStatusEnabled}).Error)
+
+	batch := &EnterpriseCdkBatch{CreatorUserId: 1, Name: "A", Quota: 100, Count: 3, TotalQuota: 300}
+	require.NoError(t, DB.Create(batch).Error)
+	require.NoError(t, DB.Create(&Redemption{UserId: 1, BatchId: batch.Id, Key: "with-remark-code", Name: "A", Quota: 100, Status: common.RedemptionCodeStatusUsed, UsedUserId: 2}).Error)
+	require.NoError(t, DB.Create(&Redemption{UserId: 1, BatchId: batch.Id, Key: "with-email-code", Name: "A", Quota: 100, Status: common.RedemptionCodeStatusUsed, UsedUserId: 3}).Error)
+	require.NoError(t, DB.Create(&Redemption{UserId: 1, BatchId: batch.Id, Key: "username-only-code", Name: "A", Quota: 100, Status: common.RedemptionCodeStatusUsed, UsedUserId: 4}).Error)
+
+	rows, err := GetRedemptionsForExport(1, batch.Id, nil, false)
+	require.NoError(t, err)
+	require.Len(t, rows, 3)
+
+	displayByKey := make(map[string]string, len(rows))
+	for _, row := range rows {
+		displayByKey[row.Key] = row.UsedUserDisplay
+	}
+	require.Equal(t, "张三 / 市场部", displayByKey["with-remark-code"])
+	require.Equal(t, "email@example.com", displayByKey["with-email-code"])
+	require.Equal(t, "username-only", displayByKey["username-only-code"])
+}
+
 func TestEnterpriseCdkQueriesExcludeSoftDeletedRedemptions(t *testing.T) {
 	resetEnterpriseCdkTables(t)
 	seedEnterpriseCdkUser(t, 1, "enterprise-a", 0)

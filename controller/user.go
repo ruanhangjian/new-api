@@ -412,6 +412,7 @@ func GetSelf(c *gin.Context) {
 		"public_id":         user.PublicId,
 		"username":          user.Username,
 		"display_name":      user.DisplayName,
+		"profile_remark":    user.ProfileRemark,
 		"role":              user.Role,
 		"status":            user.Status,
 		"email":             user.Email,
@@ -720,6 +721,14 @@ func UpdateSelf(c *gin.Context) {
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
+	profileRemark, updateProfileRemark, err := parseProfileRemarkUpdate(requestData)
+	if err != nil {
+		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+		return
+	}
+	if updateProfileRemark {
+		user.ProfileRemark = profileRemark
+	}
 
 	if user.Password == "" {
 		user.Password = "$I_LOVE_U" // make Validator happy :)
@@ -748,6 +757,12 @@ func UpdateSelf(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	if updateProfileRemark {
+		if err := model.UpdateUserProfileRemark(cleanUser.Id, profileRemark); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -756,7 +771,22 @@ func UpdateSelf(c *gin.Context) {
 	return
 }
 
+func parseProfileRemarkUpdate(requestData map[string]interface{}) (string, bool, error) {
+	value, exists := requestData["profile_remark"]
+	if !exists {
+		return "", false, nil
+	}
+	remark, ok := value.(string)
+	if !ok {
+		return "", true, fmt.Errorf("profile_remark must be a string")
+	}
+	return strings.TrimSpace(remark), true, nil
+}
+
 func checkUpdatePassword(originalPassword string, newPassword string, userId int) (updatePassword bool, err error) {
+	if newPassword == "" {
+		return false, nil
+	}
 	var currentUser *model.User
 	currentUser, err = model.GetUserById(userId, true)
 	if err != nil {
@@ -767,9 +797,6 @@ func checkUpdatePassword(originalPassword string, newPassword string, userId int
 	// 支持第一次账号绑定时原密码为空的情况
 	if !common.ValidatePasswordAndHash(originalPassword, currentUser.Password) && currentUser.Password != "" {
 		err = fmt.Errorf("原密码错误")
-		return
-	}
-	if newPassword == "" {
 		return
 	}
 	updatePassword = true
