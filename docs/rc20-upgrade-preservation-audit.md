@@ -135,11 +135,38 @@ UserAuth
 - `68428189 修正生图工坊桥接接口中间件链路`
 - `e60cfb62 适配图工坊测试到 rc20`
 
-### 未完成：Phase 2B 图工坊前端
+### 已新增：Phase 2B 图工坊前端 MVP
 
-旧 worktree 中的图工坊材料明确包含 gpt-image-playground/Lingqu 的前端子应用、灵感库、画廊、模板库、主站入口、iframe/静态资源 fallback 等内容。但当前升级分支没有实际前端图工坊 SPA/route 文件。
+本分支新增 NewAPI 原生图工坊前端 MVP，没有把真实 API key 写入浏览器，也不依赖 iframe 子应用。
 
-当前升级分支只保留了后端能力和桥接 API。若上线目标包含“用户能在网页里直接使用图工坊 UI”，还需要继续实现 Phase 2B 前端迁移。
+证据：
+
+- 前端页面：`web/default/src/features/image-workshop/index.tsx`
+- 前端 API：`web/default/src/features/image-workshop/api.ts`
+- 前端任务结果解析：`web/default/src/features/image-workshop/utils.ts`
+- 前端路由：`web/default/src/routes/_authenticated/image-workshop/index.tsx`
+- 路由树：`web/default/src/routeTree.gen.ts`
+- 侧边栏入口：`web/default/src/hooks/use-sidebar-data.ts`
+- 侧边栏模块开关：`web/default/src/hooks/use-sidebar-config.ts`
+- 管理员模块配置：`web/default/src/features/system-settings/maintenance/config.ts`
+- 模块设置说明：`web/default/src/features/system-settings/maintenance/sidebar-modules-section.tsx`
+- 个人侧边栏模块卡片：`web/default/src/features/profile/components/sidebar-modules-card.tsx`
+- 测试：`web/default/src/features/image-workshop/utils.test.ts`、`web/default/src/features/system-settings/maintenance/sidebar-modules.test.ts`
+
+已覆盖 MVP：
+
+- 生图工坊页面入口。
+- token 选择器。
+- 模型输入/预设。
+- prompt 输入。
+- `n`、`size`、`quality` 基础参数。
+- 通过 `/api/image-workshop/generations` 提交异步任务。
+- 通过 `/api/image-workshop/tasks/:task_id` 轮询任务状态。
+- 用签名 URL 展示图片。
+- 下载图片。
+- 失败状态展示。
+
+仍未迁入完整 gpt-image-playground/Lingqu 子应用能力，包括灵感库、热门 prompt、模板库、作品库、图片编辑、Agent 模式、iframe 静态资源 fallback 和 service worker。
 
 参考材料：
 
@@ -176,6 +203,18 @@ docker run --rm -v "$PWD":/app -v new-api-go125-mod:/go/pkg/mod -v new-api-go125
 
 结果：`controller`、`router` 均通过。
 
+Phase 2B 前端验证：
+
+```bash
+cd web/default
+bun test src/features/image-workshop/utils.test.ts src/features/system-settings/maintenance/sidebar-modules.test.ts
+bunx --bun oxlint -c .oxlintrc.json src/features/image-workshop src/features/system-settings/maintenance/sidebar-modules.test.ts src/routes/_authenticated/image-workshop/index.tsx src/hooks/use-sidebar-data.ts src/hooks/use-sidebar-config.ts src/features/system-settings/maintenance/config.ts src/features/system-settings/maintenance/sidebar-modules-section.tsx src/features/profile/components/sidebar-modules-card.tsx
+bun run typecheck
+bun run build
+```
+
+结果：均通过。
+
 lint：
 
 ```bash
@@ -188,14 +227,14 @@ bun run lint
 ## 剩余风险
 
 1. rc20 不是 tag 祖先合并，后续继续追 upstream 时可能再次遇到补丁队列冲突。
-2. 图工坊 Phase 2B 前端还没迁入；如果用户预期“图工坊 UI 可用”，当前分支仍不完整。
+2. 图工坊 Phase 2B 当前是 NewAPI 原生 MVP，不是完整 gpt-image-playground/Lingqu 子应用。
 3. 全量前端 lint 未绿，虽然不是本次升级阻断点，但会降低后续改动的静态检查信噪比。
 4. 尚未对真实服务器执行备份、数据库迁移预演、环境变量检查和生产 smoke test。
 5. 图工坊 Phase 1 当前按单实例本地磁盘结果存储设计，生产多实例部署需要额外确认共享存储或实例亲和策略。
 
 ## 部署前建议顺序
 
-1. 决定是否先补 Phase 2B 前端。如果要“图工坊 UI 一起上线”，先不要部署当前分支。
+1. 决定当前 NewAPI 原生图工坊 MVP 是否足够上线；如果必须包含灵感库/作品库/Agent 等完整 gpt-image-playground 能力，需要继续开独立增强分支。
 2. 在本地或 staging 环境做数据库迁移预演，重点看企业 CDK、返利、渠道监控、图工坊 task 表相关迁移。
 3. 备份生产数据库和当前部署产物。
 4. 构建前端和后端产物。
