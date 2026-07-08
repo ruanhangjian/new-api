@@ -8,6 +8,8 @@
 
 **Tech Stack:** Go + Gin + GORM + NewAPI existing TokenAuth/UserAuth/Distribute/Relay, React frontend in existing NewAPI web app, local disk result storage.
 
+**当前 rc20 升级范围说明：** 本次 NewAPI 升级只保留 Phase 1 异步生图后端和 Phase 2A 登录态桥接接口；Phase 2B 图工坊前端不纳入本次合并，也不应随升级分支部署。
+
 ---
 
 ## 当前状态
