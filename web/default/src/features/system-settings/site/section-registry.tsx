@@ -33,7 +33,6 @@ const SITE_SECTIONS = [
   {
     id: 'system-info',
     titleKey: 'System Information',
-    descriptionKey: 'Configure basic system information and branding',
     build: (settings: SiteSettings) => (
       <SystemInfoSection
         defaultValues={{
@@ -57,7 +56,6 @@ const SITE_SECTIONS = [
   {
     id: 'notice',
     titleKey: 'System Notice',
-    descriptionKey: 'Configure system maintenance notice',
     build: (settings: SiteSettings) => (
       <NoticeSection defaultValue={settings.Notice ?? ''} />
     ),
@@ -65,7 +63,6 @@ const SITE_SECTIONS = [
   {
     id: 'header-navigation',
     titleKey: 'Header navigation',
-    descriptionKey: 'Configure header navigation modules',
     build: (settings: SiteSettings) => {
       const headerNavConfig = parseHeaderNavModules(settings.HeaderNavModules)
       const headerNavSerialized = serializeHeaderNavModules(headerNavConfig)
@@ -80,7 +77,6 @@ const SITE_SECTIONS = [
   {
     id: 'sidebar-modules',
     titleKey: 'Sidebar modules',
-    descriptionKey: 'Configure sidebar modules for admin',
     build: (settings: SiteSettings) => {
       const sidebarConfig = parseSidebarModulesAdmin(
         settings.SidebarModulesAdmin

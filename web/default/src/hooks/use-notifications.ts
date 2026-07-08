@@ -16,12 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNotificationStore } from '@/stores/notification-store'
 import { getNotice } from '@/lib/api'
 import { getAnnouncementKeysToMarkReadOnOpen } from './notification-auto-open'
 import { useStatus } from '@/hooks/use-status'
+import { getNotice } from '@/lib/api'
+import { useNotificationStore } from '@/stores/notification-store'
 
 function hashString(input: string): string {
   let hash = 0
@@ -63,7 +64,7 @@ function getAnnouncementKey(item: Record<string, unknown>): string {
  * Provides unread counts and read status management
  */
 export function useNotifications() {
-  const [dialogOpen, setDialogOpen] = useState(false)
+  const [popoverOpen, setPopoverOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'notice' | 'announcements'>(
     'notice'
   )
@@ -93,8 +94,6 @@ export function useNotifications() {
     markNoticeRead,
     markAnnouncementsRead,
     isAnnouncementRead,
-    isNoticeClosed,
-    setClosedUntilDate,
   } = useNotificationStore()
 
   // Extract notice content
@@ -156,11 +155,38 @@ export function useNotifications() {
     }
   }
 
-  // Handle "Close Today" action
-  const handleCloseToday = () => {
-    const today = new Date().toDateString()
-    setClosedUntilDate(today)
-    setDialogOpen(false)
+  // Handle popover open
+  const handleOpenPopover = (tab?: 'notice' | 'announcements') => {
+    const nextTab = tab || activeTab
+
+    // Mark currently visible content as read when opening the notification center
+    if (noticeContent) {
+      markNoticeRead(noticeContent)
+    }
+    if (nextTab === 'announcements') {
+      markAnnouncementsAsRead()
+    }
+
+    setActiveTab(nextTab)
+    setPopoverOpen(true)
+  }
+
+  const handlePopoverOpenChange = (open: boolean) => {
+    if (open) {
+      handleOpenPopover(activeTab)
+      return
+    }
+
+    setPopoverOpen(false)
+  }
+
+  // Handle tab change - mark announcements as read when switching to that tab
+  const handleTabChange = (tab: 'notice' | 'announcements') => {
+    setActiveTab(tab)
+
+    if (tab === 'announcements') {
+      markAnnouncementsAsRead()
+    }
   }
 
   return {
@@ -174,19 +200,15 @@ export function useNotifications() {
     unreadNoticeCount: unreadCounts.notice,
     unreadAnnouncementsCount: unreadCounts.announcements,
 
-    // Dialog state
-    dialogOpen,
-    setDialogOpen,
+    // Popover state
+    popoverOpen,
+    setPopoverOpen: handlePopoverOpenChange,
     activeTab,
     setActiveTab: handleTabChange,
 
     // Actions
-    openDialog: handleOpenDialog,
-    closeDialog: () => setDialogOpen(false),
-    closeToday: handleCloseToday,
+    openPopover: handleOpenPopover,
+    closePopover: () => setPopoverOpen(false),
     refetchNotice,
-
-    // Status
-    isNoticeClosed: isNoticeClosed(),
   }
 }

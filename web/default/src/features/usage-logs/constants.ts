@@ -62,6 +62,12 @@ export const LOG_TYPE_ENUM = {
   LOGIN: 7,
 } as const
 
+/**
+ * The log list/stat backend uses type=0 as the "all types" sentinel.
+ * Row rendering still displays records with type=0 as "Unknown".
+ */
+export const LOG_TYPE_ALL_VALUE = '0' as const
+
 // ============================================================================
 // Time Range Presets
 // ============================================================================
@@ -96,6 +102,8 @@ export const LOG_TYPES = [
 
 /**
  * Log types for DataTableToolbar filters (single select mode)
+ * Backend treats type=0 as "all logs" in list/stat endpoints, so the filter
+ * must not expose the display-only "Unknown" label for that value.
  */
 export const LOG_TYPE_ALL_VALUE = 'all'
 

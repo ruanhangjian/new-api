@@ -20,6 +20,7 @@ import { useMemo } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Copy } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+
 import { Button } from '@/components/ui/button'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useStatus } from '@/hooks/use-status'
@@ -31,6 +32,20 @@ interface HeroProps {
   className?: string
   isAuthenticated?: boolean
 }
+
+// Stylized three-dots indicator representing "More"
+const MoreIcon = () => (
+  <svg
+    className='text-muted-foreground/60 group-hover:text-foreground size-6 shrink-0 transition-colors'
+    viewBox='0 0 24 24'
+    fill='none'
+    xmlns='http://www.w3.org/2000/svg'
+  >
+    <circle cx='6' cy='12' r='2' fill='currentColor' />
+    <circle cx='12' cy='12' r='2' fill='currentColor' />
+    <circle cx='18' cy='12' r='2' fill='currentColor' />
+  </svg>
+)
 
 export function Hero(props: HeroProps) {
   const { t } = useTranslation()

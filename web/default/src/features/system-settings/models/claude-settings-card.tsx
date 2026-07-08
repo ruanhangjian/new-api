@@ -16,13 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useRef } from 'react'
-import * as z from 'zod'
-import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useEffect, useRef } from 'react'
+import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
+import * as z from 'zod'
+
 import {
   Form,
   FormControl,
@@ -177,15 +177,14 @@ export function ClaudeSettingsCard({ defaultValues }: ClaudeSettingsCardProps) {
   }
 
   return (
-    <SettingsSection
-      title={t('Claude')}
-      description={t(
-        'Override Anthropic headers, defaults, and thinking adapter behavior'
-      )}
-    >
+    <SettingsSection title={t('Claude')}>
       <Form {...form}>
         {/* eslint-disable-next-line react-hooks/refs */}
-        <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-6'>
+        <SettingsForm onSubmit={form.handleSubmit(onSubmit)}>
+          <SettingsPageFormActions
+            onSave={form.handleSubmit(onSubmit)}
+            isSaving={updateOption.isPending}
+          />
           <FormField
             control={form.control}
             name='claude.model_headers_settings'
@@ -223,7 +222,7 @@ export function ClaudeSettingsCard({ defaultValues }: ClaudeSettingsCardProps) {
             )}
           />
 
-          <div className='space-y-4 rounded-lg border p-4'>
+          <SettingsControlGroup>
             <FormField
               control={form.control}
               name='claude.thinking_adapter_enabled'
@@ -269,12 +268,8 @@ export function ClaudeSettingsCard({ defaultValues }: ClaudeSettingsCardProps) {
                 </FormItem>
               )}
             />
-          </div>
-
-          <Button type='submit' disabled={updateOption.isPending}>
-            {updateOption.isPending ? t('Saving...') : t('Save Changes')}
-          </Button>
-        </form>
+          </SettingsControlGroup>
+        </SettingsForm>
       </Form>
     </SettingsSection>
   )

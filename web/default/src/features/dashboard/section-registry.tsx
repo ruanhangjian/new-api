@@ -27,13 +27,16 @@ const DASHBOARD_SECTIONS = [
   {
     id: 'overview',
     titleKey: 'Overview',
-    descriptionKey: 'View dashboard overview and statistics',
     build: () => null,
   },
   {
     id: 'models',
     titleKey: 'Model Call Analytics',
-    descriptionKey: 'View model call count analytics and charts',
+    build: () => null,
+  },
+  {
+    id: 'flow',
+    titleKey: 'Flow',
     build: () => null,
   },
   {
@@ -45,7 +48,6 @@ const DASHBOARD_SECTIONS = [
   {
     id: 'users',
     titleKey: 'User Analytics',
-    descriptionKey: 'View user consumption statistics and charts',
     adminOnly: true,
     build: () => null,
   },

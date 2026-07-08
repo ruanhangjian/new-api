@@ -271,40 +271,24 @@ export const ModelRatioForm = memo(function ModelRatioForm({
               control={form.control}
               name='ExposeRatioEnabled'
               render={({ field }) => (
-                <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
-                  <div className='space-y-0.5'>
-                    <FormLabel className='text-base'>
-                      {t('Expose ratio API')}
-                    </FormLabel>
+                <SettingsSwitchItem>
+                  <SettingsSwitchContent>
+                    <FormLabel>{t('Expose ratio API')}</FormLabel>
                     <FormDescription>
                       {t(
                         'Allow clients to query configured ratios via `/api/ratio`.'
                       )}
                     </FormDescription>
-                  </div>
+                  </SettingsSwitchContent>
                   <FormControl>
                     <Switch
                       checked={field.value}
                       onCheckedChange={field.onChange}
                     />
                   </FormControl>
-                </FormItem>
+                </SettingsSwitchItem>
               )}
             />
-
-            <div className='flex flex-wrap gap-4'>
-              <Button onClick={form.handleSubmit(onSave)} disabled={isSaving}>
-                {isSaving ? t('Saving...') : t('Save model prices')}
-              </Button>
-              <Button
-                type='button'
-                variant='destructive'
-                onClick={onReset}
-                disabled={isResetting}
-              >
-                {t('Reset prices')}
-              </Button>
-            </div>
           </div>
         ) : (
           <SettingsForm onSubmit={form.handleSubmit(onSave)}>
@@ -324,24 +308,22 @@ export const ModelRatioForm = memo(function ModelRatioForm({
               control={form.control}
               name='ExposeRatioEnabled'
               render={({ field }) => (
-                <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
-                  <div className='space-y-0.5'>
-                    <FormLabel className='text-base'>
-                      {t('Expose ratio API')}
-                    </FormLabel>
+                <SettingsSwitchItem>
+                  <SettingsSwitchContent>
+                    <FormLabel>{t('Expose ratio API')}</FormLabel>
                     <FormDescription>
                       {t(
                         'Allow clients to query configured ratios via `/api/ratio`.'
                       )}
                     </FormDescription>
-                  </div>
+                  </SettingsSwitchContent>
                   <FormControl>
                     <Switch
                       checked={field.value}
                       onCheckedChange={field.onChange}
                     />
                   </FormControl>
-                </FormItem>
+                </SettingsSwitchItem>
               )}
             />
 

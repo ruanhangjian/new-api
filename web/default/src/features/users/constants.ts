@@ -43,13 +43,11 @@ export const USER_STATUSES = {
     labelKey: 'Enabled',
     variant: 'success' as const,
     value: USER_STATUS.ENABLED,
-    showDot: true,
   },
   [USER_STATUS.DISABLED]: {
     labelKey: 'Disabled',
     variant: 'neutral' as const,
     value: USER_STATUS.DISABLED,
-    showDot: true,
   },
   [USER_STATUS.DELETED]: {
     labelKey: 'Deleted',
