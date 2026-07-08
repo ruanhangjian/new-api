@@ -109,6 +109,60 @@ GET /api/image-workshop/tasks/:task_id
 - 转发到底层异步入队逻辑前会移除 `token_id`，并强制 `response_format` 为 `b64_json`，保证结果落盘和签名 URL 链路稳定。
 - `GET /api/image-workshop/tasks/:task_id` 只按当前登录用户查询 image task，不要求前端再提供 API key；返回 Phase 1 已生成的签名图片 URL，不暴露本地文件路径。
 
+最新完成记录：
+
+```text
+1b56f26f 修正生图工坊桥接接口中间件链路
+```
+
+本次提交确认 `/api/image-workshop/generations` 使用真实 Gin route chain，不再在 controller 内手动调用 `TokenAuth()(relayCtx)` 或 `Distribute()(relayCtx)`，也删除了内部 `httptest` relay context。当前 middleware 顺序为：
+
+```text
+UserAuth
+-> PrepareImageWorkshopGeneration
+-> SystemPerformanceCheck
+-> TokenAuth
+-> ModelRequestRateLimit
+-> Distribute
+-> CreateImageWorkshopGeneration
+```
+
+本次修改文件：
+
+- `controller/image_workshop.go`
+- `controller/image_workshop_test.go`
+- `controller/image_async_test.go`
+- `router/api-router.go`
+- `docs/image-workshop-phase2-plan.md`
+
+已覆盖的自动化测试行为：
+
+- bridge submit 成功路径使用真实 Gin route chain。
+- `ModelRequestRateLimit` 生效：连续提交第二次返回 `429`，且不会创建第二个 task。
+- 拒绝使用其他用户的 `token_id`。
+- 禁用 token 经过 `TokenAuth` 后被拒绝。
+- `token_id` 不进入 task data。
+- 真实 token key 不进入 task data。
+- `response_format` 被强制为 `b64_json`。
+
+已验证：
+
+```bash
+docker run --rm -v "$PWD":/app -v new-api-go125-mod:/go/pkg/mod -v new-api-go125-build:/root/.cache/go-build -w /app golang:1.25.1 sh -lc '/usr/local/go/bin/go test -count=1 ./model ./service ./controller ./router'
+```
+
+结果：
+
+```text
+./model ./service ./controller ./router 全部 ok
+```
+
+未做浏览器 smoke test。本次属于 bridge middleware 链路小修，核心行为已由 route-level 自动化测试覆盖。
+
+遗留风险：
+
+- 中间件拒绝时仍沿用对应 middleware 自己的响应格式，例如 rate limit 返回 `429`，不一定包装成 bridge `success/message/data` 风格响应。
+
 ### 目标接口
 
 新增登录态 API 组：

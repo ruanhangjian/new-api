@@ -355,7 +355,9 @@ func setupImageAsyncControllerTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, i18n.Init())
 	gin.SetMode(gin.TestMode)
 	originalMemoryCacheEnabled := common.MemoryCacheEnabled
-	common.UsingSQLite = true
+	originalMainDatabaseType := common.MainDatabaseType()
+	originalLogDatabaseType := common.LogDatabaseType()
+	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
 	common.RedisEnabled = false
 	common.MemoryCacheEnabled = false
 	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
@@ -365,6 +367,7 @@ func setupImageAsyncControllerTestDB(t *testing.T) *gorm.DB {
 	model.LOG_DB = db
 	require.NoError(t, db.AutoMigrate(&model.Task{}, &model.User{}, &model.Token{}, &model.Channel{}, &model.Ability{}))
 	t.Cleanup(func() {
+		common.SetDatabaseTypes(originalMainDatabaseType, originalLogDatabaseType)
 		common.MemoryCacheEnabled = originalMemoryCacheEnabled
 		sqlDB, err := db.DB()
 		if err == nil {
@@ -378,16 +381,13 @@ func initImageAsyncControllerColumnNames(t *testing.T) {
 	t.Helper()
 	originalIsMasterNode := common.IsMasterNode
 	originalSQLitePath := common.SQLitePath
-	originalUsingSQLite := common.UsingSQLite
-	originalUsingMySQL := common.UsingMySQL
-	originalUsingPostgreSQL := common.UsingPostgreSQL
+	originalMainDatabaseType := common.MainDatabaseType()
+	originalLogDatabaseType := common.LogDatabaseType()
 	originalSQLDSN, hadSQLDSN := os.LookupEnv("SQL_DSN")
 	defer func() {
 		common.IsMasterNode = originalIsMasterNode
 		common.SQLitePath = originalSQLitePath
-		common.UsingSQLite = originalUsingSQLite
-		common.UsingMySQL = originalUsingMySQL
-		common.UsingPostgreSQL = originalUsingPostgreSQL
+		common.SetDatabaseTypes(originalMainDatabaseType, originalLogDatabaseType)
 		if hadSQLDSN {
 			require.NoError(t, os.Setenv("SQL_DSN", originalSQLDSN))
 		} else {
@@ -397,9 +397,7 @@ func initImageAsyncControllerColumnNames(t *testing.T) {
 
 	common.IsMasterNode = false
 	common.SQLitePath = fmt.Sprintf("file:%s_init?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
-	common.UsingSQLite = false
-	common.UsingMySQL = false
-	common.UsingPostgreSQL = false
+	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
 	require.NoError(t, os.Setenv("SQL_DSN", "local"))
 	require.NoError(t, model.InitDB())
 	if model.DB != nil {

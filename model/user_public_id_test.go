@@ -14,6 +14,12 @@ import (
 func openUserPublicIdTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
+	originalDB := DB
+	originalLogDB := LOG_DB
+	originalMainDatabaseType := common.MainDatabaseType()
+	originalLogDatabaseType := common.LogDatabaseType()
+	originalRedisEnabled := common.RedisEnabled
+
 	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
 	common.RedisEnabled = false
 
@@ -24,6 +30,10 @@ func openUserPublicIdTestDB(t *testing.T) *gorm.DB {
 	LOG_DB = db
 
 	t.Cleanup(func() {
+		DB = originalDB
+		LOG_DB = originalLogDB
+		common.SetDatabaseTypes(originalMainDatabaseType, originalLogDatabaseType)
+		common.RedisEnabled = originalRedisEnabled
 		sqlDB, err := db.DB()
 		if err == nil {
 			_ = sqlDB.Close()
