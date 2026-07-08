@@ -587,35 +587,6 @@ git commit -m "新增生图工坊登录态桥接接口"
 feature/image-workshop-frontend
 ```
 
-### 实施状态（feature/image-workshop-frontend-rc20）
-
-Phase 2B 前端 MVP 已在 rc20 升级分支之上新增独立前端 worktree/分支：
-
-```text
-/Users/superdavid/Downloads/中转站/new-api/.worktrees/image-workshop-frontend-rc20
-feature/image-workshop-frontend-rc20
-```
-
-本次实现 NewAPI 原生页面 `/image-workshop`，直接调用 Phase 2A 登录态桥接接口：
-
-- `GET /api/image-workshop/tokens`
-- `POST /api/image-workshop/generations`
-- `GET /api/image-workshop/tasks/:task_id`
-
-已实现：
-
-- 生图工坊侧边栏入口和路由。
-- API Key 选择器，只展示 masked key 和元数据，不保存真实 key。
-- 模型输入/预设、prompt 输入、`n`、`size`、`quality` 基础参数。
-- 提交异步任务并记录本页任务列表。
-- 自动轮询 queued/running 任务。
-- 解析 OpenAI image result 中的签名 URL 或 `b64_json`。
-- 图片预览和下载。
-- 失败状态展示。
-- 侧边栏模块开关默认项和系统设置说明。
-
-本次未迁入完整 gpt-image-playground/Lingqu 子应用，不包含灵感库、模板库、作品库、图片编辑、Agent 模式、iframe fallback 或 service worker。
-
 ## Phase 3：增强能力
 
 后续增强按独立分支推进：

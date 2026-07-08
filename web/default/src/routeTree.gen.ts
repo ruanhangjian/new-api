@@ -46,7 +46,6 @@ import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authent
 import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_authenticated/playground/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
-import { Route as AuthenticatedImageWorkshopIndexRouteImport } from './routes/_authenticated/image-workshop/index'
 import { Route as AuthenticatedEnterpriseCdkIndexRouteImport } from './routes/_authenticated/enterprise-cdk/index'
 import { Route as AuthenticatedEnterpriseCdkAdminIndexRouteImport } from './routes/_authenticated/enterprise-cdk-admin/index'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
@@ -270,12 +269,6 @@ const AuthenticatedKeysIndexRoute = AuthenticatedKeysIndexRouteImport.update({
   path: '/keys/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedImageWorkshopIndexRoute =
-  AuthenticatedImageWorkshopIndexRouteImport.update({
-    id: '/image-workshop/',
-    path: '/image-workshop/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedEnterpriseCdkIndexRoute =
   AuthenticatedEnterpriseCdkIndexRouteImport.update({
     id: '/enterprise-cdk/',
@@ -487,7 +480,6 @@ export interface FileRoutesByFullPath {
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/enterprise-cdk-admin/': typeof AuthenticatedEnterpriseCdkAdminIndexRoute
   '/enterprise-cdk/': typeof AuthenticatedEnterpriseCdkIndexRoute
-  '/image-workshop/': typeof AuthenticatedImageWorkshopIndexRoute
   '/keys/': typeof AuthenticatedKeysIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
   '/playground/': typeof AuthenticatedPlaygroundIndexRoute
@@ -553,7 +545,6 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
   '/enterprise-cdk-admin': typeof AuthenticatedEnterpriseCdkAdminIndexRoute
   '/enterprise-cdk': typeof AuthenticatedEnterpriseCdkIndexRoute
-  '/image-workshop': typeof AuthenticatedImageWorkshopIndexRoute
   '/keys': typeof AuthenticatedKeysIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
   '/playground': typeof AuthenticatedPlaygroundIndexRoute
@@ -623,7 +614,6 @@ export interface FileRoutesById {
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/_authenticated/enterprise-cdk-admin/': typeof AuthenticatedEnterpriseCdkAdminIndexRoute
   '/_authenticated/enterprise-cdk/': typeof AuthenticatedEnterpriseCdkIndexRoute
-  '/_authenticated/image-workshop/': typeof AuthenticatedImageWorkshopIndexRoute
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
   '/_authenticated/playground/': typeof AuthenticatedPlaygroundIndexRoute
@@ -692,7 +682,6 @@ export interface FileRouteTypes {
     | '/dashboard/'
     | '/enterprise-cdk-admin/'
     | '/enterprise-cdk/'
-    | '/image-workshop/'
     | '/keys/'
     | '/models/'
     | '/playground/'
@@ -758,7 +747,6 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/enterprise-cdk-admin'
     | '/enterprise-cdk'
-    | '/image-workshop'
     | '/keys'
     | '/models'
     | '/playground'
@@ -827,7 +815,6 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard/'
     | '/_authenticated/enterprise-cdk-admin/'
     | '/_authenticated/enterprise-cdk/'
-    | '/_authenticated/image-workshop/'
     | '/_authenticated/keys/'
     | '/_authenticated/models/'
     | '/_authenticated/playground/'
@@ -1139,13 +1126,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedKeysIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/image-workshop/': {
-      id: '/_authenticated/image-workshop/'
-      path: '/image-workshop'
-      fullPath: '/image-workshop/'
-      preLoaderRoute: typeof AuthenticatedImageWorkshopIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/enterprise-cdk/': {
       id: '/_authenticated/enterprise-cdk/'
       path: '/enterprise-cdk'
@@ -1449,7 +1429,6 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
   AuthenticatedEnterpriseCdkAdminIndexRoute: typeof AuthenticatedEnterpriseCdkAdminIndexRoute
   AuthenticatedEnterpriseCdkIndexRoute: typeof AuthenticatedEnterpriseCdkIndexRoute
-  AuthenticatedImageWorkshopIndexRoute: typeof AuthenticatedImageWorkshopIndexRoute
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
   AuthenticatedPlaygroundIndexRoute: typeof AuthenticatedPlaygroundIndexRoute
@@ -1483,7 +1462,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedEnterpriseCdkAdminIndexRoute:
     AuthenticatedEnterpriseCdkAdminIndexRoute,
   AuthenticatedEnterpriseCdkIndexRoute: AuthenticatedEnterpriseCdkIndexRoute,
-  AuthenticatedImageWorkshopIndexRoute: AuthenticatedImageWorkshopIndexRoute,
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,
   AuthenticatedPlaygroundIndexRoute: AuthenticatedPlaygroundIndexRoute,
