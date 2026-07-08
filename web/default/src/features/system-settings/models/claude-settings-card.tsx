@@ -243,7 +243,7 @@ export function ClaudeSettingsCard({ defaultValues }: ClaudeSettingsCardProps) {
                       onCheckedChange={field.onChange}
                     />
                   </FormControl>
-                </FormItem>
+                </SettingsSwitchItem>
               )}
             />
 

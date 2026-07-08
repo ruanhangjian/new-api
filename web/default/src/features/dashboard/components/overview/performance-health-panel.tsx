@@ -153,8 +153,7 @@ export function PerformanceHealthPanel() {
                     </span>
                   </span>
                 </div>
-                ))}
-              </div>
+              ))}
             </div>
           </div>
         )}

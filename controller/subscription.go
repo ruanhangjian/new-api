@@ -23,6 +23,10 @@ type BillingPreferenceRequest struct {
 	BillingPreference string `json:"billing_preference"`
 }
 
+type SubscriptionPayRequest struct {
+	PlanId int `json:"plan_id"`
+}
+
 // ---- User APIs ----
 
 func GetSubscriptionPlans(c *gin.Context) {

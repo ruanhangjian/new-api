@@ -551,6 +551,7 @@ export function SubscriptionsMutateDrawer({
                     </FormItem>
                   )}
                 />
+              </div>
 
               <div className='flex flex-col gap-3'>
                 <FormField

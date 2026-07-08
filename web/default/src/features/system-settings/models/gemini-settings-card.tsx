@@ -321,7 +321,7 @@ export function GeminiSettingsCard({ defaultValues }: GeminiSettingsCardProps) {
                       onCheckedChange={field.onChange}
                     />
                   </FormControl>
-                </FormItem>
+                </SettingsSwitchItem>
               )}
             />
 
