@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
+import type { SidebarData } from '@/components/layout/types'
 import {
   LayoutDashboard,
   Activity,
@@ -38,10 +39,10 @@ import {
   Settings,
   WalletCards,
   ShieldCheck,
+  ImagePlus,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { WORKSPACE_IDS } from '@/components/layout/lib/workspace-registry'
-import { type SidebarData } from '@/components/layout/types'
 import { getAffiliateRebateOverviewSilent } from '@/features/affiliate-rebate/api'
 import { getEnterpriseCdkPermission } from '@/features/enterprise-cdk/api'
 import { ROLE } from '@/lib/roles'
@@ -104,6 +105,11 @@ export function useSidebarData(): SidebarData {
             title: t('Playground'),
             url: '/playground',
             icon: FlaskConical,
+          },
+          {
+            title: t('Image Workshop'),
+            url: '/image-workshop',
+            icon: ImagePlus,
           },
           {
             title: t('Chat'),
