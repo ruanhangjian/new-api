@@ -366,6 +366,10 @@ export function useIsSidebarModuleVisible(url: string): boolean {
     auth?.user?.permissions?.sidebar_settings === false
       ? null
       : parseUserSidebarConfig(auth?.user?.sidebar_modules)
+  const runtimeDeniedUrls = new Set<string>()
+  if (auth?.user?.permissions?.affiliate_rebate === false) {
+    runtimeDeniedUrls.add('/affiliate-rebate')
+  }
 
-  return isModuleEnabled(url, adminConfig, userConfig)
+  return isModuleEnabled(url, adminConfig, userConfig, runtimeDeniedUrls)
 }

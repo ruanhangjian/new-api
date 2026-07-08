@@ -164,7 +164,7 @@ export function useChannelUpstreamUpdates(refresh: () => Promise<void>) {
         {},
         { skipErrorHandler: true } as Record<string, unknown>
       )
-      const { success, message } = res.data || {}
+      const { success, message, data } = res.data || {}
       if (!success) {
         toast.error(message || t('Batch processing failed'))
         return
@@ -246,7 +246,7 @@ export function useChannelUpstreamUpdates(refresh: () => Promise<void>) {
         {},
         { skipErrorHandler: true } as Record<string, unknown>
       )
-      const { success, message, data } = res.data || {}
+      const { success, message } = res.data || {}
       if (!success) {
         toast.error(message || t('Batch detection failed'))
         return

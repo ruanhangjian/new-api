@@ -104,9 +104,10 @@ function createGroupPricingId() {
   return `gpr_${groupPricingIdCounter}`
 }
 
-function normalizeRatio(value: unknown): number {
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : 1
+export function normalizeRatio(value: unknown): string {
+  const text = String(value ?? '').trim()
+  if (!text) return '1'
+  return Number.isFinite(Number(text)) ? text : '1'
 }
 
 function parseRatioMap(value: string): Record<string, number> {
@@ -132,10 +133,10 @@ function parseNestedRatioMap(
   })
 }
 
-function buildGroupPricingRows(
+export function buildGroupPricingRows(
   groupRatio: string,
   userUsableGroups: string,
-  topupGroupRatio: string
+  topupGroupRatio = '{}'
 ): GroupPricingRow[] {
   const ratioMap = parseRatioMap(groupRatio)
   const usableMap = parseUsableMap(userUsableGroups)
@@ -156,7 +157,7 @@ function buildGroupPricingRows(
   }))
 }
 
-function serializeGroupPricingRows(rows: GroupPricingRow[]) {
+export function serializeGroupPricingRows(rows: GroupPricingRow[]) {
   const groupRatio: Record<string, number> = {}
   const userUsableGroups: Record<string, string> = {}
   const topupGroupRatio: Record<string, number> = {}
@@ -164,7 +165,7 @@ function serializeGroupPricingRows(rows: GroupPricingRow[]) {
   for (const row of rows) {
     const name = row.name.trim()
     if (!name) continue
-    groupRatio[name] = normalizeRatio(row.ratio)
+    groupRatio[name] = Number(normalizeRatio(row.ratio))
     if (row.selectable) {
       userUsableGroups[name] = row.description
     }
@@ -274,7 +275,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
     ])
     return [...names].map((name) => ({
       name,
-      ratio: normalizeRatio(ratioMap[name]),
+      ratio: Number(normalizeRatio(ratioMap[name])),
     }))
   }, [groupRatio, userUsableGroups, topupGroupRatio])
 

@@ -20,11 +20,6 @@ import { ArrowUpDown, Check, Filter, Grid2X2, Table2 } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import {
-  sideDrawerContentClassName,
-  sideDrawerFormClassName,
-  sideDrawerHeaderClassName,
-} from '@/components/drawer-layout'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -51,6 +46,7 @@ import {
   type SortOption,
   type ViewMode,
 } from '../constants'
+import { cn } from '@/lib/utils'
 import type { PricingModel, PricingVendor, TokenUnit } from '../types'
 import { PricingSidebar } from './pricing-sidebar'
 

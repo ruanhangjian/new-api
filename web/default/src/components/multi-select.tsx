@@ -95,6 +95,24 @@ function splitDraft(value: string): { completed: string[]; draft: string } {
   return { completed, draft }
 }
 
+export function filterSelectableOptions(
+  options: Option[],
+  selected: string[],
+  inputValue: string
+): Option[] {
+  const selectedSet = new Set(selected)
+  const query = inputValue.trim().toLowerCase()
+
+  return options.filter((option) => {
+    if (selectedSet.has(option.value)) return false
+    if (!query) return true
+    return (
+      option.value.toLowerCase().includes(query) ||
+      option.label.toLowerCase().includes(query)
+    )
+  })
+}
+
 /**
  * MultiSelect — tags/chips style multi-select built on Base UI Combobox.
  *

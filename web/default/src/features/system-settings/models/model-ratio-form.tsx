@@ -36,8 +36,6 @@ import { Switch } from '@/components/ui/switch'
 
 import {
   SettingsForm,
-  SettingsSwitchContent,
-  SettingsSwitchItem,
 } from '../components/settings-form-layout'
 import {
   ModelRatioVisualEditor,

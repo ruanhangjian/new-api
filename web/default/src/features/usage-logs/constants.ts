@@ -97,10 +97,15 @@ export const LOG_TYPES = [
 /**
  * Log types for DataTableToolbar filters (single select mode)
  */
-export const LOG_TYPE_FILTERS = LOG_TYPES.map((type) => ({
-  label: type.label,
-  value: String(type.value),
-}))
+export const LOG_TYPE_ALL_VALUE = 'all'
+
+export const LOG_TYPE_FILTERS = [
+  { label: 'All Types', value: LOG_TYPE_ALL_VALUE },
+  ...LOG_TYPES.map((type) => ({
+    label: type.label,
+    value: String(type.value),
+  })),
+]
 
 // ============================================================================
 // Drawing Logs (MjProxy) Constants

@@ -22,6 +22,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { CalendarClock, CreditCard, RefreshCw, Settings2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { sideDrawerSwitchItemClassName } from '@/components/drawer-layout'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -52,6 +53,7 @@ import {
 } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
 import {
   createPlan,
   updatePlan,

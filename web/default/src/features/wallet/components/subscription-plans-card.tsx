@@ -72,8 +72,7 @@ import type {
   PlanRecord,
   UserSubscriptionRecord,
 } from '@/features/subscriptions/types'
-import { formatQuota } from '@/lib/format'
-import { cn } from '@/lib/utils'
+import { dotColorMap, StatusBadge, textColorMap } from '@/components/status-badge'
 
 import type { PaymentMethod, TopupInfo } from '../types'
 

@@ -96,9 +96,8 @@ export function TokenLimitSection({ defaultValues }: TokenLimitSectionProps) {
       <Form {...form}>
         <SettingsForm onSubmit={form.handleSubmit(onSubmit)}>
           <SettingsPageFormActions
-            onSave={form.handleSubmit(onSubmit)}
             isSaving={updateOption.isPending}
-            saveLabel='Save token limits'
+            saveText='Save token limits'
           />
           <FormField
             control={form.control}

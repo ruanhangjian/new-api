@@ -22,11 +22,6 @@ import type { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
 import {
-  sideDrawerContentClassName,
-  sideDrawerFormClassName,
-  sideDrawerHeaderClassName,
-} from '@/components/drawer-layout'
-import {
   Accordion,
   AccordionContent,
   AccordionItem,

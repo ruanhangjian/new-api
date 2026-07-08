@@ -339,10 +339,19 @@ export type BillingSettings = {
 }
 
 export type OperationsSettings = {
+  RetryTimes: number
   DefaultCollapseSidebar: boolean
   DemoSiteEnabled: boolean
   SelfUseModeEnabled: boolean
   QuotaRemindThreshold: string
+  ChannelDisableThreshold: string
+  AutomaticDisableChannelEnabled: boolean
+  AutomaticEnableChannelEnabled: boolean
+  AutomaticDisableKeywords: string
+  AutomaticDisableStatusCodes: string
+  AutomaticRetryStatusCodes: string
+  'monitor_setting.auto_test_channel_enabled': boolean
+  'monitor_setting.auto_test_channel_minutes': number
   SMTPServer: string
   SMTPPort: string
   SMTPAccount: string

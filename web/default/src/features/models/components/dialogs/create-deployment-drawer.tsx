@@ -24,14 +24,6 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
-import {
-  SideDrawerSection,
-  sideDrawerContentClassName,
-  sideDrawerFooterClassName,
-  sideDrawerFormClassName,
-  sideDrawerHeaderClassName,
-} from '@/components/drawer-layout'
-import { MultiSelect } from '@/components/multi-select'
 import { Button } from '@/components/ui/button'
 import {
   Form,

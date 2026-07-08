@@ -24,13 +24,6 @@ import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import {
-  SideDrawerSection,
-  sideDrawerContentClassName,
-  sideDrawerFooterClassName,
-  sideDrawerFormClassName,
-  sideDrawerHeaderClassName,
-} from '@/components/drawer-layout'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -62,6 +55,17 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  ADMIN_PERMISSION_ACTIONS,
+  ADMIN_PERMISSION_RESOURCES,
+  EMPTY_PERMISSION_CATALOG,
+  hasPermission,
+  normalizeAdminPermissions,
+} from '@/lib/admin-permissions'
+import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
+import { formatQuota, parseQuotaFromDollars } from '@/lib/format'
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 import {
   createUser,
   updateUser,

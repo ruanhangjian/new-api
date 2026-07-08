@@ -24,16 +24,6 @@ import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import {
-  SideDrawerSection,
-  sideDrawerContentClassName,
-  sideDrawerFooterClassName,
-  sideDrawerFormClassName,
-  sideDrawerHeaderClassName,
-} from '@/components/drawer-layout'
-import { JsonEditor } from '@/components/json-editor'
-import { StatusBadge } from '@/components/status-badge'
-import { TagInput } from '@/components/tag-input'
 import { Button } from '@/components/ui/button'
 import {
   Form,

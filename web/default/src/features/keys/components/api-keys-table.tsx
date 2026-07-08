@@ -228,27 +228,32 @@ export function ApiKeysTable() {
       refreshTrigger,
     ],
     queryFn: async () => {
-      const result = shouldSearch
-        ? await searchApiKeys({
-            keyword: globalFilter,
-            token: tokenFilter,
-            p: pagination.pageIndex + 1,
-            size: pagination.pageSize,
-          })
-        : await getApiKeys({
-            p: pagination.pageIndex + 1,
-            size: pagination.pageSize,
-          })
+      if (shouldSearch) {
+        const result = await searchApiKeys({
+          keyword: globalFilter,
+          token: tokenFilter,
+          p: pagination.pageIndex + 1,
+          size: pagination.pageSize,
+        })
+
+        if (!result.success) {
+          toast.error(result.message || t(ERROR_MESSAGES.SEARCH_FAILED))
+          return { items: [], total: 0 }
+        }
+
+        return {
+          items: result.data || [],
+          total: result.data?.length || 0,
+        }
+      }
+
+      const result = await getApiKeys({
+        p: pagination.pageIndex + 1,
+        size: pagination.pageSize,
+      })
 
       if (!result.success) {
-        toast.error(
-          result.message ||
-            t(
-              shouldSearch
-                ? ERROR_MESSAGES.SEARCH_FAILED
-                : ERROR_MESSAGES.LOAD_FAILED
-            )
-        )
+        toast.error(result.message || t(ERROR_MESSAGES.LOAD_FAILED))
         return { items: [], total: 0 }
       }
 

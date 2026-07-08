@@ -17,14 +17,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import * as z from 'zod'
 
 import { DateTimePicker } from '@/components/datetime-picker'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,7 +33,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import {
@@ -46,21 +44,8 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
-import { api } from '@/lib/api'
-import dayjs from '@/lib/dayjs'
 import { formatTimestampToDate } from '@/lib/format'
 
 import {
@@ -82,29 +67,7 @@ type LogSettingsSectionProps = {
   defaultEnabled: boolean
 }
 
-type ServerLogInfo = {
-  enabled: boolean
-  log_dir: string
-  file_count: number
-  total_size: number
-  oldest_time?: string
-  newest_time?: string
-}
-
 const HOURS_IN_DAY = 24
-
-function formatBytes(bytes: number, decimals = 2): string {
-  if (!bytes || Number.isNaN(bytes)) return '0 Bytes'
-  if (bytes === 0) return '0 Bytes'
-  if (bytes < 0) return `-${formatBytes(-bytes, decimals)}`
-  const k = 1024
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(Math.abs(bytes)) / Math.log(k))
-  if (i < 0 || i >= sizes.length) return `${bytes} Bytes`
-  return `${Number.parseFloat((bytes / Math.pow(k, i)).toFixed(decimals))} ${
-    sizes[i]
-  }`
-}
 
 const getDateHoursAgo = (hours: number) => {
   const date = new Date()
@@ -153,27 +116,10 @@ export function LogSettingsSection({
     null
   )
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
-  const [serverLogInfo, setServerLogInfo] = useState<ServerLogInfo | null>(null)
-  const [serverLogCleanupMode, setServerLogCleanupMode] = useState('by_count')
-  const [serverLogCleanupValue, setServerLogCleanupValue] = useState(10)
-  const [serverLogCleanupLoading, setServerLogCleanupLoading] = useState(false)
-
-  const fetchServerLogInfo = useCallback(async () => {
-    try {
-      const res = await api.get('/api/performance/logs')
-      if (res.data.success) setServerLogInfo(res.data.data)
-    } catch {
-      /* ignore */
-    }
-  }, [])
 
   useEffect(() => {
     form.reset({ LogConsumeEnabled: defaultEnabled })
   }, [defaultEnabled, form])
-
-  useEffect(() => {
-    fetchServerLogInfo()
-  }, [fetchServerLogInfo])
 
   useEffect(() => {
     let cancelled = false

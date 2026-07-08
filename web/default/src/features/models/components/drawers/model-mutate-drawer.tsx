@@ -25,16 +25,6 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import * as z from 'zod'
 
-import {
-  SideDrawerSection,
-  sideDrawerContentClassName,
-  sideDrawerFooterClassName,
-  sideDrawerFormClassName,
-  sideDrawerHeaderClassName,
-  sideDrawerSwitchItemClassName,
-} from '@/components/drawer-layout'
-import { JsonEditor } from '@/components/json-editor'
-import { TagInput } from '@/components/tag-input'
 import { Button } from '@/components/ui/button'
 import {
   Collapsible,

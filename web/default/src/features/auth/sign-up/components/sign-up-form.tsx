@@ -46,6 +46,8 @@ import { useAuthRedirect } from '@/features/auth/hooks/use-auth-redirect'
 import { useEmailVerification } from '@/features/auth/hooks/use-email-verification'
 import { useTurnstile } from '@/features/auth/hooks/use-turnstile'
 import { getAffiliateCode } from '@/features/auth/lib/storage'
+import { useStatus } from '@/hooks/use-status'
+import { cn } from '@/lib/utils'
 
 export function SignUpForm({
   className,

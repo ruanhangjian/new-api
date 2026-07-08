@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as z from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -47,7 +47,15 @@ const numericString = z.string().refine((value) => {
 }, 'Enter a non-negative number or leave empty')
 
 const monitoringSchema = z.object({
+  'monitor_setting.auto_test_channel_enabled': z.boolean(),
+  'monitor_setting.auto_test_channel_minutes': z.coerce.number().min(1),
+  ChannelDisableThreshold: numericString,
   QuotaRemindThreshold: numericString,
+  AutomaticDisableChannelEnabled: z.boolean(),
+  AutomaticEnableChannelEnabled: z.boolean(),
+  AutomaticDisableKeywords: z.string(),
+  AutomaticDisableStatusCodes: z.string(),
+  AutomaticRetryStatusCodes: z.string(),
   perf_metrics_setting: z.object({
     enabled: z.boolean(),
     flush_interval: z.coerce.number().min(1),
@@ -60,7 +68,15 @@ type MonitoringFormInput = z.input<typeof monitoringSchema>
 type MonitoringFormValues = z.output<typeof monitoringSchema>
 
 type FlatMonitoringDefaults = {
+  'monitor_setting.auto_test_channel_enabled': boolean
+  'monitor_setting.auto_test_channel_minutes': number
+  ChannelDisableThreshold: string
   QuotaRemindThreshold: string
+  AutomaticDisableChannelEnabled: boolean
+  AutomaticEnableChannelEnabled: boolean
+  AutomaticDisableKeywords: string
+  AutomaticDisableStatusCodes: string
+  AutomaticRetryStatusCodes: string
   'perf_metrics_setting.enabled': boolean
   'perf_metrics_setting.flush_interval': number
   'perf_metrics_setting.bucket_time': 'minute' | '5min' | 'hour'
@@ -74,7 +90,21 @@ type MonitoringSettingsSectionProps = {
 const buildFormDefaults = (
   defaults: MonitoringSettingsSectionProps['defaultValues']
 ): MonitoringFormInput => ({
+  'monitor_setting.auto_test_channel_enabled':
+    defaults['monitor_setting.auto_test_channel_enabled'] ?? false,
+  'monitor_setting.auto_test_channel_minutes':
+    defaults['monitor_setting.auto_test_channel_minutes'] ?? 10,
+  ChannelDisableThreshold: defaults.ChannelDisableThreshold ?? '',
   QuotaRemindThreshold: defaults.QuotaRemindThreshold ?? '',
+  AutomaticDisableChannelEnabled:
+    defaults.AutomaticDisableChannelEnabled ?? false,
+  AutomaticEnableChannelEnabled:
+    defaults.AutomaticEnableChannelEnabled ?? false,
+  AutomaticDisableKeywords: defaults.AutomaticDisableKeywords ?? '',
+  AutomaticDisableStatusCodes: defaults.AutomaticDisableStatusCodes ?? '401',
+  AutomaticRetryStatusCodes:
+    defaults.AutomaticRetryStatusCodes ??
+    '100-199,300-399,401-407,409-499,500-503,505-523,525-599',
   perf_metrics_setting: {
     enabled: defaults['perf_metrics_setting.enabled'],
     flush_interval: defaults['perf_metrics_setting.flush_interval'],
@@ -86,7 +116,24 @@ const buildFormDefaults = (
 const normalizeDefaults = (
   defaults: MonitoringSettingsSectionProps['defaultValues']
 ): FlatMonitoringDefaults => ({
+  'monitor_setting.auto_test_channel_enabled':
+    defaults['monitor_setting.auto_test_channel_enabled'] ?? false,
+  'monitor_setting.auto_test_channel_minutes':
+    defaults['monitor_setting.auto_test_channel_minutes'] ?? 10,
+  ChannelDisableThreshold: (defaults.ChannelDisableThreshold ?? '').trim(),
   QuotaRemindThreshold: (defaults.QuotaRemindThreshold ?? '').trim(),
+  AutomaticDisableChannelEnabled:
+    defaults.AutomaticDisableChannelEnabled ?? false,
+  AutomaticEnableChannelEnabled:
+    defaults.AutomaticEnableChannelEnabled ?? false,
+  AutomaticDisableKeywords: (defaults.AutomaticDisableKeywords ?? '').trim(),
+  AutomaticDisableStatusCodes: (
+    defaults.AutomaticDisableStatusCodes ?? '401'
+  ).trim(),
+  AutomaticRetryStatusCodes: (
+    defaults.AutomaticRetryStatusCodes ??
+    '100-199,300-399,401-407,409-499,500-503,505-523,525-599'
+  ).trim(),
   'perf_metrics_setting.enabled': defaults['perf_metrics_setting.enabled'],
   'perf_metrics_setting.flush_interval':
     defaults['perf_metrics_setting.flush_interval'],
@@ -99,7 +146,17 @@ const normalizeDefaults = (
 const normalizeFormValues = (
   values: MonitoringFormValues
 ): FlatMonitoringDefaults => ({
+  'monitor_setting.auto_test_channel_enabled':
+    values['monitor_setting.auto_test_channel_enabled'],
+  'monitor_setting.auto_test_channel_minutes':
+    values['monitor_setting.auto_test_channel_minutes'],
+  ChannelDisableThreshold: values.ChannelDisableThreshold.trim(),
   QuotaRemindThreshold: values.QuotaRemindThreshold.trim(),
+  AutomaticDisableChannelEnabled: values.AutomaticDisableChannelEnabled,
+  AutomaticEnableChannelEnabled: values.AutomaticEnableChannelEnabled,
+  AutomaticDisableKeywords: values.AutomaticDisableKeywords.trim(),
+  AutomaticDisableStatusCodes: values.AutomaticDisableStatusCodes.trim(),
+  AutomaticRetryStatusCodes: values.AutomaticRetryStatusCodes.trim(),
   'perf_metrics_setting.enabled': values.perf_metrics_setting.enabled,
   'perf_metrics_setting.flush_interval':
     values.perf_metrics_setting.flush_interval,
@@ -140,7 +197,16 @@ export function MonitoringSettingsSection({
     baselineSerializedRef.current = serialized
   }, [defaultValues])
 
-  const perfMetricsEnabled = form.watch('perf_metrics_setting.enabled')
+  const autoDisableStatusCodes = form.watch('AutomaticDisableStatusCodes')
+  const autoRetryStatusCodes = form.watch('AutomaticRetryStatusCodes')
+  const autoDisableParsed = useMemo(
+    () => parseHttpStatusCodeRules(autoDisableStatusCodes ?? ''),
+    [autoDisableStatusCodes]
+  )
+  const autoRetryParsed = useMemo(
+    () => parseHttpStatusCodeRules(autoRetryStatusCodes ?? ''),
+    [autoRetryStatusCodes]
+  )
 
   const onSubmit = async (values: MonitoringFormValues) => {
     const normalized = normalizeFormValues(values)

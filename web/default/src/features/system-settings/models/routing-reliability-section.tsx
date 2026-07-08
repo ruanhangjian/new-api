@@ -286,7 +286,6 @@ export function RoutingReliabilitySection({
       <Form {...form}>
         <SettingsForm onSubmit={form.handleSubmit(onSubmit)}>
           <SettingsPageFormActions
-            onSave={form.handleSubmit(onSubmit)}
             isSaving={updateOption.isPending}
           />
 

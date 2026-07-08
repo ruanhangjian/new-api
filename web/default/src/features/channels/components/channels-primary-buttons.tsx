@@ -77,6 +77,7 @@ export function ChannelsPrimaryButtons() {
     batchMode,
     setBatchMode,
     upstream,
+    setCurrentRow,
   } = useChannels()
   const queryClient = useQueryClient()
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)

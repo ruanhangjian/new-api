@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
+import { useMemo, useState } from 'react'
 import {
   ArrowRight,
   BookOpen,
