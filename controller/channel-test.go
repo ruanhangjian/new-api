@@ -857,11 +857,6 @@ func TestChannel(c *gin.Context) {
 	if c.Request != nil {
 		requestCtx = c.Request.Context()
 	}
-	testUserID, err := resolveChannelTestUserID(c)
-	if err != nil {
-		common.ApiError(c, err)
-		return
-	}
 	result := testChannel(requestCtx, channel, testUserID, testModel, endpointType, isStream)
 	if result.localErr != nil {
 		resp := gin.H{

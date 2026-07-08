@@ -97,11 +97,11 @@ func UpdateSubscriptionPreference(c *gin.Context) {
 	common.ApiSuccess(c, gin.H{"billing_preference": pref})
 }
 
-func SubscriptionPayBalance(c *gin.Context) {
-	if !operation_setting.IsPaymentComplianceConfirmed() {
-		common.ApiErrorMsg(c, "支付合规条款未确认")
+func SubscriptionRequestBalancePay(c *gin.Context) {
+	if !requirePaymentCompliance(c) {
 		return
 	}
+
 	userId := c.GetInt("id")
 	var req SubscriptionPayRequest
 	if err := c.ShouldBindJSON(&req); err != nil || req.PlanId <= 0 {

@@ -107,32 +107,6 @@ func clickHouseLogOrder(prefix string) string {
 	return prefix + "created_at desc, " + prefix + "request_id desc"
 }
 
-func buildLogLikeCondition(column string, value string) (string, string, error) {
-	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
-		pattern, err := sanitizeClickHouseLikePattern(value)
-		if err != nil {
-			return "", "", err
-		}
-		return column + " LIKE ?", pattern, nil
-	}
-
-	pattern, err := sanitizeLikePattern(value)
-	if err != nil {
-		return "", "", err
-	}
-	return column + " LIKE ? ESCAPE '!'", pattern, nil
-}
-
-func sanitizeClickHouseLikePattern(input string) (string, error) {
-	input = strings.ReplaceAll(input, `\`, `\\`)
-	input = strings.ReplaceAll(input, `_`, `\_`)
-
-	if err := validateLikePattern(input); err != nil {
-		return "", err
-	}
-	return input, nil
-}
-
 func assignDisplayLogIds(logs []*Log, startIdx int) {
 	for i := range logs {
 		logs[i].Id = startIdx + i + 1
