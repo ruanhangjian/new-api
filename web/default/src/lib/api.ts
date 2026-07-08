@@ -19,7 +19,6 @@ For commercial licensing, please contact support@quantumnous.com
 import axios, { type AxiosRequestConfig } from 'axios'
 import i18next from 'i18next'
 import { toast } from 'sonner'
-
 import { useAuthStore } from '@/stores/auth-store'
 
 export type ApiRequestConfig = AxiosRequestConfig & {
@@ -53,11 +52,14 @@ export const api = axios.create({
 const inFlightGet = new Map<string, Promise<unknown>>()
 const originalGet = api.get.bind(api)
 
-api.get = ((url: string, config: ApiRequestConfig = {}) => {
-  const disableDuplicate = config.disableDuplicate
+api.get = ((url: string, config = {}) => {
+  const disableDuplicate = (config as unknown as Record<string, unknown>)
+    ?.disableDuplicate
   if (disableDuplicate) return originalGet(url, config)
 
-  const params = config.params ? JSON.stringify(config.params) : '{}'
+  const params = (config as unknown as Record<string, unknown>)?.params
+    ? JSON.stringify((config as unknown as Record<string, unknown>).params)
+    : '{}'
   const key = `${url}?${params}`
 
   // Return existing in-flight request if available
@@ -77,7 +79,8 @@ api.get = ((url: string, config: ApiRequestConfig = {}) => {
 // Handle business logic errors and HTTP errors globally
 api.interceptors.response.use(
   (response) => {
-    const skipBusiness = response.config.skipBusinessError
+    const skipBusiness = (response.config as unknown as Record<string, unknown>)
+      ?.skipBusinessError
 
     // Unified business response format: { success, message, data }
     if (
@@ -88,7 +91,7 @@ api.interceptors.response.use(
     ) {
       if (!response.data.success) {
         // Show error toast for business failures
-        const msg = response.data.message || t('Request failed')
+        const msg = response.data.message || 'Request failed'
         toast.error(msg)
       }
     }
@@ -96,23 +99,23 @@ api.interceptors.response.use(
   },
   (error) => {
     const skip = error?.config?.skipErrorHandler
-    const status = error?.response?.status
+    if (!skip) {
+      const status = error?.response?.status
 
-    if (status === 401) {
-      try {
-        useAuthStore.getState().auth.reset()
-      } catch {
-        /* empty */
+      if (status === 401) {
+        // Unauthorized: clear auth state and show toast
+        toast.error(i18next.t('Session expired!'))
+        try {
+          useAuthStore.getState().auth.reset()
+        } catch {
+          /* empty */
+        }
+      } else {
+        // Other errors: show error message from response or default
+        const msg =
+          error?.response?.data?.message || error?.message || 'Request error'
+        toast.error(msg)
       }
-
-      if (!skip) {
-        toast.error(t('Session expired!'))
-      }
-    } else if (!skip) {
-      // Other errors: show error message from response or default
-      const msg =
-        error?.response?.data?.message || error?.message || t('Request failed')
-      toast.error(msg)
     }
     return Promise.reject(error)
   }
@@ -179,7 +182,7 @@ export async function getSelf() {
   const res = await api.get('/api/user/self', {
     // Avoid global 401 toast during guards/preloads
     skipErrorHandler: true,
-  })
+  } as Record<string, unknown>)
   return res.data
 }
 

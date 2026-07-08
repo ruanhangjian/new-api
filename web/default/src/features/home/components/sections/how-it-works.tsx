@@ -17,7 +17,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
-
 import { AnimateInView } from '@/components/animate-in-view'
 import { QUICK_START_STEPS } from '../../constants'
 import { SectionHeading } from '../section-heading'

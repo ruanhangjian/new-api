@@ -16,12 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
-import { useTranslation } from 'react-i18next'
 import * as z from 'zod'
-
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useTranslation } from 'react-i18next'
+import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
@@ -41,16 +41,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-
-import {
-  SettingsForm,
-  SettingsSwitchContent,
-  SettingsSwitchItem,
-} from '../components/settings-form-layout'
-import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
-import { safeNumberFieldProps } from '../utils/numeric-field'
 
 const dataDashboardSchema = z.object({
   DataExportEnabled: z.boolean(),
@@ -97,28 +89,29 @@ export function DashboardSection({ defaultValues }: DashboardSectionProps) {
   const isEnabled = form.watch('DataExportEnabled')
 
   return (
-    <SettingsSection title={t('Data Dashboard')}>
+    <SettingsSection
+      title={t('Data Dashboard')}
+      description={t('Configure experimental data export for the dashboard')}
+    >
       <Form {...form}>
-        <SettingsForm onSubmit={form.handleSubmit(onSubmit)}>
-          <SettingsPageFormActions
-            onSave={form.handleSubmit(onSubmit)}
-            isSaving={updateOption.isPending}
-          />
+        <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-6'>
           <FormField
             control={form.control}
             name='DataExportEnabled'
             render={({ field }) => (
-              <SettingsSwitchItem>
-                <SettingsSwitchContent>
-                  <FormLabel>{t('Enable Data Dashboard')}</FormLabel>
-                </SettingsSwitchContent>
+              <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
+                <div className='space-y-0.5'>
+                  <FormLabel className='text-base'>
+                    {t('Enable Data Dashboard')}
+                  </FormLabel>
+                </div>
                 <FormControl>
                   <Switch
                     checked={field.value}
                     onCheckedChange={field.onChange}
                   />
                 </FormControl>
-              </SettingsSwitchItem>
+              </FormItem>
             )}
           />
 
@@ -135,8 +128,9 @@ export function DashboardSection({ defaultValues }: DashboardSectionProps) {
                       min={1}
                       max={1440}
                       step={1}
-                      {...safeNumberFieldProps(field)}
                       disabled={!isEnabled}
+                      value={field.value}
+                      onChange={(e) => field.onChange(e.target.valueAsNumber)}
                     />
                   </FormControl>
                   <FormDescription>
@@ -189,7 +183,11 @@ export function DashboardSection({ defaultValues }: DashboardSectionProps) {
               )}
             />
           </div>
-        </SettingsForm>
+
+          <Button type='submit' disabled={updateOption.isPending}>
+            {updateOption.isPending ? t('Saving...') : t('Save Changes')}
+          </Button>
+        </form>
       </Form>
     </SettingsSection>
   )

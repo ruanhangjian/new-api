@@ -53,7 +53,15 @@ export function useDeploymentsColumns(opts: {
       meta: { mobileHidden: true },
       cell: ({ row }) => {
         const id = row.original.id
-        return <TableId value={id} />
+        return (
+          <StatusBadge
+            label={String(id)}
+            variant='neutral'
+            copyText={String(id)}
+            size='sm'
+            className='font-mono'
+          />
+        )
       },
       size: 120,
     },
@@ -93,6 +101,7 @@ export function useDeploymentsColumns(opts: {
           <StatusBadge
             label={config.label}
             variant={config.variant}
+            showDot={config.showDot}
             size='sm'
             copyable={false}
             className='-ml-1.5'

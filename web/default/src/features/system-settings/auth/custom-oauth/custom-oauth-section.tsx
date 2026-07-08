@@ -51,7 +51,12 @@ export function CustomOAuthSection() {
 
   if (isLoading) {
     return (
-      <SettingsSection title={t('Custom OAuth Providers')}>
+      <SettingsSection
+        title={t('Custom OAuth Providers')}
+        description={t(
+          'Configure custom OAuth providers for user authentication'
+        )}
+      >
         <div className='text-muted-foreground py-8 text-center text-sm'>
           {t('Loading...')}
         </div>
@@ -60,7 +65,12 @@ export function CustomOAuthSection() {
   }
 
   return (
-    <SettingsSection title={t('Custom OAuth Providers')}>
+    <SettingsSection
+      title={t('Custom OAuth Providers')}
+      description={t(
+        'Configure custom OAuth providers for user authentication'
+      )}
+    >
       <ProviderTable
         providers={providers}
         onEdit={handleEdit}

@@ -17,7 +17,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
-
 import { AnimateInView } from '@/components/animate-in-view'
 import { cn } from '@/lib/utils'
 import { VALUE_REASONS } from '../../constants'

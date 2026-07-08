@@ -16,13 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useRef } from 'react'
+import * as z from 'zod'
 import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import * as z from 'zod'
-
+import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
@@ -177,14 +177,15 @@ export function ClaudeSettingsCard({ defaultValues }: ClaudeSettingsCardProps) {
   }
 
   return (
-    <SettingsSection title={t('Claude')}>
+    <SettingsSection
+      title={t('Claude')}
+      description={t(
+        'Override Anthropic headers, defaults, and thinking adapter behavior'
+      )}
+    >
       <Form {...form}>
         {/* eslint-disable-next-line react-hooks/refs */}
-        <SettingsForm onSubmit={form.handleSubmit(onSubmit)}>
-          <SettingsPageFormActions
-            onSave={form.handleSubmit(onSubmit)}
-            isSaving={updateOption.isPending}
-          />
+        <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-6'>
           <FormField
             control={form.control}
             name='claude.model_headers_settings'
@@ -222,7 +223,7 @@ export function ClaudeSettingsCard({ defaultValues }: ClaudeSettingsCardProps) {
             )}
           />
 
-          <SettingsControlGroup>
+          <div className='space-y-4 rounded-lg border p-4'>
             <FormField
               control={form.control}
               name='claude.thinking_adapter_enabled'
@@ -268,8 +269,12 @@ export function ClaudeSettingsCard({ defaultValues }: ClaudeSettingsCardProps) {
                 </FormItem>
               )}
             />
-          </SettingsControlGroup>
-        </SettingsForm>
+          </div>
+
+          <Button type='submit' disabled={updateOption.isPending}>
+            {updateOption.isPending ? t('Saving...') : t('Save Changes')}
+          </Button>
+        </form>
       </Form>
     </SettingsSection>
   )

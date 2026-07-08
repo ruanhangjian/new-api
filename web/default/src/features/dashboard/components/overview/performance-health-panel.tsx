@@ -71,17 +71,9 @@ export function PerformanceHealthPanel() {
   const summary = useMemo(() => {
     return {
       avgLatencyMs: Math.round(
-        simpleAverage(
-          models,
-          'avg_latency_ms',
-          (v) => Number.isFinite(v) && v > 0
-        )
+        simpleAverage(models, 'avg_latency_ms', (v) => Number.isFinite(v) && v > 0)
       ),
-      avgTps: simpleAverage(
-        models,
-        'avg_tps',
-        (v) => Number.isFinite(v) && v > 0
-      ),
+      avgTps: simpleAverage(models, 'avg_tps', (v) => Number.isFinite(v) && v > 0),
       successRate: simpleAverage(models, 'success_rate', Number.isFinite),
     }
   }, [models])
@@ -93,10 +85,7 @@ export function PerformanceHealthPanel() {
   return (
     <section className='bg-card h-full overflow-hidden rounded-2xl border shadow-xs'>
       <div className='flex items-center gap-2 border-b px-4 py-3 sm:px-5'>
-        <HeartPulse
-          className='text-muted-foreground/60 size-4 shrink-0'
-          aria-hidden='true'
-        />
+        <HeartPulse className='text-muted-foreground/60 size-4 shrink-0' aria-hidden='true' />
         <h3 className='text-sm font-semibold'>{t('Performance health')}</h3>
         <span className='text-muted-foreground ml-auto text-xs'>
           {t('Performance metrics for the last 24 hours')}
@@ -162,28 +151,11 @@ export function PerformanceHealthPanel() {
                     >
                       {formatUptimePct(model.success_rate)}
                     </span>
-                    <span className='inline-flex shrink-0 items-center gap-1'>
-                      <span
-                        className={cn(
-                          'size-1.5 rounded-full',
-                          getSuccessRateDotClass(model.success_rate)
-                        )}
-                        aria-hidden='true'
-                      />
-                      <span
-                        className={cn(
-                          'font-mono text-[11px] font-semibold tabular-nums',
-                          getSuccessRateTextClass(model.success_rate)
-                        )}
-                      >
-                        {formatUptimePct(model.success_rate)}
-                      </span>
-                    </span>
-                  </div>
-                ))}
-              </div>
+                  </span>
+                </div>
+              ))}
             </div>
-          )
+          </div>
         )}
       </div>
     </section>

@@ -18,22 +18,14 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import {
+  LayoutDashboard,
   Activity,
   Key,
   FileText,
   Wallet,
   HandCoins,
   Box,
-  CreditCard,
-  FileText,
-  FlaskConical,
-  Key,
-  LayoutDashboard,
-  ListTodo,
-  MessageSquare,
-  Radio,
-  ServerCog,
-  Settings,
+  Users,
   Ticket,
   User,
   Command,
@@ -65,15 +57,6 @@ function formatAffiliateRebateRate(rate: number): string {
   return `${Number(percentage.toFixed(2)).toString()}%`
 }
 
-import { type SidebarData } from '@/components/layout/types'
-import { ROLE } from '@/lib/roles'
-
-/**
- * Root navigation groups for the application sidebar.
- *
- * These are shown when the URL does not match any nested sidebar view
- * registered in `layout/lib/sidebar-view-registry.ts`.
- */
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
   const { data: affiliateRebateOverview } = useQuery({
@@ -104,6 +87,14 @@ export function useSidebarData(): SidebarData {
     enterpriseCdkPermission.data?.has_permission === true
 
   return {
+    workspaces: [
+      {
+        id: WORKSPACE_IDS.DEFAULT,
+        name: '', // Dynamically fetches system name
+        logo: Command,
+        plan: '', // Dynamically fetches system version
+      },
+    ],
     navGroups: [
       {
         id: 'chat',

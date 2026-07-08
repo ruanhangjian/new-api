@@ -41,15 +41,21 @@ import {
 const route = getRouteApi('/_authenticated/usage-logs/$section')
 const TASK_LOG_SECTIONS = ['drawing', 'task'] as const
 
-const SECTION_META: Record<UsageLogsSectionId, { titleKey: string }> = {
+const SECTION_META: Record<
+  UsageLogsSectionId,
+  { titleKey: string; descriptionKey: string }
+> = {
   common: {
     titleKey: 'Common Logs',
+    descriptionKey: 'View and manage your API usage logs',
   },
   drawing: {
     titleKey: 'Drawing Logs',
+    descriptionKey: 'View and manage your drawing logs',
   },
   task: {
     titleKey: 'Task Logs',
+    descriptionKey: 'View and manage your task logs',
   },
 }
 
@@ -116,11 +122,14 @@ function UsageLogsContent() {
         <SectionPageLayout.Title>
           {t(pageMeta.titleKey)}
         </SectionPageLayout.Title>
+        <SectionPageLayout.Description>
+          {t(pageMeta.descriptionKey)}
+        </SectionPageLayout.Description>
         <SectionPageLayout.Content>
           <div className='flex h-full min-h-0 flex-col gap-4'>
             {showTaskSwitcher && (
               <Tabs value={activeCategory} onValueChange={handleSectionChange}>
-                <TabsList className='max-w-full flex-wrap justify-start group-data-horizontal/tabs:h-auto'>
+                <TabsList className='group-data-horizontal/tabs:h-auto max-w-full flex-wrap justify-start'>
                   {visibleSections.map((section) => (
                     <TabsTrigger key={section} value={section}>
                       {t(SECTION_META[section].titleKey)}

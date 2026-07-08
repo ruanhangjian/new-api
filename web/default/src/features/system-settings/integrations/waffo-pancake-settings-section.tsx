@@ -17,11 +17,20 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import * as React from 'react'
-import type { SetStateAction } from 'react'
+import * as z from 'zod'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-
 import { Button } from '@/components/ui/button'
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -40,11 +49,16 @@ import {
   type PairResult,
   createWaffoPancakePair,
   listWaffoPancakeCatalog,
+  saveWaffoPancakeConfig,
 } from './waffo-pancake-api'
 
-export type WaffoPancakeSettingsValues = {
-  WaffoPancakeMerchantID: string
-  WaffoPancakePrivateKey: string
+// Only operator-typed fields. Nothing else lands in OptionMap until Save.
+const waffoPancakeSchema = z.object({
+  WaffoPancakeMerchantID: z.string(),
+  WaffoPancakePrivateKey: z.string(),
+})
+
+export type WaffoPancakeSettingsValues = z.infer<typeof waffoPancakeSchema> & {
   WaffoPancakeReturnURL: string
 }
 
@@ -72,14 +86,7 @@ const DEFAULT_NEW_STORE_NAME = 'new-api-store'
 const DEFAULT_NEW_PRODUCT_NAME = 'new-api-charge-product'
 const DEFAULT_NEW_PAIR_NAME = `${DEFAULT_NEW_STORE_NAME} + ${DEFAULT_NEW_PRODUCT_NAME}`
 
-export function WaffoPancakeSettingsSection({
-  defaultValues,
-  values,
-  onValueChange,
-  selectedBinding,
-  savedBinding,
-  onSelectedBindingChange,
-}: Props) {
+export function WaffoPancakeSettingsSection(props: Props) {
   const { t } = useTranslation()
   const selectedBinding = props.selectedBinding ?? {
     storeID: props.provisionedStoreID ?? '',
@@ -112,16 +119,11 @@ export function WaffoPancakeSettingsSection({
       ''
   )
   const [creatingPair, setCreatingPair] = React.useState(false)
-  const chosenStoreID = selectedBinding.storeID
-  const chosenProductID = selectedBinding.productID
-  const storeID = savedBinding.storeID
-  const productID = savedBinding.productID
-  const returnURL = values.WaffoPancakeReturnURL
 
-  const initialRef = React.useRef(defaultValues)
+  const initialRef = React.useRef(props.defaultValues)
   const defaultsSignature = React.useMemo(
-    () => JSON.stringify(defaultValues),
-    [defaultValues]
+    () => JSON.stringify(props.defaultValues),
+    [props.defaultValues]
   )
 
   // "merchantID|privateKey" of the last verified pair; debounced verify
@@ -151,6 +153,11 @@ export function WaffoPancakeSettingsSection({
     initialRef.current = parsed
     if (didMountRef.current) return
     didMountRef.current = true
+    form.reset({
+      WaffoPancakeMerchantID: parsed.WaffoPancakeMerchantID,
+      WaffoPancakePrivateKey: parsed.WaffoPancakePrivateKey,
+    })
+    setReturnURL(parsed.WaffoPancakeReturnURL ?? '')
     lastVerifiedSignature.current = `${parsed.WaffoPancakeMerchantID.trim()}|${parsed.WaffoPancakePrivateKey.trim()}`
   }, [defaultsSignature, form])
 
@@ -208,7 +215,7 @@ export function WaffoPancakeSettingsSection({
       preselect?: { storeID?: string; productID?: string }
     ) => {
       const serial = ++fetchSerialRef.current
-      let stores: CatalogStore[]
+      let stores: CatalogStore[] = []
       try {
         const body = await listWaffoPancakeCatalog(merchantID, privateKey)
         if (serial !== fetchSerialRef.current) return
@@ -244,10 +251,8 @@ export function WaffoPancakeSettingsSection({
 
       setCatalog(stores)
       if (preselect) {
-        onSelectedBindingChange({
-          storeID: preselect.storeID ?? '',
-          productID: preselect.productID ?? '',
-        })
+        setChosenStoreID(preselect.storeID ?? '')
+        setChosenProductID(preselect.productID ?? '')
       } else {
         // Default anchor: bound product if found, else first product of
         // the first store with any — saves a click for new operators.
@@ -255,31 +260,28 @@ export function WaffoPancakeSettingsSection({
           s.onetimeProducts.some((p) => p.id === productID)
         )
         if (boundStore && productID) {
-          onSelectedBindingChange({
-            storeID: boundStore.id,
-            productID,
-          })
+          setChosenStoreID(boundStore.id)
+          setChosenProductID(productID)
         } else {
           const storeWithProducts = stores.find(
             (s) => s.onetimeProducts.length > 0
           )
           if (storeWithProducts) {
-            onSelectedBindingChange({
-              storeID: storeWithProducts.id,
-              productID: storeWithProducts.onetimeProducts[0].id,
-            })
+            setChosenStoreID(storeWithProducts.id)
+            setChosenProductID(storeWithProducts.onetimeProducts[0].id)
           } else {
-            onSelectedBindingChange({ storeID: '', productID: '' })
+            setChosenStoreID('')
+            setChosenProductID('')
           }
         }
       }
       setPhase('idle')
     },
-    [onSelectedBindingChange, productID, t]
+    [productID, t]
   )
 
-  const watchedMerchantID = values.WaffoPancakeMerchantID || ''
-  const watchedPrivateKey = values.WaffoPancakePrivateKey || ''
+  const watchedMerchantID = form.watch('WaffoPancakeMerchantID') || ''
+  const watchedPrivateKey = form.watch('WaffoPancakePrivateKey') || ''
   React.useEffect(() => {
     const m = watchedMerchantID.trim()
     const k = watchedPrivateKey.trim()
@@ -300,23 +302,22 @@ export function WaffoPancakeSettingsSection({
   const initialLoadRef = React.useRef(false)
   React.useEffect(() => {
     if (initialLoadRef.current) return
-    if (!defaultValues.WaffoPancakeMerchantID.trim()) return
+    if (!props.defaultValues.WaffoPancakeMerchantID.trim()) return
     initialLoadRef.current = true
-    const timer = window.setTimeout(() => {
-      setPhase('verifying')
-      void verifyAndFetchCatalog('', '')
-    }, 0)
-    return () => window.clearTimeout(timer)
-  }, [defaultValues.WaffoPancakeMerchantID, verifyAndFetchCatalog])
+    setPhase('verifying')
+    void verifyAndFetchCatalog('', '')
+  }, [props.defaultValues.WaffoPancakeMerchantID, verifyAndFetchCatalog])
 
   // Returns typed creds when the operator edited either field; otherwise
   // blanks so the backend falls back to persisted creds. Without this,
   // returning admins (saved merchant ID but empty key field) would send
   // a mixed-state body that the backend rejects.
   const readCreds = () => {
-    const formMerchant = (values.WaffoPancakeMerchantID || '').trim()
-    const formKey = (values.WaffoPancakePrivateKey || '').trim()
-    const saved = (defaultValues.WaffoPancakeMerchantID || '').trim()
+    const formMerchant = (
+      form.getValues('WaffoPancakeMerchantID') || ''
+    ).trim()
+    const formKey = (form.getValues('WaffoPancakePrivateKey') || '').trim()
+    const saved = (props.defaultValues.WaffoPancakeMerchantID || '').trim()
     const edited = formMerchant !== saved || formKey.length > 0
     if (!edited) return { merchantID: '', privateKey: '' }
     return { merchantID: formMerchant, privateKey: formKey }
@@ -463,11 +464,14 @@ export function WaffoPancakeSettingsSection({
   }
 
   const verifying = phase === 'verifying'
+  const saving = phase === 'saving'
 
   // "Not edited" = MerchantID unchanged AND PrivateKey field blank, in
   // which case the backend falls back to persisted creds. Otherwise we
   // require both fields filled (mixed states would fail signature check).
-  const savedMerchantID = (defaultValues.WaffoPancakeMerchantID || '').trim()
+  const savedMerchantID = (
+    props.defaultValues.WaffoPancakeMerchantID || ''
+  ).trim()
   const formMerchantID = watchedMerchantID.trim()
   const formPrivateKey = watchedPrivateKey.trim()
   const credsEdited =
@@ -505,41 +509,46 @@ export function WaffoPancakeSettingsSection({
           )}
         </p>
       </div>
-      <div className='grid min-w-0 gap-x-5 gap-y-4 lg:grid-cols-2'>
-        {/* Blue box — webhook configuration only. */}
-        <div className='rounded-md bg-blue-50 p-4 text-sm text-blue-900 lg:col-span-2 dark:bg-blue-950 dark:text-blue-100'>
-          <p className='mb-2 font-medium'>{t('Webhook Configuration:')}</p>
-          <ul className='list-inside list-disc space-y-1'>
-            <li>
-              {t('Webhook URL (Test):')}{' '}
-              <code className='rounded bg-blue-100 px-1 py-0.5 text-xs dark:bg-blue-900'>
-                {'<ServerAddress>/api/waffo-pancake/webhook/test'}
-              </code>
-            </li>
-            <li>
-              {t('Webhook URL (Production):')}{' '}
-              <code className='rounded bg-blue-100 px-1 py-0.5 text-xs dark:bg-blue-900'>
-                {'<ServerAddress>/api/waffo-pancake/webhook/prod'}
-              </code>
-            </li>
-            <li>
-              {t(
-                'Register each URL into the matching Test Mode / Production Mode webhook slot in the Pancake dashboard. Separate endpoints prevent test traffic from accidentally crediting production accounts.'
-              )}
-            </li>
-            <li>
-              {t('Configure at:')}{' '}
-              <a
-                href={PANCAKE_DASHBOARD_URL}
-                target='_blank'
-                rel='noreferrer'
-                className='underline hover:no-underline'
-              >
-                {t('Waffo Pancake Dashboard')}
-              </a>
-            </li>
-          </ul>
-        </div>
+      <Form {...form}>
+        <form
+          onSubmit={(e) => e.preventDefault()}
+          className='space-y-4'
+          data-no-autosubmit='true'
+        >
+          {/* Blue box — webhook configuration only. */}
+          <div className='rounded-md bg-blue-50 p-4 text-sm text-blue-900 dark:bg-blue-950 dark:text-blue-100'>
+            <p className='mb-2 font-medium'>{t('Webhook Configuration:')}</p>
+            <ul className='list-inside list-disc space-y-1'>
+              <li>
+                {t('Webhook URL (Test):')}{' '}
+                <code className='rounded bg-blue-100 px-1 py-0.5 text-xs dark:bg-blue-900'>
+                  {'<ServerAddress>/api/waffo-pancake/webhook/test'}
+                </code>
+              </li>
+              <li>
+                {t('Webhook URL (Production):')}{' '}
+                <code className='rounded bg-blue-100 px-1 py-0.5 text-xs dark:bg-blue-900'>
+                  {'<ServerAddress>/api/waffo-pancake/webhook/prod'}
+                </code>
+              </li>
+              <li>
+                {t(
+                  'Register each URL into the matching Test Mode / Production Mode webhook slot in the Pancake dashboard. Separate endpoints prevent test traffic from accidentally crediting production accounts.'
+                )}
+              </li>
+              <li>
+                {t('Configure at:')}{' '}
+                <a
+                  href={PANCAKE_DASHBOARD_URL}
+                  target='_blank'
+                  rel='noreferrer'
+                  className='underline hover:no-underline'
+                >
+                  {t('Waffo Pancake Dashboard')}
+                </a>
+              </li>
+            </ul>
+          </div>
 
           <FormField
             control={form.control}
@@ -565,7 +574,6 @@ export function WaffoPancakeSettingsSection({
               </FormItem>
             )}
           />
-        </div>
 
           <FormField
             control={form.control}
@@ -598,14 +606,8 @@ export function WaffoPancakeSettingsSection({
               </FormItem>
             )}
           />
-          <p className='text-muted-foreground text-xs'>
-            {t(
-              'The environment (test vs production) is decided by the key you paste here — use the Test key while integrating, then swap to the Production key when going live.'
-            )}
-          </p>
-        </div>
 
-        {/*
+          {/*
           Binding section — split into two visually distinct paths:
           (A) "Use existing" pair from the loaded catalog — only rendered when
               the merchant actually has stores, so first-time setup isn't
@@ -615,15 +617,17 @@ export function WaffoPancakeSettingsSection({
           The two paths are split by an "or" divider so the operator never has
           to wonder which field belongs to which intent.
         */}
-        <div className='space-y-4 pt-2 lg:col-span-2'>
-          <div>
-            <h4 className='font-medium'>
-              {t('Bind a Pancake store + product')}
-            </h4>
-            <p className='text-muted-foreground text-xs'>{bindStatusMessage}</p>
-          </div>
+          <div className='space-y-4 pt-2'>
+            <div>
+              <h4 className='font-medium'>
+                {t('Bind a Pancake store + product')}
+              </h4>
+              <p className='text-muted-foreground text-xs'>
+                {bindStatusMessage}
+              </p>
+            </div>
 
-          {/*
+            {/*
               Operator-facing explainer: why only ONE store + product needs
               to be bound at the gateway level, and what each piece is used
               for. Subscriptions reuse the same Store but get their own
@@ -682,21 +686,10 @@ export function WaffoPancakeSettingsSection({
               </div>
               <p className='text-muted-foreground text-xs'>
                 {t(
-                  'The bound Store is the parent container for every Pancake product new-api creates from this admin — both the wallet top-up product and any subscription-plan products. One store is enough; pin a different one only if you genuinely run separate Pancake catalogs.'
+                  "Used as SuccessURL on the new product. You'll be prompted to confirm if left blank."
                 )}
-              </li>
-              <li>
-                {t(
-                  'The bound Product powers wallet top-ups: when a user enters any amount, new-api runs the checkout against this single Pancake product and overrides the price per session — no need to pre-create $1 / $5 / $10 SKUs.'
-                )}
-              </li>
-              <li>
-                {t(
-                  'Subscription plans do NOT use the bound Product — each plan has its own dedicated Pancake product, set in the Subscriptions admin (or auto-minted via the "+ Create" button there).'
-                )}
-              </li>
-            </ul>
-          </div>
+              </p>
+            </div>
 
             {hasCatalog ? (
               <>
@@ -774,113 +767,35 @@ export function WaffoPancakeSettingsSection({
             <div className='flex items-center gap-3'>
               <Button
                 type='button'
-                variant='outline'
-                onClick={handleCreatePair}
-                disabled={creatingPair || verifying || !credsReady}
-                className='shrink-0'
+                onClick={handleSave}
+                disabled={saving || !chosenStoreID || !chosenProductID}
               >
-                {creatingPair
-                  ? t('Creating...')
-                  : `+ ${t('Create')} ${DEFAULT_NEW_PAIR_NAME}`}
+                {saving ? t('Saving...') : t('Save Waffo Pancake settings')}
               </Button>
+              {storeID || productID ? (
+                <div className='text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-xs'>
+                  {storeID ? (
+                    <span>
+                      {t('Bound store:')}{' '}
+                      <code className='bg-muted rounded px-1 py-0.5'>
+                        {storeID}
+                      </code>
+                    </span>
+                  ) : null}
+                  {productID ? (
+                    <span>
+                      {t('Bound product:')}{' '}
+                      <code className='bg-muted rounded px-1 py-0.5'>
+                        {productID}
+                      </code>
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
-            <p className='text-muted-foreground text-xs'>
-              {t(
-                "Used as SuccessURL on the new product. You'll be prompted to confirm if left blank."
-              )}
-            </p>
           </div>
-
-          {hasCatalog ? (
-            <>
-              <div className='relative flex items-center py-1'>
-                <div className='flex-1 border-t' />
-                <span className='text-muted-foreground px-3 text-[10px] font-medium tracking-[0.2em] uppercase'>
-                  {t('or pick existing')}
-                </span>
-                <div className='flex-1 border-t' />
-              </div>
-
-              <div className='grid grid-cols-2 gap-3'>
-                <div className='grid gap-1.5'>
-                  <Label>{t('Store')}</Label>
-                  <Select
-                    items={storeSelectItems}
-                    value={chosenStoreID}
-                    onValueChange={(value) => {
-                      // Base UI Select can deliver null on deselect.
-                      onSelectedBindingChange({
-                        storeID: value ?? '',
-                        productID: '',
-                      })
-                    }}
-                  >
-                    <SelectTrigger className='w-full'>
-                      <SelectValue placeholder={t('Select a store')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {storeSelectItems.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className='grid gap-1.5'>
-                  <Label>{t('Product')}</Label>
-                  <Select
-                    items={productSelectItems}
-                    value={chosenProductID}
-                    onValueChange={(value) =>
-                      onSelectedBindingChange((previous) => ({
-                        ...previous,
-                        productID: value ?? '',
-                      }))
-                    }
-                    disabled={!chosenStoreID || productSelectItems.length === 0}
-                  >
-                    <SelectTrigger className='w-full'>
-                      <SelectValue placeholder={t('Select a product')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {productSelectItems.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </>
-          ) : null}
-
-          <div className='flex items-center gap-3'>
-            {storeID || productID ? (
-              <div className='text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-xs'>
-                {storeID ? (
-                  <span>
-                    {t('Bound store:')}{' '}
-                    <code className='bg-muted rounded px-1 py-0.5'>
-                      {storeID}
-                    </code>
-                  </span>
-                ) : null}
-                {productID ? (
-                  <span>
-                    {t('Bound product:')}{' '}
-                    <code className='bg-muted rounded px-1 py-0.5'>
-                      {productID}
-                    </code>
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </div>
+        </form>
+      </Form>
     </div>
   )
 }

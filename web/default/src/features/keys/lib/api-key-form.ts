@@ -59,7 +59,9 @@ export function getApiKeyFormSchema(t: TFunction) {
     })
 }
 
-export type ApiKeyFormValues = z.infer<ReturnType<typeof getApiKeyFormSchema>>
+export type ApiKeyFormValues = z.infer<
+  ReturnType<typeof getApiKeyFormSchema>
+>
 
 // ============================================================================
 // Form Defaults

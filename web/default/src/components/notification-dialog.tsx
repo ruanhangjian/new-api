@@ -34,9 +34,6 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { getAnnouncementColorClass } from '@/lib/colors'
-import { formatDateTimeObject } from '@/lib/time'
-import { cn } from '@/lib/utils'
 
 interface AnnouncementItem {
   id?: number | string
@@ -46,16 +43,15 @@ interface AnnouncementItem {
   publishDate?: string | Date
 }
 
-interface NotificationPopoverProps {
+interface NotificationDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  unreadCount: number
   activeTab: 'notice' | 'announcements'
   onTabChange: (tab: 'notice' | 'announcements') => void
   notice: string
   announcements: AnnouncementItem[]
   loading: boolean
-  className?: string
+  onCloseToday: () => void
 }
 
 /**
@@ -124,7 +120,7 @@ function AnnouncementDot({ type }: { type?: string }) {
   return (
     <span
       className={cn(
-        'mt-1.5 inline-block size-2 shrink-0 rounded-full',
+        'mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full',
         getAnnouncementColorClass(type)
       )}
     />
@@ -147,25 +143,11 @@ function getAnnouncementRenderKey(announcement: AnnouncementItem): string {
 /**
  * Empty state component
  */
-function EmptyState({
-  icon,
-  title,
-  description,
-}: {
-  icon: React.ReactNode
-  title: string
-  description?: string
-}) {
+function EmptyState({ message }: { message: string }) {
   return (
-    <Empty className='min-h-48 border-0 p-4'>
-      <EmptyHeader>
-        <EmptyMedia variant='icon'>{icon}</EmptyMedia>
-        <EmptyTitle>{title}</EmptyTitle>
-        {description ? (
-          <EmptyDescription>{description}</EmptyDescription>
-        ) : null}
-      </EmptyHeader>
-    </Empty>
+    <div className='flex flex-col items-center justify-center py-12 text-center'>
+      <p className='text-muted-foreground text-sm'>{message}</p>
+    </div>
   )
 }
 
@@ -182,19 +164,11 @@ function NoticeContent({
   t: TFunction
 }) {
   if (loading) {
-    return (
-      <EmptyState
-        icon={<Bell />}
-        title={t('Loading...')}
-        description={t('Latest platform updates and notices')}
-      />
-    )
+    return <EmptyState message={t('Loading...')} />
   }
 
   if (!notice) {
-    return (
-      <EmptyState icon={<Bell />} title={t('No announcements at this time')} />
-    )
+    return <EmptyState message={t('No announcements at this time')} />
   }
 
   return (
@@ -217,24 +191,16 @@ function AnnouncementsContent({
   t: TFunction
 }) {
   if (loading) {
-    return (
-      <EmptyState
-        icon={<Megaphone />}
-        title={t('Loading...')}
-        description={t('Latest platform updates and notices')}
-      />
-    )
+    return <EmptyState message={t('Loading...')} />
   }
 
   if (announcements.length === 0) {
-    return (
-      <EmptyState icon={<Megaphone />} title={t('No system announcements')} />
-    )
+    return <EmptyState message={t('No system announcements')} />
   }
 
   return (
-    <ScrollArea className='h-[min(52vh,28rem)] pr-3'>
-      <div className='flex flex-col'>
+    <ScrollArea className='h-[50vh] pr-4'>
+      <div className='space-y-0'>
         {announcements.map((item, idx) => {
           const announcementKey = getAnnouncementRenderKey(item)
           const publishDate = item.publishDate
@@ -252,27 +218,30 @@ function AnnouncementsContent({
               <div className='py-3'>
                 <div className='flex items-start gap-3'>
                   <AnnouncementDot type={item.type} />
-                  <div className='flex min-w-0 flex-1 flex-col gap-2'>
+                  <div className='min-w-0 flex-1 space-y-2'>
+                    {/* Content */}
                     <div className='text-sm'>
                       <RichContent breaks content={item.content || ''} />
                     </div>
 
-                    {item.extra ? (
+                    {/* Extra info */}
+                    {item.extra && (
                       <div className='text-muted-foreground text-xs'>
                         <RichContent breaks content={item.extra} />
                       </div>
-                    ) : null}
+                    )}
 
-                    {absoluteTime ? (
+                    {/* Time */}
+                    {absoluteTime && (
                       <div className='text-muted-foreground text-xs'>
-                        {relativeTime ? `${relativeTime} • ` : null}
+                        {relativeTime && `${relativeTime} • `}
                         {absoluteTime}
                       </div>
-                    ) : null}
+                    )}
                   </div>
                 </div>
               </div>
-              {idx < announcements.length - 1 ? <Separator /> : null}
+              {idx < announcements.length - 1 && <Separator />}
             </div>
           )
         })}
@@ -282,54 +251,25 @@ function AnnouncementsContent({
 }
 
 /**
- * Notification popover with Notice and Announcements tabs
+ * Notification dialog with Notice and Announcements tabs
  */
-export function NotificationPopover({
+export function NotificationDialog({
   open,
   onOpenChange,
-  unreadCount,
   activeTab,
   onTabChange,
   notice,
   announcements,
   loading,
-  className,
-}: NotificationPopoverProps) {
+  onCloseToday,
+}: NotificationDialogProps) {
   const { t } = useTranslation()
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger
-        render={
-          <Button
-            variant='ghost'
-            size='icon'
-            className={cn('relative size-9', className)}
-            aria-label={t('Notifications')}
-          />
-        }
-      >
-        <Bell className='size-[1.2rem]' />
-        {unreadCount > 0 ? (
-          <Badge
-            variant='destructive'
-            className='absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center px-1 text-[10px] font-semibold tabular-nums'
-          >
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </Badge>
-        ) : null}
-      </PopoverTrigger>
-
-      <PopoverContent
-        align='end'
-        sideOffset={8}
-        className='w-[min(26rem,calc(100vw-1rem))] gap-3 p-3'
-      >
-        <PopoverHeader className='gap-1 px-1'>
-          <PopoverTitle>{t('System Announcements')}</PopoverTitle>
-          <p className='text-muted-foreground text-xs'>
-            {t('Latest platform updates and notices')}
-          </p>
-        </PopoverHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className='max-h-[90vh] sm:max-w-2xl'>
+        <DialogHeader>
+          <DialogTitle>{t('System Announcements')}</DialogTitle>
+        </DialogHeader>
 
         <Tabs
           value={activeTab}
@@ -337,20 +277,20 @@ export function NotificationPopover({
         >
           <TabsList className='grid w-full grid-cols-2'>
             <TabsTrigger value='notice' className='gap-1.5'>
-              <Bell className='size-3.5' />
+              <Bell className='h-3.5 w-3.5' />
               {t('Notice')}
             </TabsTrigger>
             <TabsTrigger value='announcements' className='gap-1.5'>
-              <Megaphone className='size-3.5' />
+              <Megaphone className='h-3.5 w-3.5' />
               {t('Timeline')}
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value='notice' className='mt-2'>
+          <TabsContent value='notice' className='mt-4'>
             <NoticeContent notice={notice} loading={loading} t={t} />
           </TabsContent>
 
-          <TabsContent value='announcements' className='mt-2'>
+          <TabsContent value='announcements' className='mt-4'>
             <AnnouncementsContent
               announcements={announcements}
               loading={loading}
@@ -359,12 +299,13 @@ export function NotificationPopover({
           </TabsContent>
         </Tabs>
 
-        <div className='flex justify-end'>
-          <Button size='sm' onClick={() => onOpenChange(false)}>
-            {t('Close')}
+        <DialogFooter className='gap-2'>
+          <Button variant='outline' onClick={onCloseToday}>
+            {t('Close Today')}
           </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
+          <Button onClick={() => onOpenChange(false)}>{t('Close')}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

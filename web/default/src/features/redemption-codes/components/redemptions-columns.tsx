@@ -18,10 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { type ColumnDef } from '@tanstack/react-table'
 import { useTranslation } from 'react-i18next'
-
-import { MaskedValueDisplay } from '@/components/masked-value-display'
-import { StatusBadge } from '@/components/status-badge'
-import { TableId } from '@/components/table-id'
+import { formatQuota, formatTimestampToDate } from '@/lib/format'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Tooltip,
@@ -66,9 +63,7 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
       header: t('ID'),
       meta: { mobileHidden: true },
       cell: ({ row }) => {
-        return (
-          <TableId value={row.getValue('id') as number} className='w-[60px]' />
-        )
+        return <div className='w-[60px]'>{row.getValue('id')}</div>
       },
       size: 80,
     },
@@ -95,6 +90,7 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
             <StatusBadge
               label={t('Expired')}
               variant='warning'
+              showDot={true}
               copyable={false}
               className='-ml-1.5'
             />
@@ -111,6 +107,7 @@ export function useRedemptionsColumns(): ColumnDef<Redemption>[] {
           <StatusBadge
             label={t(statusConfig.labelKey)}
             variant={statusConfig.variant}
+            showDot={statusConfig.showDot}
             copyable={false}
             className='-ml-1.5'
           />

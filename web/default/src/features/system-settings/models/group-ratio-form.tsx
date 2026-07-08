@@ -139,16 +139,6 @@ export const GroupRatioForm = memo(function GroupRatioForm({
       <GroupPricingGuide open={guideOpen} onOpenChange={setGuideOpen} />
 
       <Form {...form}>
-        <SettingsPageActionsPortal>
-          <Button
-            type='button'
-            size='sm'
-            onClick={form.handleSubmit(onSave)}
-            disabled={isSaving}
-          >
-            {isSaving ? t('Saving...') : t('Save group ratios')}
-          </Button>
-        </SettingsPageActionsPortal>
         {editMode === 'visual' ? (
           <div className='space-y-6'>
             <GroupRatioVisualEditor
@@ -175,27 +165,33 @@ export const GroupRatioForm = memo(function GroupRatioForm({
               control={form.control}
               name='DefaultUseAutoGroup'
               render={({ field }) => (
-                <SettingsSwitchItem>
-                  <SettingsSwitchContent>
-                    <FormLabel>{t('Default to auto groups')}</FormLabel>
+                <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
+                  <div className='space-y-0.5'>
+                    <FormLabel className='text-base'>
+                      {t('Default to auto groups')}
+                    </FormLabel>
                     <FormDescription>
                       {t(
                         'When enabled, newly created tokens start in the first auto group.'
                       )}
                     </FormDescription>
-                  </SettingsSwitchContent>
+                  </div>
                   <FormControl>
                     <Switch
                       checked={field.value}
                       onCheckedChange={field.onChange}
                     />
                   </FormControl>
-                </SettingsSwitchItem>
+                </FormItem>
               )}
             />
+
+            <Button onClick={form.handleSubmit(onSave)} disabled={isSaving}>
+              {isSaving ? t('Saving...') : t('Save group ratios')}
+            </Button>
           </div>
         ) : (
-          <SettingsForm onSubmit={form.handleSubmit(onSave)}>
+          <form onSubmit={form.handleSubmit(onSave)} className='space-y-6'>
             <FormField
               control={form.control}
               name='GroupRatio'
@@ -317,25 +313,31 @@ export const GroupRatioForm = memo(function GroupRatioForm({
               control={form.control}
               name='DefaultUseAutoGroup'
               render={({ field }) => (
-                <SettingsSwitchItem>
-                  <SettingsSwitchContent>
-                    <FormLabel>{t('Default to auto groups')}</FormLabel>
+                <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
+                  <div className='space-y-0.5'>
+                    <FormLabel className='text-base'>
+                      {t('Default to auto groups')}
+                    </FormLabel>
                     <FormDescription>
                       {t(
                         'When enabled, newly created tokens start in the first auto group.'
                       )}
                     </FormDescription>
-                  </SettingsSwitchContent>
+                  </div>
                   <FormControl>
                     <Switch
                       checked={field.value}
                       onCheckedChange={field.onChange}
                     />
                   </FormControl>
-                </SettingsSwitchItem>
+                </FormItem>
               )}
             />
-          </SettingsForm>
+
+            <Button type='submit' disabled={isSaving}>
+              {isSaving ? t('Saving...') : t('Save group ratios')}
+            </Button>
+          </form>
         )}
       </Form>
     </div>
@@ -377,11 +379,8 @@ function GroupPricingGuide({ open, onOpenChange }: GroupPricingGuideProps) {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side='right'
-        className={sideDrawerContentClassName('sm:max-w-2xl')}
-      >
-        <SheetHeader className={sideDrawerHeaderClassName()}>
+      <SheetContent side='right' className='w-full gap-0 p-0 sm:max-w-2xl'>
+        <SheetHeader className='border-b p-4'>
           <SheetTitle>{t('Group pricing usage guide')}</SheetTitle>
           <SheetDescription>
             {t(
@@ -390,7 +389,7 @@ function GroupPricingGuide({ open, onOpenChange }: GroupPricingGuideProps) {
           </SheetDescription>
         </SheetHeader>
 
-        <div className={sideDrawerFormClassName('gap-5')}>
+        <div className='space-y-5 overflow-y-auto p-4'>
           <section className='space-y-2'>
             <h3 className='text-sm font-semibold'>
               {t('The two roles of a group')}

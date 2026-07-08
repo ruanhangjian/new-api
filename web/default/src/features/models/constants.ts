@@ -80,9 +80,12 @@ export function getModelStatusOptions(t: TFunction) {
 
 export function getModelStatusConfig(
   t: TFunction
-): Record<ModelStatus, { label: string; variant: 'success' | 'neutral' }> {
+): Record<
+  ModelStatus,
+  { label: string; variant: 'success' | 'neutral'; showDot?: boolean }
+> {
   return {
-    1: { label: t('Enabled'), variant: 'success' },
+    1: { label: t('Enabled'), variant: 'success', showDot: true },
     0: { label: t('Disabled'), variant: 'neutral' },
   }
 }
@@ -120,10 +123,11 @@ export function getDeploymentStatusConfig(t: TFunction): Record<
   {
     label: string
     variant: 'success' | 'neutral' | 'warning' | 'danger'
+    showDot?: boolean
   }
 > {
   return {
-    running: { label: t('Running'), variant: 'success' },
+    running: { label: t('Running'), variant: 'success', showDot: true },
     completed: { label: t('Completed'), variant: 'success' },
     failed: { label: t('Failed'), variant: 'danger' },
     error: { label: t('Failed'), variant: 'danger' },
@@ -131,10 +135,12 @@ export function getDeploymentStatusConfig(t: TFunction): Record<
     'deployment requested': {
       label: t('Deployment requested'),
       variant: 'warning',
+      showDot: true,
     },
     'termination requested': {
       label: t('Termination requested'),
       variant: 'warning',
+      showDot: true,
     },
   }
 }

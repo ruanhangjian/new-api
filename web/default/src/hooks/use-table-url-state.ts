@@ -175,7 +175,8 @@ export function useTableUrlState(
       search: (prev) => ({
         ...(prev as SearchRecord),
         [pageKey]: nextPage <= defaultPage ? undefined : nextPage,
-        [pageSizeKey]: nextPageSize,
+        [pageSizeKey]:
+          nextPageSize === defaultPageSize ? undefined : nextPageSize,
       }),
     })
   }

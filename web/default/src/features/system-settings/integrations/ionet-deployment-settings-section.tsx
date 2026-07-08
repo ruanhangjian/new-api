@@ -38,13 +38,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { testDeploymentConnectionWithKey } from '@/features/models/api'
-
-import {
-  SettingsForm,
-  SettingsSwitchContent,
-  SettingsSwitchItem,
-} from '../components/settings-form-layout'
-import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
 
@@ -137,26 +130,29 @@ export function IoNetDeploymentSettingsSection({
   }
 
   return (
-    <SettingsSection title={t('io.net Deployments')}>
+    <SettingsSection
+      title={t('io.net Deployments')}
+      description={t('Configure io.net API key for model deployments')}
+    >
       <Form {...form}>
-        <SettingsForm onSubmit={form.handleSubmit(onSubmit)} autoComplete='off'>
-          <SettingsPageFormActions
-            onSave={form.handleSubmit(onSubmit)}
-            isSaving={updateOption.isPending || isSubmitting}
-            isSaveDisabled={!isDirty}
-            saveLabel='Save io.net settings'
-          />
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          autoComplete='off'
+          className='space-y-6'
+        >
           <FormField
             control={form.control}
             name='enabled'
             render={({ field }) => (
-              <SettingsSwitchItem>
-                <SettingsSwitchContent>
-                  <FormLabel>{t('Enable io.net deployments')}</FormLabel>
+              <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
+                <div className='space-y-0.5'>
+                  <FormLabel className='text-base'>
+                    {t('Enable io.net deployments')}
+                  </FormLabel>
                   <FormDescription>
                     {t('Enable io.net model deployment service in console')}
                   </FormDescription>
-                </SettingsSwitchContent>
+                </div>
                 <FormControl>
                   <Switch
                     checked={field.value}
@@ -164,7 +160,7 @@ export function IoNetDeploymentSettingsSection({
                     disabled={updateOption.isPending || isSubmitting}
                   />
                 </FormControl>
-              </SettingsSwitchItem>
+              </FormItem>
             )}
           />
 
@@ -258,7 +254,16 @@ export function IoNetDeploymentSettingsSection({
               ) : null}
             </>
           ) : null}
-        </SettingsForm>
+
+          <Button
+            type='submit'
+            disabled={!isDirty || updateOption.isPending || isSubmitting}
+          >
+            {updateOption.isPending || isSubmitting
+              ? t('Saving...')
+              : t('Save io.net settings')}
+          </Button>
+        </form>
       </Form>
     </SettingsSection>
   )

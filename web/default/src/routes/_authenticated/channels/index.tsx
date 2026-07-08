@@ -25,7 +25,7 @@ import { useAuthStore } from '@/stores/auth-store'
 
 const channelsSearchSchema = z.object({
   page: z.number().optional().catch(1),
-  pageSize: z.number().optional().catch(undefined),
+  pageSize: z.number().optional().catch(10),
   filter: z.string().optional().catch(''),
   status: z.array(z.string()).optional().catch([]),
   type: z.array(z.string()).optional().catch([]),

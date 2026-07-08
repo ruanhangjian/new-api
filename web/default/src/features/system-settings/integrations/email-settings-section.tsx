@@ -16,11 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { zodResolver } from '@hookform/resolvers/zod'
-import { useForm } from 'react-hook-form'
-import { useTranslation } from 'react-i18next'
 import * as z from 'zod'
-
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useTranslation } from 'react-i18next'
+import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
@@ -34,13 +34,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
-
-import {
-  SettingsForm,
-  SettingsSwitchContent,
-  SettingsSwitchItem,
-} from '../components/settings-form-layout'
-import { SettingsPageFormActions } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useResetForm } from '../hooks/use-reset-form'
 import { useUpdateOption } from '../hooks/use-update-option'
@@ -179,14 +172,16 @@ export function EmailSettingsSection({
   }
 
   return (
-    <SettingsSection title={t('SMTP Email')}>
+    <SettingsSection
+      title={t('SMTP Email')}
+      description={t('Configure outgoing email server for notifications')}
+    >
       <Form {...form}>
-        <SettingsForm onSubmit={form.handleSubmit(onSubmit)} autoComplete='off'>
-          <SettingsPageFormActions
-            onSave={form.handleSubmit(onSubmit)}
-            isSaving={updateOption.isPending}
-            saveLabel='Save SMTP settings'
-          />
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className='space-y-6'
+          autoComplete='off'
+        >
           <FormField
             control={form.control}
             name='SMTPServer'
@@ -306,14 +301,14 @@ export function EmailSettingsSection({
                         'Allow self-signed or hostname-mismatched SMTP certificates'
                       )}
                     </FormDescription>
-                  </SettingsSwitchContent>
+                  </div>
                   <FormControl>
                     <Switch
                       checked={field.value}
                       onCheckedChange={field.onChange}
                     />
                   </FormControl>
-                </SettingsSwitchItem>
+                </FormItem>
               )}
             />
 
@@ -321,20 +316,22 @@ export function EmailSettingsSection({
               control={form.control}
               name='SMTPForceAuthLogin'
               render={({ field }) => (
-                <SettingsSwitchItem>
-                  <SettingsSwitchContent>
-                    <FormLabel>{t('Force AUTH LOGIN')}</FormLabel>
+                <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
+                  <div className='space-y-0.5'>
+                    <FormLabel className='text-base'>
+                      {t('Force AUTH LOGIN')}
+                    </FormLabel>
                     <FormDescription>
                       {t('Force SMTP authentication using AUTH LOGIN method')}
                     </FormDescription>
-                  </SettingsSwitchContent>
+                  </div>
                   <FormControl>
                     <Switch
                       checked={field.value}
                       onCheckedChange={field.onChange}
                     />
                   </FormControl>
-                </SettingsSwitchItem>
+                </FormItem>
               )}
             />
           </div>
@@ -405,7 +402,11 @@ export function EmailSettingsSection({
               </FormItem>
             )}
           />
-        </SettingsForm>
+
+          <Button type='submit' disabled={updateOption.isPending}>
+            {updateOption.isPending ? t('Saving...') : t('Save SMTP settings')}
+          </Button>
+        </form>
       </Form>
     </SettingsSection>
   )

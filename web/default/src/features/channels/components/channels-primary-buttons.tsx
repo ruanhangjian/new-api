@@ -70,7 +70,6 @@ export function ChannelsPrimaryButtons() {
   const { t } = useTranslation()
   const {
     setOpen,
-    setCurrentRow,
     enableTagMode,
     setEnableTagMode,
     idSort,

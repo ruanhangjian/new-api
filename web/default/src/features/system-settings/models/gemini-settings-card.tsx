@@ -16,13 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useMemo, useRef } from 'react'
+import * as z from 'zod'
 import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import * as z from 'zod'
-
+import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
@@ -230,13 +230,14 @@ export function GeminiSettingsCard({ defaultValues }: GeminiSettingsCardProps) {
   )
 
   return (
-    <SettingsSection title={t('Gemini')}>
+    <SettingsSection
+      title={t('Gemini')}
+      description={t(
+        'Configure Gemini safety behavior, version overrides, and thinking adapter'
+      )}
+    >
       <Form {...form}>
-        <SettingsForm onSubmit={form.handleSubmit(onSubmit)}>
-          <SettingsPageFormActions
-            onSave={form.handleSubmit(onSubmit)}
-            isSaving={updateOption.isPending}
-          />
+        <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-6'>
           <FormField
             control={form.control}
             name='gemini.safety_settings'
@@ -298,7 +299,7 @@ export function GeminiSettingsCard({ defaultValues }: GeminiSettingsCardProps) {
             )}
           />
 
-          <SettingsControlGroup>
+          <div className='space-y-4 rounded-lg border p-4'>
             <FormField
               control={form.control}
               name='gemini.thinking_adapter_enabled'
@@ -354,15 +355,15 @@ export function GeminiSettingsCard({ defaultValues }: GeminiSettingsCardProps) {
                 )}
               </p>
             )}
-          </SettingsControlGroup>
+          </div>
 
           <FormField
             control={form.control}
             name='gemini.function_call_thought_signature_enabled'
             render={({ field }) => (
-              <SettingsSwitchItem>
-                <SettingsSwitchContent>
-                  <FormLabel>
+              <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
+                <div className='space-y-0.5'>
+                  <FormLabel className='text-base'>
                     {t('Enable FunctionCall thoughtSignature Fill')}
                   </FormLabel>
                   <FormDescription>
@@ -370,14 +371,14 @@ export function GeminiSettingsCard({ defaultValues }: GeminiSettingsCardProps) {
                       'Fill thoughtSignature only for Gemini/Vertex channels using the OpenAI format'
                     )}
                   </FormDescription>
-                </SettingsSwitchContent>
+                </div>
                 <FormControl>
                   <Switch
                     checked={field.value}
                     onCheckedChange={field.onChange}
                   />
                 </FormControl>
-              </SettingsSwitchItem>
+              </FormItem>
             )}
           />
 
@@ -385,25 +386,31 @@ export function GeminiSettingsCard({ defaultValues }: GeminiSettingsCardProps) {
             control={form.control}
             name='gemini.remove_function_response_id_enabled'
             render={({ field }) => (
-              <SettingsSwitchItem>
-                <SettingsSwitchContent>
-                  <FormLabel>{t('Remove functionResponse.id field')}</FormLabel>
+              <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
+                <div className='space-y-0.5'>
+                  <FormLabel className='text-base'>
+                    {t('Remove functionResponse.id field')}
+                  </FormLabel>
                   <FormDescription>
                     {t(
                       'Vertex AI does not support functionResponse.id. Enable this to remove the field automatically.'
                     )}
                   </FormDescription>
-                </SettingsSwitchContent>
+                </div>
                 <FormControl>
                   <Switch
                     checked={field.value}
                     onCheckedChange={field.onChange}
                   />
                 </FormControl>
-              </SettingsSwitchItem>
+              </FormItem>
             )}
           />
-        </SettingsForm>
+
+          <Button type='submit' disabled={updateOption.isPending}>
+            {updateOption.isPending ? t('Saving...') : t('Save Changes')}
+          </Button>
+        </form>
       </Form>
     </SettingsSection>
   )
