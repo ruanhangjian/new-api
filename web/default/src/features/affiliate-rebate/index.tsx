@@ -99,16 +99,42 @@ import type {
 
 type InviteeFilter = 'all' | 'active'
 
-const SHARE_COPY_KEYS = [
-  'I use ZhiLian AI for stable multi-model API access, transparent quota, and no inflated usage. Register with my invite link: {{link}}',
-  'Recommended: ZhiLian AI supports multiple models, stable API forwarding, and clear quota billing. My invite link: {{link}}',
-  'ZhiLian AI has been stable for my model API usage, with practical quota and support for mainstream models. Register here: {{link}}',
-  'If you need a stable AI API platform with clear quota and multiple model options, try ZhiLian AI: {{link}}',
-  'ZhiLian AI supports GPT, Claude, and other models. The API is stable and the quota is straightforward. Invite link: {{link}}',
-  'I recommend ZhiLian AI for daily AI API usage: stable service, transparent billing, and multiple models. {{link}}',
-  'I am using ZhiLian AI for multi-model API access. It is stable and the quota feels solid. Register with my link: {{link}}',
-  'ZhiLian AI supports multiple models with stable routing and clear quota, no inflated numbers. Invite link: {{link}}',
-] as const
+const SHARE_COPY_TEMPLATES = {
+  en: [
+    'I use ZhiLian AI for stable multi-model API access, transparent quota, and no inflated usage. Register with my invite link: {{link}}',
+    'Recommended: ZhiLian AI supports multiple models, stable API forwarding, and clear quota billing. My invite link: {{link}}',
+    'ZhiLian AI has been stable for my model API usage, with practical quota and support for mainstream models. Register here: {{link}}',
+    'If you need a stable AI API platform with clear quota and multiple model options, try ZhiLian AI: {{link}}',
+    'ZhiLian AI supports GPT, Claude, and other models. The API is stable and the quota is straightforward. Invite link: {{link}}',
+    'I recommend ZhiLian AI for daily AI API usage: stable service, transparent billing, and multiple models. {{link}}',
+    'I am using ZhiLian AI for multi-model API access. It is stable and the quota feels solid. Register with my link: {{link}}',
+    'ZhiLian AI supports multiple models with stable routing and clear quota, no inflated numbers. Invite link: {{link}}',
+  ],
+  zhCN: [
+    '我在用智链AI做模型中转，接入很方便，模型不掺水，日常用下来也比较稳定。邀请链接：{{link}}',
+    '推荐一个我在用的 AI 中转站：智链AI。支持多模型，接入简单，价格也比较实惠。注册链接：{{link}}',
+    '智链AI用起来比较省心，API 接入方便，额度清楚不虚标，适合日常稳定调用。邀请链接：{{link}}',
+    '如果你需要稳定的 AI API 中转，可以试试智链AI，模型不掺水，价格实惠，接入也简单：{{link}}',
+    '最近在用智链AI，支持多种主流模型，调用稳定，计费透明，整体性价比不错。注册链接：{{link}}',
+    '智链AI比较适合日常 API 使用，接入成本低，模型质量实在，不需要折腾太多配置。邀请链接：{{link}}',
+    '推荐智链AI：多模型可用，接口稳定，额度不掺水，价格对日常使用比较友好。注册链接：{{link}}',
+    '我用智链AI主要是图省心：API 好接，模型不掺水，调用稳定，价格也比较合适。注册链接：{{link}}',
+  ],
+} as const
+
+function isChineseLanguage(language: string | undefined): boolean {
+  if (!language) return false
+  return language === 'zhCN' || language === 'zhTW' || language.startsWith('zh')
+}
+
+function buildShareMessages(language: string | undefined, inviteLink: string) {
+  const localeTemplates = isChineseLanguage(language)
+    ? SHARE_COPY_TEMPLATES.zhCN
+    : SHARE_COPY_TEMPLATES.en
+  return localeTemplates.map((template) =>
+    template.replace('{{link}}', inviteLink)
+  )
+}
 
 function formatRate(rate: number): string {
   if (!Number.isFinite(rate)) return '-'
@@ -131,7 +157,7 @@ function getStatusBadgeVariant(status: AffiliateInviteeSummary['status']) {
 }
 
 export function AffiliateRebate() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { copyToClipboard } = useCopyToClipboard()
   const user = useAuthStore((state) => state.auth.user)
   const [transferring, setTransferring] = useState(false)
@@ -191,7 +217,7 @@ export function AffiliateRebate() {
 
   const generateShareMessage = () => {
     if (!inviteLink) return
-    const messages = SHARE_COPY_KEYS.map((key) => t(key, { link: inviteLink }))
+    const messages = buildShareMessages(i18n.language, inviteLink)
     const pool = messages.filter((message) => message !== shareMessage)
     const candidates = pool.length > 0 ? pool : messages
     const next = candidates[Math.floor(Math.random() * candidates.length)]
@@ -200,7 +226,7 @@ export function AffiliateRebate() {
 
   const handleOpenShareDialog = () => {
     if (!inviteLink) return
-    const messages = SHARE_COPY_KEYS.map((key) => t(key, { link: inviteLink }))
+    const messages = buildShareMessages(i18n.language, inviteLink)
     const next = messages[Math.floor(Math.random() * messages.length)]
     setShareMessage(next)
     setShareDialogOpen(true)

@@ -108,6 +108,26 @@ function getBillingPreferenceLabel(
   }
 }
 
+function getSubscriptionSourceLabel(
+  source: string | undefined,
+  t: (key: string) => string
+): string {
+  switch (source) {
+    case 'balance':
+      return t('Balance Payment')
+    case 'epay':
+      return t('Epay')
+    case 'stripe':
+      return t('Stripe')
+    case 'creem':
+      return t('Creem')
+    case 'waffo-pancake':
+      return t('Waffo Pancake')
+    default:
+      return source || '-'
+  }
+}
+
 function getSubscriptionSortValue(sub: UserSubscriptionRecord): number {
   const subscription = sub.subscription
   return (
@@ -239,7 +259,7 @@ function SubscriptionUsageCard({
       {!compact && (
         <div className='text-muted-foreground grid grid-cols-2 gap-2 text-xs'>
           <div>
-            {t('Source')}: {subscription?.source || '-'}
+            {t('Source')}: {getSubscriptionSourceLabel(subscription?.source, t)}
           </div>
           <div>
             {t('Created At')}: {formatTimestamp(subscription?.created_at || 0)}

@@ -339,7 +339,7 @@ export function ChannelStatusPage() {
               overall === 'operational' ? 'bg-emerald-500' : 'bg-amber-500'
             }`}
           />
-          {overall === 'operational' ? 'OPERATIONAL' : 'DEGRADED'}
+          {overall === 'operational' ? t('Operational') : t('Degraded')}
         </Badge>
         <Button
           variant='outline'

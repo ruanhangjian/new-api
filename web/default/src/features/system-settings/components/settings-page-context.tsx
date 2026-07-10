@@ -126,7 +126,7 @@ export function SettingsPageFormActions({
               disabled={isResetting}
             >
               <RotateCcw data-icon='inline-start' />
-              {resetText ?? t('Reset')}
+              {resetText ? t(resetText) : t('Reset')}
             </Button>
           )}
           <Button
@@ -136,7 +136,7 @@ export function SettingsPageFormActions({
             disabled={disabled || !isDirty || isSaving}
           >
             <Save data-icon='inline-start' />
-            {isSaving ? t('Saving...') : (saveText ?? t('Save'))}
+            {isSaving ? t('Saving...') : saveText ? t(saveText) : t('Save')}
           </Button>
         </>
       )}
