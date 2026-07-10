@@ -21,6 +21,7 @@ import type { BillingSettings } from '../types'
 import {
   BILLING_DEFAULT_SECTION,
   getBillingSectionContent,
+  getBillingSectionMeta,
 } from './section-registry.tsx'
 
 const defaultBillingSettings: BillingSettings = {
@@ -29,6 +30,8 @@ const defaultBillingSettings: BillingSettings = {
   QuotaForInviter: 0,
   QuotaForInvitee: 0,
   TopUpLink: '',
+  EnterpriseCdkContactMessage:
+    '余额不足。如需充值，请联系管理员线下收款后授信。',
   'general_setting.docs_link': '',
   'quota_setting.enable_free_model_pre_consume': true,
   QuotaPerUnit: 500000,
@@ -121,6 +124,7 @@ export function BillingSettings() {
       defaultSettings={defaultBillingSettings}
       defaultSection={BILLING_DEFAULT_SECTION}
       getSectionContent={getBillingSectionContent}
+      getSectionMeta={getBillingSectionMeta}
     />
   )
 }

@@ -35,6 +35,10 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  SettingsSwitchContent,
+  SettingsSwitchItem,
+} from '../components/settings-form-layout'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
 import {
@@ -300,11 +304,9 @@ export function GeminiSettingsCard({ defaultValues }: GeminiSettingsCardProps) {
               control={form.control}
               name='gemini.thinking_adapter_enabled'
               render={({ field }) => (
-                <FormItem className='flex flex-row items-center justify-between'>
-                  <div className='space-y-0.5'>
-                    <FormLabel className='text-base'>
-                      {t('Thinking Adapter')}
-                    </FormLabel>
+                <SettingsSwitchItem>
+                  <SettingsSwitchContent>
+                    <FormLabel>{t('Thinking Suffix Adapter')}</FormLabel>
                     <FormDescription>
                       {t('Supports `-thinking`, `-thinking-')}
                       {'{{budget}}'}
@@ -312,14 +314,14 @@ export function GeminiSettingsCard({ defaultValues }: GeminiSettingsCardProps) {
                         '`, and `-nothinking` suffixes while routing to the correct Gemini variant.'
                       )}
                     </FormDescription>
-                  </div>
+                  </SettingsSwitchContent>
                   <FormControl>
                     <Switch
                       checked={field.value}
                       onCheckedChange={field.onChange}
                     />
                   </FormControl>
-                </FormItem>
+                </SettingsSwitchItem>
               )}
             />
 

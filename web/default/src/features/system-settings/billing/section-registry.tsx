@@ -64,6 +64,7 @@ const BILLING_SECTIONS = [
           QuotaForInviter: settings.QuotaForInviter,
           QuotaForInvitee: settings.QuotaForInvitee,
           TopUpLink: settings.TopUpLink,
+          EnterpriseCdkContactMessage: settings.EnterpriseCdkContactMessage,
           general_setting: {
             docs_link: settings['general_setting.docs_link'],
           },
@@ -246,3 +247,4 @@ export const BILLING_SECTION_IDS = billingRegistry.sectionIds
 export const BILLING_DEFAULT_SECTION = billingRegistry.defaultSection
 export const getBillingSectionNavItems = billingRegistry.getSectionNavItems
 export const getBillingSectionContent = billingRegistry.getSectionContent
+export const getBillingSectionMeta = billingRegistry.getSectionMeta

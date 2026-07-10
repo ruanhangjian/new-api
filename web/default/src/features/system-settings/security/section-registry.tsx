@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { RateLimitSection } from '../request-limits/rate-limit-section'
 import { SensitiveWordsSection } from '../request-limits/sensitive-words-section'
 import { SSRFSection } from '../request-limits/ssrf-section'
+import { TokenLimitSection } from '../request-limits/token-limit-section'
 import type { SecuritySettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
 
@@ -80,6 +81,18 @@ const SECURITY_SECTIONS = [
       />
     ),
   },
+  {
+    id: 'token-limits',
+    titleKey: 'Token Limits',
+    build: (settings: SecuritySettings) => (
+      <TokenLimitSection
+        defaultValues={{
+          'token_setting.max_user_tokens':
+            settings['token_setting.max_user_tokens'],
+        }}
+      />
+    ),
+  },
 ] as const
 
 export type SecuritySectionId = (typeof SECURITY_SECTIONS)[number]['id']
@@ -98,3 +111,4 @@ export const SECURITY_SECTION_IDS = securityRegistry.sectionIds
 export const SECURITY_DEFAULT_SECTION = securityRegistry.defaultSection
 export const getSecuritySectionNavItems = securityRegistry.getSectionNavItems
 export const getSecuritySectionContent = securityRegistry.getSectionContent
+export const getSecuritySectionMeta = securityRegistry.getSectionMeta

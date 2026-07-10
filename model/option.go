@@ -20,6 +20,11 @@ type Option struct {
 	Value string `json:"value"`
 }
 
+const (
+	EnterpriseCdkContactMessageOptionKey = "EnterpriseCdkContactMessage"
+	EnterpriseCdkContactMessageDefault   = "余额不足。如需充值，请联系管理员线下收款后授信。"
+)
+
 func AllOption() ([]*Option, error) {
 	var options []*Option
 	var err error
@@ -63,6 +68,8 @@ func InitOptionMap() {
 	common.OptionMap["SMTPAccount"] = ""
 	common.OptionMap["SMTPToken"] = ""
 	common.OptionMap["SMTPSSLEnabled"] = strconv.FormatBool(common.SMTPSSLEnabled)
+	common.OptionMap["SMTPStartTLSEnabled"] = strconv.FormatBool(common.SMTPStartTLSEnabled)
+	common.OptionMap["SMTPInsecureSkipVerify"] = strconv.FormatBool(common.SMTPInsecureSkipVerify)
 	common.OptionMap["SMTPForceAuthLogin"] = strconv.FormatBool(common.SMTPForceAuthLogin)
 	common.OptionMap["Notice"] = ""
 	common.OptionMap["About"] = ""
@@ -149,6 +156,7 @@ func InitOptionMap() {
 	common.OptionMap["AudioRatio"] = ratio_setting.AudioRatio2JSONString()
 	common.OptionMap["AudioCompletionRatio"] = ratio_setting.AudioCompletionRatio2JSONString()
 	common.OptionMap["TopUpLink"] = common.TopUpLink
+	common.OptionMap[EnterpriseCdkContactMessageOptionKey] = EnterpriseCdkContactMessageDefault
 	//common.OptionMap["ChatLink"] = common.ChatLink
 	//common.OptionMap["ChatLink2"] = common.ChatLink2
 	common.OptionMap["QuotaPerUnit"] = strconv.FormatFloat(common.QuotaPerUnit, 'f', -1, 64)
@@ -277,7 +285,7 @@ func updateOptionMap(key string, value string) (err error) {
 			common.ImageDownloadPermission = intValue
 		}
 	}
-	if strings.HasSuffix(key, "Enabled") || key == "DefaultCollapseSidebar" || key == "DefaultUseAutoGroup" || key == "SMTPForceAuthLogin" {
+	if strings.HasSuffix(key, "Enabled") || key == "DefaultCollapseSidebar" || key == "DefaultUseAutoGroup" || key == "SMTPForceAuthLogin" || key == "SMTPInsecureSkipVerify" {
 		boolValue := value == "true"
 		switch key {
 		case "PasswordRegisterEnabled":
@@ -352,6 +360,10 @@ func updateOptionMap(key string, value string) (err error) {
 			setting.StopOnSensitiveEnabled = boolValue
 		case "SMTPSSLEnabled":
 			common.SMTPSSLEnabled = boolValue
+		case "SMTPStartTLSEnabled":
+			common.SMTPStartTLSEnabled = boolValue
+		case "SMTPInsecureSkipVerify":
+			common.SMTPInsecureSkipVerify = boolValue
 		case "SMTPForceAuthLogin":
 			common.SMTPForceAuthLogin = boolValue
 		case "WorkerAllowHttpImageRequestEnabled":

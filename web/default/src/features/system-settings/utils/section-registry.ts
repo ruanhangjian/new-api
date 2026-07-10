@@ -16,8 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { ReactNode } from 'react'
 import type { TFunction } from 'i18next'
+import type { ReactNode } from 'react'
 
 /**
  * Section definition for settings pages
@@ -25,7 +25,7 @@ import type { TFunction } from 'i18next'
 export type SectionDefinition<TSettings, TExtraArgs extends unknown[] = []> = {
   id: string
   titleKey: string
-  descriptionKey: string
+  descriptionKey?: string
   build: (settings: TSettings, ...extraArgs: TExtraArgs) => ReactNode
 }
 
@@ -82,9 +82,11 @@ export function createSectionRegistry<
     settings: TSettings,
     ...extraArgs: TExtraArgs
   ) {
-    const section =
-      sections.find((item) => item.id === sectionId) ?? sections[0]
-    return section.build(settings, ...extraArgs)
+    return getSectionMeta(sectionId).build(settings, ...extraArgs)
+  }
+
+  function getSectionMeta(sectionId: SectionId) {
+    return sections.find((item) => item.id === sectionId) ?? sections[0]
   }
 
   return {
@@ -92,5 +94,6 @@ export function createSectionRegistry<
     defaultSection,
     getSectionNavItems,
     getSectionContent,
+    getSectionMeta,
   }
 }

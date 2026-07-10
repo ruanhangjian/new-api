@@ -22,6 +22,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { CalendarClock, CreditCard, RefreshCw, Settings2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { sideDrawerSwitchItemClassName } from '@/components/drawer-layout'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -52,6 +53,7 @@ import {
 } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
 import {
   createPlan,
   updatePlan,
@@ -88,6 +90,9 @@ export function SubscriptionsMutateDrawer({
   const { t } = useTranslation()
   const isEdit = !!currentRow?.plan?.id
   const { triggerRefresh } = useSubscriptions()
+  const { meta: currencyMeta } = getCurrencyDisplay()
+  const tokensOnly = currencyMeta.kind === 'tokens'
+  const currencyLabel = getCurrencyLabel()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [groupOptions, setGroupOptions] = useState<string[]>([])
   const [creatingPancakeProduct, setCreatingPancakeProduct] = useState(false)
@@ -334,7 +339,7 @@ export function SubscriptionsMutateDrawer({
                   name='price_amount'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('Actual Amount')}</FormLabel>
+                      <FormLabel>{t('Plan Price')}</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
@@ -351,6 +356,11 @@ export function SubscriptionsMutateDrawer({
                           }
                         />
                       </FormControl>
+                      <FormDescription>
+                        {t(
+                          'Amount the user pays to purchase this plan; the actual currency depends on the payment gateway.'
+                        )}
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -361,30 +371,38 @@ export function SubscriptionsMutateDrawer({
                   name='total_amount'
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('Total Quota')}</FormLabel>
+                      <FormLabel>
+                        {t('Quota ({{currency}})', { currency: currencyLabel })}
+                      </FormLabel>
                       <FormControl>
-                        <div className='relative'>
-                          <span className='text-muted-foreground pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-base sm:text-sm'>
-                            $
-                          </span>
-                          <Input
-                            {...field}
-                            type='number'
-                            step='0.01'
-                            min={1}
-                            value={field.value ?? ''}
-                            onFocus={selectNumberOnFocus}
-                            onChange={(e) =>
-                              field.onChange(
-                                e.target.value === ''
-                                  ? ''
-                                  : Number(e.target.value)
-                              )
-                            }
-                            className='pl-7'
-                          />
-                        </div>
+                        <Input
+                          {...field}
+                          type='number'
+                          min={0}
+                          step={tokensOnly ? 1 : 0.01}
+                          value={field.value ?? ''}
+                          placeholder={
+                            tokensOnly
+                              ? t('Enter quota in tokens')
+                              : t('Enter quota in {{currency}}', {
+                                  currency: currencyLabel,
+                                })
+                          }
+                          onFocus={selectNumberOnFocus}
+                          onChange={(e) =>
+                            field.onChange(
+                              e.target.value === ''
+                                ? ''
+                                : Number.parseFloat(e.target.value)
+                            )
+                          }
+                        />
                       </FormControl>
+                      <FormDescription>
+                        {t(
+                          'Total quota included in the plan, usable per billing period. 0 means unlimited.'
+                        )}
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -426,6 +444,55 @@ export function SubscriptionsMutateDrawer({
                           </SelectGroup>
                         </SelectContent>
                       </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='downgrade_group'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Downgrade Group')}</FormLabel>
+                      <Select
+                        items={[
+                          {
+                            value: '__none__',
+                            label: t('Downgrade to pre-purchase group'),
+                          },
+                          ...groupOptions.map((g) => ({ value: g, label: g })),
+                        ]}
+                        onValueChange={(v) =>
+                          field.onChange(v === '__none__' ? '' : v)
+                        }
+                        value={field.value || ''}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue
+                              placeholder={t('Downgrade to pre-purchase group')}
+                            />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent alignItemWithTrigger={false}>
+                          <SelectGroup>
+                            <SelectItem value='__none__'>
+                              {t('Downgrade to pre-purchase group')}
+                            </SelectItem>
+                            {groupOptions.map((g) => (
+                              <SelectItem key={g} value={g}>
+                                {g}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        {t(
+                          'Downgrade to this group after the subscription expires'
+                        )}
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -486,7 +553,9 @@ export function SubscriptionsMutateDrawer({
                     </FormItem>
                   )}
                 />
+              </div>
 
+              <div className='flex flex-col gap-3'>
                 <FormField
                   control={form.control}
                   name='enabled'
@@ -501,6 +570,42 @@ export function SubscriptionsMutateDrawer({
                       <FormLabel className='!mt-0'>
                         {t('Enabled Status')}
                       </FormLabel>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='allow_balance_pay'
+                  render={({ field }) => (
+                    <FormItem className={sideDrawerSwitchItemClassName()}>
+                      <FormLabel className='!mt-0'>
+                        {t('Allow balance redemption')}
+                      </FormLabel>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='allow_wallet_overflow'
+                  render={({ field }) => (
+                    <FormItem className={sideDrawerSwitchItemClassName()}>
+                      <FormLabel className='!mt-0'>
+                        {t('Allow wallet balance after quota used up')}
+                      </FormLabel>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
                     </FormItem>
                   )}
                 />

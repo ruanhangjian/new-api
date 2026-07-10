@@ -39,12 +39,15 @@ import { Route as AuthenticatedWalletIndexRouteImport } from './routes/_authenti
 import { Route as AuthenticatedUsersIndexRouteImport } from './routes/_authenticated/users/index'
 import { Route as AuthenticatedUsageLogsIndexRouteImport } from './routes/_authenticated/usage-logs/index'
 import { Route as AuthenticatedSystemSettingsIndexRouteImport } from './routes/_authenticated/system-settings/index'
+import { Route as AuthenticatedSystemInfoIndexRouteImport } from './routes/_authenticated/system-info/index'
 import { Route as AuthenticatedSubscriptionsIndexRouteImport } from './routes/_authenticated/subscriptions/index'
 import { Route as AuthenticatedRedemptionCodesIndexRouteImport } from './routes/_authenticated/redemption-codes/index'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile/index'
 import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_authenticated/playground/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
+import { Route as AuthenticatedEnterpriseCdkIndexRouteImport } from './routes/_authenticated/enterprise-cdk/index'
+import { Route as AuthenticatedEnterpriseCdkAdminIndexRouteImport } from './routes/_authenticated/enterprise-cdk-admin/index'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
 import { Route as AuthenticatedChannelStatusIndexRouteImport } from './routes/_authenticated/channel-status/index'
@@ -71,6 +74,7 @@ import { Route as AuthenticatedSystemSettingsModelsSectionRouteImport } from './
 import { Route as AuthenticatedSystemSettingsContentSectionRouteImport } from './routes/_authenticated/system-settings/content/$section'
 import { Route as AuthenticatedSystemSettingsBillingSectionRouteImport } from './routes/_authenticated/system-settings/billing/$section'
 import { Route as AuthenticatedSystemSettingsAuthSectionRouteImport } from './routes/_authenticated/system-settings/auth/$section'
+import { Route as AuthenticatedEnterpriseCdkBatchesIdRouteImport } from './routes/_authenticated/enterprise-cdk/batches/$id'
 
 const UserAgreementRoute = UserAgreementRouteImport.update({
   id: '/user-agreement',
@@ -224,6 +228,12 @@ const AuthenticatedSystemSettingsIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
   } as any)
+const AuthenticatedSystemInfoIndexRoute =
+  AuthenticatedSystemInfoIndexRouteImport.update({
+    id: '/system-info/',
+    path: '/system-info/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSubscriptionsIndexRoute =
   AuthenticatedSubscriptionsIndexRouteImport.update({
     id: '/subscriptions/',
@@ -259,6 +269,18 @@ const AuthenticatedKeysIndexRoute = AuthenticatedKeysIndexRouteImport.update({
   path: '/keys/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedEnterpriseCdkIndexRoute =
+  AuthenticatedEnterpriseCdkIndexRouteImport.update({
+    id: '/enterprise-cdk/',
+    path: '/enterprise-cdk/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedEnterpriseCdkAdminIndexRoute =
+  AuthenticatedEnterpriseCdkAdminIndexRouteImport.update({
+    id: '/enterprise-cdk-admin/',
+    path: '/enterprise-cdk-admin/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedDashboardIndexRoute =
   AuthenticatedDashboardIndexRouteImport.update({
     id: '/dashboard/',
@@ -413,6 +435,12 @@ const AuthenticatedSystemSettingsAuthSectionRoute =
     path: '/auth/$section',
     getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
   } as any)
+const AuthenticatedEnterpriseCdkBatchesIdRoute =
+  AuthenticatedEnterpriseCdkBatchesIdRouteImport.update({
+    id: '/enterprise-cdk/batches/$id',
+    path: '/enterprise-cdk/batches/$id',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -450,17 +478,21 @@ export interface FileRoutesByFullPath {
   '/channel-status/': typeof AuthenticatedChannelStatusIndexRoute
   '/channels/': typeof AuthenticatedChannelsIndexRoute
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/enterprise-cdk-admin/': typeof AuthenticatedEnterpriseCdkAdminIndexRoute
+  '/enterprise-cdk/': typeof AuthenticatedEnterpriseCdkIndexRoute
   '/keys/': typeof AuthenticatedKeysIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
   '/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/profile/': typeof AuthenticatedProfileIndexRoute
   '/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
   '/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
+  '/system-info/': typeof AuthenticatedSystemInfoIndexRoute
   '/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
   '/usage-logs/': typeof AuthenticatedUsageLogsIndexRoute
   '/users/': typeof AuthenticatedUsersIndexRoute
   '/wallet/': typeof AuthenticatedWalletIndexRoute
   '/pricing/$modelId/': typeof PricingModelIdIndexRoute
+  '/enterprise-cdk/batches/$id': typeof AuthenticatedEnterpriseCdkBatchesIdRoute
   '/system-settings/auth/$section': typeof AuthenticatedSystemSettingsAuthSectionRoute
   '/system-settings/billing/$section': typeof AuthenticatedSystemSettingsBillingSectionRoute
   '/system-settings/content/$section': typeof AuthenticatedSystemSettingsContentSectionRoute
@@ -511,17 +543,21 @@ export interface FileRoutesByTo {
   '/channel-status': typeof AuthenticatedChannelStatusIndexRoute
   '/channels': typeof AuthenticatedChannelsIndexRoute
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
+  '/enterprise-cdk-admin': typeof AuthenticatedEnterpriseCdkAdminIndexRoute
+  '/enterprise-cdk': typeof AuthenticatedEnterpriseCdkIndexRoute
   '/keys': typeof AuthenticatedKeysIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
   '/playground': typeof AuthenticatedPlaygroundIndexRoute
   '/profile': typeof AuthenticatedProfileIndexRoute
   '/redemption-codes': typeof AuthenticatedRedemptionCodesIndexRoute
   '/subscriptions': typeof AuthenticatedSubscriptionsIndexRoute
+  '/system-info': typeof AuthenticatedSystemInfoIndexRoute
   '/system-settings': typeof AuthenticatedSystemSettingsIndexRoute
   '/usage-logs': typeof AuthenticatedUsageLogsIndexRoute
   '/users': typeof AuthenticatedUsersIndexRoute
   '/wallet': typeof AuthenticatedWalletIndexRoute
   '/pricing/$modelId': typeof PricingModelIdIndexRoute
+  '/enterprise-cdk/batches/$id': typeof AuthenticatedEnterpriseCdkBatchesIdRoute
   '/system-settings/auth/$section': typeof AuthenticatedSystemSettingsAuthSectionRoute
   '/system-settings/billing/$section': typeof AuthenticatedSystemSettingsBillingSectionRoute
   '/system-settings/content/$section': typeof AuthenticatedSystemSettingsContentSectionRoute
@@ -576,17 +612,21 @@ export interface FileRoutesById {
   '/_authenticated/channel-status/': typeof AuthenticatedChannelStatusIndexRoute
   '/_authenticated/channels/': typeof AuthenticatedChannelsIndexRoute
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/_authenticated/enterprise-cdk-admin/': typeof AuthenticatedEnterpriseCdkAdminIndexRoute
+  '/_authenticated/enterprise-cdk/': typeof AuthenticatedEnterpriseCdkIndexRoute
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
   '/_authenticated/playground/': typeof AuthenticatedPlaygroundIndexRoute
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
   '/_authenticated/redemption-codes/': typeof AuthenticatedRedemptionCodesIndexRoute
   '/_authenticated/subscriptions/': typeof AuthenticatedSubscriptionsIndexRoute
+  '/_authenticated/system-info/': typeof AuthenticatedSystemInfoIndexRoute
   '/_authenticated/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
   '/_authenticated/usage-logs/': typeof AuthenticatedUsageLogsIndexRoute
   '/_authenticated/users/': typeof AuthenticatedUsersIndexRoute
   '/_authenticated/wallet/': typeof AuthenticatedWalletIndexRoute
   '/pricing/$modelId/': typeof PricingModelIdIndexRoute
+  '/_authenticated/enterprise-cdk/batches/$id': typeof AuthenticatedEnterpriseCdkBatchesIdRoute
   '/_authenticated/system-settings/auth/$section': typeof AuthenticatedSystemSettingsAuthSectionRoute
   '/_authenticated/system-settings/billing/$section': typeof AuthenticatedSystemSettingsBillingSectionRoute
   '/_authenticated/system-settings/content/$section': typeof AuthenticatedSystemSettingsContentSectionRoute
@@ -640,17 +680,21 @@ export interface FileRouteTypes {
     | '/channel-status/'
     | '/channels/'
     | '/dashboard/'
+    | '/enterprise-cdk-admin/'
+    | '/enterprise-cdk/'
     | '/keys/'
     | '/models/'
     | '/playground/'
     | '/profile/'
     | '/redemption-codes/'
     | '/subscriptions/'
+    | '/system-info/'
     | '/system-settings/'
     | '/usage-logs/'
     | '/users/'
     | '/wallet/'
     | '/pricing/$modelId/'
+    | '/enterprise-cdk/batches/$id'
     | '/system-settings/auth/$section'
     | '/system-settings/billing/$section'
     | '/system-settings/content/$section'
@@ -701,17 +745,21 @@ export interface FileRouteTypes {
     | '/channel-status'
     | '/channels'
     | '/dashboard'
+    | '/enterprise-cdk-admin'
+    | '/enterprise-cdk'
     | '/keys'
     | '/models'
     | '/playground'
     | '/profile'
     | '/redemption-codes'
     | '/subscriptions'
+    | '/system-info'
     | '/system-settings'
     | '/usage-logs'
     | '/users'
     | '/wallet'
     | '/pricing/$modelId'
+    | '/enterprise-cdk/batches/$id'
     | '/system-settings/auth/$section'
     | '/system-settings/billing/$section'
     | '/system-settings/content/$section'
@@ -765,17 +813,21 @@ export interface FileRouteTypes {
     | '/_authenticated/channel-status/'
     | '/_authenticated/channels/'
     | '/_authenticated/dashboard/'
+    | '/_authenticated/enterprise-cdk-admin/'
+    | '/_authenticated/enterprise-cdk/'
     | '/_authenticated/keys/'
     | '/_authenticated/models/'
     | '/_authenticated/playground/'
     | '/_authenticated/profile/'
     | '/_authenticated/redemption-codes/'
     | '/_authenticated/subscriptions/'
+    | '/_authenticated/system-info/'
     | '/_authenticated/system-settings/'
     | '/_authenticated/usage-logs/'
     | '/_authenticated/users/'
     | '/_authenticated/wallet/'
     | '/pricing/$modelId/'
+    | '/_authenticated/enterprise-cdk/batches/$id'
     | '/_authenticated/system-settings/auth/$section'
     | '/_authenticated/system-settings/billing/$section'
     | '/_authenticated/system-settings/content/$section'
@@ -1025,6 +1077,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSystemSettingsIndexRouteImport
       parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
     }
+    '/_authenticated/system-info/': {
+      id: '/_authenticated/system-info/'
+      path: '/system-info'
+      fullPath: '/system-info/'
+      preLoaderRoute: typeof AuthenticatedSystemInfoIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/subscriptions/': {
       id: '/_authenticated/subscriptions/'
       path: '/subscriptions'
@@ -1065,6 +1124,20 @@ declare module '@tanstack/react-router' {
       path: '/keys'
       fullPath: '/keys/'
       preLoaderRoute: typeof AuthenticatedKeysIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/enterprise-cdk/': {
+      id: '/_authenticated/enterprise-cdk/'
+      path: '/enterprise-cdk'
+      fullPath: '/enterprise-cdk/'
+      preLoaderRoute: typeof AuthenticatedEnterpriseCdkIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/enterprise-cdk-admin/': {
+      id: '/_authenticated/enterprise-cdk-admin/'
+      path: '/enterprise-cdk-admin'
+      fullPath: '/enterprise-cdk-admin/'
+      preLoaderRoute: typeof AuthenticatedEnterpriseCdkAdminIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/dashboard/': {
@@ -1249,6 +1322,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSystemSettingsAuthSectionRouteImport
       parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
     }
+    '/_authenticated/enterprise-cdk/batches/$id': {
+      id: '/_authenticated/enterprise-cdk/batches/$id'
+      path: '/enterprise-cdk/batches/$id'
+      fullPath: '/enterprise-cdk/batches/$id'
+      preLoaderRoute: typeof AuthenticatedEnterpriseCdkBatchesIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
@@ -1347,15 +1427,19 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChannelStatusIndexRoute: typeof AuthenticatedChannelStatusIndexRoute
   AuthenticatedChannelsIndexRoute: typeof AuthenticatedChannelsIndexRoute
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
+  AuthenticatedEnterpriseCdkAdminIndexRoute: typeof AuthenticatedEnterpriseCdkAdminIndexRoute
+  AuthenticatedEnterpriseCdkIndexRoute: typeof AuthenticatedEnterpriseCdkIndexRoute
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
   AuthenticatedPlaygroundIndexRoute: typeof AuthenticatedPlaygroundIndexRoute
   AuthenticatedProfileIndexRoute: typeof AuthenticatedProfileIndexRoute
   AuthenticatedRedemptionCodesIndexRoute: typeof AuthenticatedRedemptionCodesIndexRoute
   AuthenticatedSubscriptionsIndexRoute: typeof AuthenticatedSubscriptionsIndexRoute
+  AuthenticatedSystemInfoIndexRoute: typeof AuthenticatedSystemInfoIndexRoute
   AuthenticatedUsageLogsIndexRoute: typeof AuthenticatedUsageLogsIndexRoute
   AuthenticatedUsersIndexRoute: typeof AuthenticatedUsersIndexRoute
   AuthenticatedWalletIndexRoute: typeof AuthenticatedWalletIndexRoute
+  AuthenticatedEnterpriseCdkBatchesIdRoute: typeof AuthenticatedEnterpriseCdkBatchesIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -1375,6 +1459,9 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChannelStatusIndexRoute: AuthenticatedChannelStatusIndexRoute,
   AuthenticatedChannelsIndexRoute: AuthenticatedChannelsIndexRoute,
   AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
+  AuthenticatedEnterpriseCdkAdminIndexRoute:
+    AuthenticatedEnterpriseCdkAdminIndexRoute,
+  AuthenticatedEnterpriseCdkIndexRoute: AuthenticatedEnterpriseCdkIndexRoute,
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,
   AuthenticatedPlaygroundIndexRoute: AuthenticatedPlaygroundIndexRoute,
@@ -1382,9 +1469,12 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedRedemptionCodesIndexRoute:
     AuthenticatedRedemptionCodesIndexRoute,
   AuthenticatedSubscriptionsIndexRoute: AuthenticatedSubscriptionsIndexRoute,
+  AuthenticatedSystemInfoIndexRoute: AuthenticatedSystemInfoIndexRoute,
   AuthenticatedUsageLogsIndexRoute: AuthenticatedUsageLogsIndexRoute,
   AuthenticatedUsersIndexRoute: AuthenticatedUsersIndexRoute,
   AuthenticatedWalletIndexRoute: AuthenticatedWalletIndexRoute,
+  AuthenticatedEnterpriseCdkBatchesIdRoute:
+    AuthenticatedEnterpriseCdkBatchesIdRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

@@ -35,6 +35,10 @@ import {
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  SettingsSwitchContent,
+  SettingsSwitchItem,
+} from '../components/settings-form-layout'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
 import {
@@ -224,24 +228,22 @@ export function ClaudeSettingsCard({ defaultValues }: ClaudeSettingsCardProps) {
               control={form.control}
               name='claude.thinking_adapter_enabled'
               render={({ field }) => (
-                <FormItem className='flex flex-row items-center justify-between'>
-                  <div className='space-y-0.5'>
-                    <FormLabel className='text-base'>
-                      {t('Thinking Adapter')}
-                    </FormLabel>
+                <SettingsSwitchItem>
+                  <SettingsSwitchContent>
+                    <FormLabel>{t('Thinking Suffix Adapter')}</FormLabel>
                     <FormDescription>
                       {t(
-                        'Translate `-thinking` suffixes into Anthropic native thinking models while keeping pricing predictable.'
+                        'Adapt `-thinking` suffix requests to Anthropic native thinking behavior while keeping billing predictable.'
                       )}
                     </FormDescription>
-                  </div>
+                  </SettingsSwitchContent>
                   <FormControl>
                     <Switch
                       checked={field.value}
                       onCheckedChange={field.onChange}
                     />
                   </FormControl>
-                </FormItem>
+                </SettingsSwitchItem>
               )}
             />
 

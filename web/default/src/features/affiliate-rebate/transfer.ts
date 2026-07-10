@@ -1,6 +1,7 @@
-import { QUOTA_PER_DOLLAR } from '@/features/wallet/constants'
+import { DEFAULT_CURRENCY_CONFIG } from '@/stores/system-config-store'
 
-const MIN_AFFILIATE_TRANSFER_QUOTA = QUOTA_PER_DOLLAR / 100
+export const MIN_AFFILIATE_TRANSFER_QUOTA =
+  DEFAULT_CURRENCY_CONFIG.quotaPerUnit / 100
 
 export function canTransferAffiliateReward(availableQuota: number): boolean {
   return availableQuota >= MIN_AFFILIATE_TRANSFER_QUOTA

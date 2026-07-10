@@ -16,9 +16,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
+import { useMemo, useState } from 'react'
 import {
   ArrowRight,
   BookOpen,
@@ -582,7 +582,9 @@ export function OverviewDashboard() {
 
   const completedStepCount = startSteps.filter((step) => step.completed).length
   const setupComplete = completedStepCount === startSteps.length
-  const setupGuideExpanded = manualSetupGuideExpanded ?? !setupComplete
+  const setupStatusReady = apiKeysQuery.isFetched && Boolean(user)
+  const setupGuideExpanded =
+    manualSetupGuideExpanded ?? (setupStatusReady && !setupComplete)
   const showLeftContentPanels =
     isAdmin || showApiInfoPanel || showAnnouncementsPanel || showFAQPanel
   const showContentPanels = showLeftContentPanels || showUptimePanel

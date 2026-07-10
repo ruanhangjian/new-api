@@ -61,6 +61,14 @@ const OPERATIONS_SECTIONS = [
             settings['monitor_setting.auto_test_channel_enabled'],
           'monitor_setting.auto_test_channel_minutes':
             settings['monitor_setting.auto_test_channel_minutes'],
+          'perf_metrics_setting.enabled':
+            settings['perf_metrics_setting.enabled'],
+          'perf_metrics_setting.flush_interval':
+            settings['perf_metrics_setting.flush_interval'],
+          'perf_metrics_setting.bucket_time':
+            settings['perf_metrics_setting.bucket_time'],
+          'perf_metrics_setting.retention_days':
+            settings['perf_metrics_setting.retention_days'],
         }}
       />
     ),
@@ -78,6 +86,8 @@ const OPERATIONS_SECTIONS = [
           SMTPFrom: settings.SMTPFrom,
           SMTPToken: settings.SMTPToken,
           SMTPSSLEnabled: settings.SMTPSSLEnabled,
+          SMTPStartTLSEnabled: settings.SMTPStartTLSEnabled,
+          SMTPInsecureSkipVerify: settings.SMTPInsecureSkipVerify,
           SMTPForceAuthLogin: settings.SMTPForceAuthLogin,
         }}
       />

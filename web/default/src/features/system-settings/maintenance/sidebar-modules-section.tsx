@@ -45,7 +45,9 @@ type SidebarModulesSectionProps = {
 type SidebarFormValues = SidebarModulesAdminConfig
 
 const toTitleCase = (value: string) =>
-  value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
+  value
+    .replaceAll(/[_-]+/g, ' ')
+    .replaceAll(/\b\w/g, (char) => char.toUpperCase())
 
 export function SidebarModulesSection({
   config,
@@ -102,7 +104,7 @@ export function SidebarModulesSection({
       },
       midjourney: {
         title: t('Drawing logs'),
-        description: t('History of Midjourney-style image tasks.'),
+        description: t('History of MjProxy-style image tasks.'),
       },
       task: {
         title: t('Task logs'),

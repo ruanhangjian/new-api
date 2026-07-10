@@ -34,13 +34,17 @@ import {
   MessageSquare,
   CreditCard,
   ListTodo,
+  ServerCog,
   Settings,
   WalletCards,
+  ShieldCheck,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { WORKSPACE_IDS } from '@/components/layout/lib/workspace-registry'
 import { type SidebarData } from '@/components/layout/types'
 import { getAffiliateRebateOverviewSilent } from '@/features/affiliate-rebate/api'
+import { getEnterpriseCdkPermission } from '@/features/enterprise-cdk/api'
+import { ROLE } from '@/lib/roles'
 
 const DEFAULT_AFFILIATE_REBATE_RATE = 0.02
 
@@ -68,10 +72,19 @@ export function useSidebarData(): SidebarData {
     retry: false,
     staleTime: 5 * 60 * 1000,
   })
+  const { data: enterpriseCdkPermission } = useQuery({
+    queryKey: ['enterprise-cdk-permission', 'sidebar'],
+    queryFn: getEnterpriseCdkPermission,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  })
 
   const affiliateRebateRate = formatAffiliateRebateRate(
     affiliateRebateOverview?.rate ?? DEFAULT_AFFILIATE_REBATE_RATE
   )
+  const hasEnterpriseCdkPermission =
+    enterpriseCdkPermission?.success &&
+    enterpriseCdkPermission.data?.has_permission === true
 
   return {
     workspaces: [
@@ -157,6 +170,15 @@ export function useSidebarData(): SidebarData {
             badgeClassName:
               'isolate relative -ml-1 h-[22px] items-start overflow-visible border-transparent bg-transparent px-1.5 pb-0 pt-[2px] text-[9px] font-bold leading-[12px] text-white shadow-none hover:bg-transparent dark:border-transparent dark:bg-transparent dark:text-white dark:hover:bg-transparent before:absolute before:inset-x-0 before:top-0 before:z-0 before:h-[17px] before:rounded-full before:bg-red-500 before:shadow-sm before:shadow-red-500/25 before:content-[""] after:absolute after:left-1 after:top-[13px] after:z-0 after:h-0 after:w-0 after:border-t-[8px] after:border-r-[9px] after:border-t-red-500 after:border-r-transparent after:content-[""]',
           },
+          ...(hasEnterpriseCdkPermission
+            ? [
+                {
+                  title: t('Enterprise CDK'),
+                  url: '/enterprise-cdk',
+                  icon: Ticket,
+                },
+              ]
+            : []),
           {
             title: t('Profile'),
             url: '/profile',
@@ -199,9 +221,20 @@ export function useSidebarData(): SidebarData {
             icon: Ticket,
           },
           {
-            title: t('Subscription Management'),
+            title: t('Enterprise CDK Management'),
+            url: '/enterprise-cdk-admin',
+            icon: ShieldCheck,
+          },
+          {
+            title: t('Subscriptions'),
             url: '/subscriptions',
             icon: CreditCard,
+          },
+          {
+            title: t('System Info'),
+            url: '/system-info',
+            icon: ServerCog,
+            requiredRole: ROLE.SUPER_ADMIN,
           },
           {
             title: t('System Settings'),

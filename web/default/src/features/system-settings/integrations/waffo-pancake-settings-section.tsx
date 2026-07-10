@@ -41,6 +41,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+
 import { removeTrailingSlash } from './utils'
 import {
   type CatalogStore,
@@ -61,8 +62,21 @@ export type WaffoPancakeSettingsValues = z.infer<typeof waffoPancakeSchema> & {
   WaffoPancakeReturnURL: string
 }
 
+export type WaffoPancakeBinding = {
+  storeID: string
+  productID: string
+}
+
 interface Props {
   defaultValues: WaffoPancakeSettingsValues
+  values?: WaffoPancakeSettingsValues
+  onValueChange?: <K extends keyof WaffoPancakeSettingsValues>(
+    key: K,
+    value: WaffoPancakeSettingsValues[K]
+  ) => void
+  selectedBinding?: WaffoPancakeBinding
+  savedBinding?: WaffoPancakeBinding
+  onSelectedBindingChange?: (binding: WaffoPancakeBinding) => void
   provisionedStoreID?: string
   provisionedProductID?: string
 }
@@ -74,12 +88,17 @@ const DEFAULT_NEW_PAIR_NAME = `${DEFAULT_NEW_STORE_NAME} + ${DEFAULT_NEW_PRODUCT
 
 export function WaffoPancakeSettingsSection(props: Props) {
   const { t } = useTranslation()
+  const selectedBinding = props.selectedBinding ?? {
+    storeID: props.provisionedStoreID ?? '',
+    productID: props.provisionedProductID ?? '',
+  }
+  const savedBinding = props.savedBinding ?? selectedBinding
 
   const [storeID, setStoreID] = React.useState(
-    props.provisionedStoreID ?? ''
+    savedBinding.storeID
   )
   const [productID, setProductID] = React.useState(
-    props.provisionedProductID ?? ''
+    savedBinding.productID
   )
 
   const [phase, setPhase] = React.useState<'idle' | 'verifying' | 'saving'>(
@@ -89,13 +108,15 @@ export function WaffoPancakeSettingsSection(props: Props) {
   // Seed dropdowns from saved bindings so they render on first paint instead
   // of waiting for the async catalog fetch to confirm them.
   const [chosenStoreID, setChosenStoreID] = React.useState<string>(
-    props.provisionedStoreID ?? ''
+    selectedBinding.storeID
   )
   const [chosenProductID, setChosenProductID] = React.useState<string>(
-    props.provisionedProductID ?? ''
+    selectedBinding.productID
   )
   const [returnURL, setReturnURL] = React.useState(
-    props.defaultValues.WaffoPancakeReturnURL ?? ''
+    props.values?.WaffoPancakeReturnURL ??
+      props.defaultValues.WaffoPancakeReturnURL ??
+      ''
   )
   const [creatingPair, setCreatingPair] = React.useState(false)
 
@@ -114,8 +135,12 @@ export function WaffoPancakeSettingsSection(props: Props) {
     resolver: zodResolver(waffoPancakeSchema),
     mode: 'onChange',
     defaultValues: {
-      WaffoPancakeMerchantID: props.defaultValues.WaffoPancakeMerchantID,
-      WaffoPancakePrivateKey: props.defaultValues.WaffoPancakePrivateKey,
+      WaffoPancakeMerchantID:
+        props.values?.WaffoPancakeMerchantID ??
+        props.defaultValues.WaffoPancakeMerchantID,
+      WaffoPancakePrivateKey:
+        props.values?.WaffoPancakePrivateKey ??
+        props.defaultValues.WaffoPancakePrivateKey,
     },
   })
 
@@ -137,12 +162,17 @@ export function WaffoPancakeSettingsSection(props: Props) {
   }, [defaultsSignature, form])
 
   React.useEffect(() => {
-    setStoreID(props.provisionedStoreID ?? '')
-  }, [props.provisionedStoreID])
+    setStoreID(savedBinding.storeID)
+  }, [savedBinding.storeID])
 
   React.useEffect(() => {
-    setProductID(props.provisionedProductID ?? '')
-  }, [props.provisionedProductID])
+    setProductID(savedBinding.productID)
+  }, [savedBinding.productID])
+
+  React.useEffect(() => {
+    setChosenStoreID(selectedBinding.storeID)
+    setChosenProductID(selectedBinding.productID)
+  }, [selectedBinding.productID, selectedBinding.storeID])
 
   const productsForChosenStore = React.useMemo(() => {
     if (!chosenStoreID) return []
@@ -335,6 +365,10 @@ export function WaffoPancakeSettingsSection(props: Props) {
           storeID: created.store_id,
           productID: created.product_id,
         })
+        props.onSelectedBindingChange?.({
+          storeID: created.store_id,
+          productID: created.product_id,
+        })
         toast.success(
           `${t('Store + product created')}: ${created.store_id} / ${created.product_id}`
         )
@@ -347,6 +381,10 @@ export function WaffoPancakeSettingsSection(props: Props) {
       if (errData?.orphan_store && errData.store_id) {
         setPhase('verifying')
         await verifyAndFetchCatalog(merchantID, privateKey, {
+          storeID: errData.store_id,
+          productID: '',
+        })
+        props.onSelectedBindingChange?.({
           storeID: errData.store_id,
           productID: '',
         })
@@ -401,6 +439,10 @@ export function WaffoPancakeSettingsSection(props: Props) {
         const saved = body.data as { product_id: string; store_id: string }
         setStoreID(saved.store_id)
         setProductID(saved.product_id)
+        props.onSelectedBindingChange?.({
+          storeID: saved.store_id,
+          productID: saved.product_id,
+        })
         toast.success(t('Waffo Pancake settings saved'))
       } else {
         const reason = typeof body?.data === 'string' ? body.data : undefined
@@ -519,7 +561,13 @@ export function WaffoPancakeSettingsSection(props: Props) {
                     placeholder='MER_xxx'
                     autoComplete='off'
                     {...field}
-                    onChange={(event) => field.onChange(event.target.value)}
+                    onChange={(event) => {
+                      field.onChange(event.target.value)
+                      props.onValueChange?.(
+                        'WaffoPancakeMerchantID',
+                        event.target.value
+                      )
+                    }}
                   />
                 </FormControl>
                 <FormMessage />
@@ -539,7 +587,13 @@ export function WaffoPancakeSettingsSection(props: Props) {
                     placeholder={t('Leave blank to keep the existing key')}
                     autoComplete='new-password'
                     {...field}
-                    onChange={(event) => field.onChange(event.target.value)}
+                    onChange={(event) => {
+                      field.onChange(event.target.value)
+                      props.onValueChange?.(
+                        'WaffoPancakePrivateKey',
+                        event.target.value
+                      )
+                    }}
                     className='font-mono text-xs'
                   />
                 </FormControl>
@@ -609,7 +663,13 @@ export function WaffoPancakeSettingsSection(props: Props) {
                 <Input
                   placeholder='https://example.com/console/topup'
                   value={returnURL}
-                  onChange={(event) => setReturnURL(event.target.value)}
+                  onChange={(event) => {
+                    setReturnURL(event.target.value)
+                    props.onValueChange?.(
+                      'WaffoPancakeReturnURL',
+                      event.target.value
+                    )
+                  }}
                   className='flex-1'
                 />
                 <Button
@@ -649,8 +709,13 @@ export function WaffoPancakeSettingsSection(props: Props) {
                       value={chosenStoreID}
                       onValueChange={(value) => {
                         // Base UI Select can deliver null on deselect.
-                        setChosenStoreID(value ?? '')
+                        const nextStoreID = value ?? ''
+                        setChosenStoreID(nextStoreID)
                         setChosenProductID('')
+                        props.onSelectedBindingChange?.({
+                          storeID: nextStoreID,
+                          productID: '',
+                        })
                       }}
                     >
                       <SelectTrigger className='w-full'>
@@ -671,7 +736,14 @@ export function WaffoPancakeSettingsSection(props: Props) {
                     <Select
                       items={productSelectItems}
                       value={chosenProductID}
-                      onValueChange={(value) => setChosenProductID(value ?? '')}
+                      onValueChange={(value) => {
+                        const nextProductID = value ?? ''
+                        setChosenProductID(nextProductID)
+                        props.onSelectedBindingChange?.({
+                          storeID: chosenStoreID,
+                          productID: nextProductID,
+                        })
+                      }}
                       disabled={
                         !chosenStoreID || productSelectItems.length === 0
                       }

@@ -55,11 +55,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import {
-  StatusBadge,
-  dotColorMap,
-  textColorMap,
-} from '@/components/status-badge'
-import {
   getPublicPlans,
   getSelfSubscriptionFull,
   updateBillingPreference,
@@ -77,12 +72,16 @@ import type {
   PlanRecord,
   UserSubscriptionRecord,
 } from '@/features/subscriptions/types'
+import { dotColorMap, StatusBadge, textColorMap } from '@/components/status-badge'
+
 import type { PaymentMethod, TopupInfo } from '../types'
 
 interface SubscriptionPlansCardProps {
   topupInfo: TopupInfo | null
   onAvailabilityChange?: (available: boolean) => void
   mode?: 'plans' | 'summary'
+  userQuota?: number
+  onPurchaseSuccess?: () => void | Promise<void>
 }
 
 function getEpayMethods(payMethods: PaymentMethod[] = []): PaymentMethod[] {
@@ -106,6 +105,26 @@ function getBillingPreferenceLabel(
       return t('Wallet Only')
     default:
       return preference
+  }
+}
+
+function getSubscriptionSourceLabel(
+  source: string | undefined,
+  t: (key: string) => string
+): string {
+  switch (source) {
+    case 'balance':
+      return t('Balance Payment')
+    case 'epay':
+      return t('Epay')
+    case 'stripe':
+      return t('Stripe')
+    case 'creem':
+      return t('Creem')
+    case 'waffo-pancake':
+      return t('Waffo Pancake')
+    default:
+      return source || '-'
   }
 }
 
@@ -240,7 +259,7 @@ function SubscriptionUsageCard({
       {!compact && (
         <div className='text-muted-foreground grid grid-cols-2 gap-2 text-xs'>
           <div>
-            {t('Source')}: {subscription?.source || '-'}
+            {t('Source')}: {getSubscriptionSourceLabel(subscription?.source, t)}
           </div>
           <div>
             {t('Created At')}: {formatTimestamp(subscription?.created_at || 0)}
@@ -255,6 +274,8 @@ export function SubscriptionPlansCard({
   topupInfo,
   onAvailabilityChange,
   mode = 'plans',
+  userQuota,
+  onPurchaseSuccess,
 }: SubscriptionPlansCardProps) {
   const { t, i18n } = useTranslation()
 
@@ -410,7 +431,7 @@ export function SubscriptionPlansCard({
 
   if (loading) {
     return (
-      <Card className='gap-0 overflow-hidden py-0'>
+      <Card data-card-hover='false' className='gap-0 overflow-hidden py-0'>
         <CardContent className='space-y-4 p-3 sm:p-5'>
           <Skeleton className='h-24 w-full' />
           <Skeleton className='h-48 w-full' />
@@ -429,6 +450,7 @@ export function SubscriptionPlansCard({
         title={t('My Subscriptions')}
         icon={<Crown className='h-4 w-4' />}
         headerClassName='p-3 !pb-3 sm:p-4 sm:!pb-3'
+        disableHoverEffect
         action={
           hasAny ? (
             <Button
@@ -838,6 +860,8 @@ export function SubscriptionPlansCard({
         enableWaffoPancake={enableWaffoPancake}
         enableOnlineTopUp={enableOnlineTopUp}
         epayMethods={epayMethods}
+        userQuota={userQuota}
+        onPurchaseSuccess={onPurchaseSuccess}
         purchaseLimit={
           selectedPlan?.plan?.max_purchase_per_user
             ? Number(selectedPlan.plan.max_purchase_per_user)

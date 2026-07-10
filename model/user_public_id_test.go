@@ -14,9 +14,13 @@ import (
 func openUserPublicIdTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
-	common.UsingSQLite = true
-	common.UsingMySQL = false
-	common.UsingPostgreSQL = false
+	originalDB := DB
+	originalLogDB := LOG_DB
+	originalMainDatabaseType := common.MainDatabaseType()
+	originalLogDatabaseType := common.LogDatabaseType()
+	originalRedisEnabled := common.RedisEnabled
+
+	common.SetDatabaseTypes(common.DatabaseTypeSQLite, common.DatabaseTypeSQLite)
 	common.RedisEnabled = false
 
 	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
@@ -26,6 +30,10 @@ func openUserPublicIdTestDB(t *testing.T) *gorm.DB {
 	LOG_DB = db
 
 	t.Cleanup(func() {
+		DB = originalDB
+		LOG_DB = originalLogDB
+		common.SetDatabaseTypes(originalMainDatabaseType, originalLogDatabaseType)
+		common.RedisEnabled = originalRedisEnabled
 		sqlDB, err := db.DB()
 		if err == nil {
 			_ = sqlDB.Close()

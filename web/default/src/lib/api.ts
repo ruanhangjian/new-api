@@ -16,10 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import axios from 'axios'
+import axios, { type AxiosRequestConfig } from 'axios'
 import i18next from 'i18next'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
+
+export type ApiRequestConfig = AxiosRequestConfig & {
+  skipBusinessError?: boolean
+  skipErrorHandler?: boolean
+  disableDuplicate?: boolean
+}
 
 // ============================================================================
 // Axios Instance Configuration
@@ -57,7 +63,8 @@ api.get = ((url: string, config = {}) => {
   const key = `${url}?${params}`
 
   // Return existing in-flight request if available
-  if (inFlightGet.has(key)) return inFlightGet.get(key)!
+  const inFlight = inFlightGet.get(key)
+  if (inFlight) return inFlight
 
   // Create new request and clean up after completion
   const req = originalGet(url, config).finally(() => inFlightGet.delete(key))

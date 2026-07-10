@@ -23,6 +23,8 @@ import { useTranslation } from 'react-i18next'
 import { useSearch } from '@/context/search-provider'
 import { useTheme } from '@/context/theme-provider'
 import { useSidebarData } from '@/hooks/use-sidebar-data'
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 import {
   Command,
   CommandDialog,
@@ -43,9 +45,18 @@ export function CommandMenu() {
   const { open, setOpen } = useSearch()
   const { pathname } = useLocation()
   const sidebarData = useSidebarData()
+  const userRole = useAuthStore((state) => state.auth.user?.role)
 
   // 根据当前路径从工作区注册表获取对应的侧边栏配置
-  const navGroups = getNavGroupsForPath(pathname, t) || sidebarData.navGroups
+  const role = userRole ?? ROLE.GUEST
+  const navGroups = (getNavGroupsForPath(pathname, t) || sidebarData.navGroups)
+    .map((group) => {
+      const items = group.items.filter(
+        (item) => item.requiredRole === undefined || role >= item.requiredRole
+      )
+      return items.length === group.items.length ? group : { ...group, items }
+    })
+    .filter((group) => group.items.length > 0)
 
   const runCommand = React.useCallback(
     (command: () => unknown) => {

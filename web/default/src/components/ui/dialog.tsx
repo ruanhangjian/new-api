@@ -16,12 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import * as React from 'react'
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog'
 import { Cancel01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { cn } from '@/lib/utils'
+import * as React from 'react'
+
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot='dialog' {...props} />
@@ -59,13 +60,15 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  overlayClassName,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
+  overlayClassName?: string
 }) {
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Popup
         data-slot='dialog-content'
         className={cn(

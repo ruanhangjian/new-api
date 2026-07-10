@@ -239,6 +239,8 @@ export function Wallet(props: WalletProps) {
     []
   )
 
+  const subscriptionUserQuota = Number(user?.quota || 0)
+
   const quickRechargeProps = {
     title: t('Quick Recharge'),
     description: t('Quick top-up, ready to use anytime'),
@@ -373,6 +375,7 @@ export function Wallet(props: WalletProps) {
                     <SubscriptionPlansCard
                       topupInfo={topupInfo}
                       mode='summary'
+                      userQuota={subscriptionUserQuota}
                     />
                   </div>
                 )}
@@ -380,6 +383,7 @@ export function Wallet(props: WalletProps) {
                 <SubscriptionPlansCard
                   topupInfo={topupInfo}
                   onAvailabilityChange={handleSubscriptionAvailabilityChange}
+                  userQuota={subscriptionUserQuota}
                 />
 
                 <div className='xl:hidden' id='wallet-add-funds-mobile'>
@@ -394,6 +398,7 @@ export function Wallet(props: WalletProps) {
                   <SubscriptionPlansCard
                     topupInfo={topupInfo}
                     mode='summary'
+                    userQuota={subscriptionUserQuota}
                   />
                   <div id='wallet-add-funds' className='scroll-mt-4'>
                     <RechargeFormCard {...quickRechargeProps} />

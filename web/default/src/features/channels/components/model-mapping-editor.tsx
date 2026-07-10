@@ -28,6 +28,8 @@ type ModelMappingEditorProps = {
   value: string
   onChange: (value: string) => void
   disabled?: boolean
+  sourceModelOptions?: string[]
+  targetModelOptions?: string[]
 }
 
 type MappingRow = {

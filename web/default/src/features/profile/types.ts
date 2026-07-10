@@ -41,6 +41,8 @@ export interface UserProfile {
   username: string
   /** Display name */
   display_name: string
+  /** User-maintained account remark for enterprise CDK redeemer display */
+  profile_remark?: string
   /** User role (1=普通用户, 10=管理员, 100=超级管理员) */
   role: number
   /** Email address */
@@ -127,6 +129,7 @@ export interface UserSettings {
  */
 export interface UpdateUserRequest {
   display_name?: string
+  profile_remark?: string
   password?: string
   original_password?: string
 }
