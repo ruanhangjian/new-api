@@ -24,19 +24,26 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import type { InspirationCase } from '../types'
+import { ImagePreviewDialog } from './image-preview-dialog'
 
 type InspirationStripProps = {
   items: InspirationCase[]
   isLoading: boolean
+  isSwitching: boolean
   onUse: (item: InspirationCase) => void
-  onRefresh: () => void
+  onPrevious: () => void
+  onNext: () => void
+  onRandom: () => void
 }
 
 export function InspirationStrip({
   items,
   isLoading,
+  isSwitching,
   onUse,
-  onRefresh,
+  onPrevious,
+  onNext,
+  onRandom,
 }: InspirationStripProps) {
   return (
     <section
@@ -44,7 +51,10 @@ export function InspirationStrip({
       aria-labelledby='inspiration-title'
     >
       <div className='image-workshop-section-head'>
-        <h2 id='inspiration-title'>灵感模板</h2>
+        <div className='image-workshop-section-title'>
+          <h2 id='inspiration-title'>灵感模板</h2>
+          <span>点击模板即可填入提示词</span>
+        </div>
         <div className='image-workshop-section-actions'>
           <Link
             className='image-workshop-text-link'
@@ -57,7 +67,8 @@ export function InspirationStrip({
             type='button'
             title='上一批'
             aria-label='上一批'
-            onClick={onRefresh}
+            disabled={isLoading || isSwitching}
+            onClick={onPrevious}
           >
             <ChevronLeft aria-hidden='true' />
           </button>
@@ -65,7 +76,8 @@ export function InspirationStrip({
             type='button'
             title='下一批'
             aria-label='下一批'
-            onClick={onRefresh}
+            disabled={isLoading || isSwitching}
+            onClick={onNext}
           >
             <ChevronRight aria-hidden='true' />
           </button>
@@ -78,31 +90,40 @@ export function InspirationStrip({
               <div className='image-workshop-template-skeleton' key={index} />
             ))
           : items.map((item) => (
-              <button
-                className='image-workshop-template-card'
-                type='button'
-                key={item.id}
-                onClick={() => onUse(item)}
-              >
-                {item.thumbnailUrl ? (
-                  <img src={item.thumbnailUrl} alt='' loading='lazy' />
-                ) : (
-                  <span className='image-workshop-template-placeholder' />
-                )}
-                <span>{item.title}</span>
-              </button>
+              <article className='image-workshop-template-card' key={item.id}>
+                <button
+                  className='image-workshop-template-use'
+                  type='button'
+                  onClick={() => onUse(item)}
+                >
+                  {item.thumbnailUrl ? (
+                    <img
+                      src={item.thumbnailUrl}
+                      alt={item.title}
+                      loading='eager'
+                    />
+                  ) : (
+                    <span className='image-workshop-template-placeholder' />
+                  )}
+                  <span>{item.title}</span>
+                </button>
+                <ImagePreviewDialog src={item.thumbnailUrl} alt={item.title} />
+              </article>
             ))}
       </div>
 
       <div className='image-workshop-template-footer'>
-        <span>来自 Lingqu 同源灵感库 · 点击模板即可填入提示词</span>
         <button
           type='button'
           title='换一批'
           aria-label='换一批'
-          onClick={onRefresh}
+          disabled={isLoading || isSwitching}
+          onClick={onRandom}
         >
-          <RefreshCw aria-hidden='true' />
+          <RefreshCw
+            className={isSwitching ? 'animate-spin' : undefined}
+            aria-hidden='true'
+          />
         </button>
       </div>
     </section>

@@ -20,6 +20,8 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, ExternalLink, Search } from 'lucide-react'
+import { ImagePreviewDialog } from './components/image-preview-dialog'
+import { WorkshopSelect } from './components/workshop-select'
 import './image-workshop.css'
 import {
   loadInspirationLibrary,
@@ -174,7 +176,7 @@ export function InspirationLibraryPage() {
           )}
 
         <footer className='image-workshop-library-attribution'>
-          <span>灵感数据与 Lingqu 使用相同的开源数据源：</span>
+          <span>开源数据来源：</span>
           <a
             href='https://github.com/freestylefly/awesome-gpt-image-2'
             target='_blank'
@@ -208,9 +210,10 @@ function CaseCard({
     <article className='image-workshop-library-card'>
       <div className='image-workshop-library-card-media'>
         {item.thumbnailUrl ? (
-          <img src={item.thumbnailUrl} alt='' loading='lazy' />
+          <img src={item.thumbnailUrl} alt={item.title} loading='lazy' />
         ) : null}
         <span>{item.category}</span>
+        <ImagePreviewDialog src={item.thumbnailUrl} alt={item.title} />
       </div>
       <div className='image-workshop-library-card-body'>
         <h2>{item.title}</h2>
@@ -242,7 +245,12 @@ function TemplateGroupCard({
 
   return (
     <article className='image-workshop-template-library-card'>
-      {group.coverUrl && <img src={group.coverUrl} alt='' loading='lazy' />}
+      {group.coverUrl && (
+        <div className='image-workshop-template-library-media'>
+          <img src={group.coverUrl} alt={group.title} loading='lazy' />
+          <ImagePreviewDialog src={group.coverUrl} alt={group.title} />
+        </div>
+      )}
       <div className='image-workshop-template-library-body'>
         <h2>{group.title}</h2>
         <div className='image-workshop-template-tags'>
@@ -250,16 +258,17 @@ function TemplateGroupCard({
             <span key={tag}>{tag}</span>
           ))}
         </div>
-        <select
-          value={entry?.id}
-          onChange={(event) => setEntryId(event.target.value)}
-        >
-          {group.entries.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.title}
-            </option>
-          ))}
-        </select>
+        <WorkshopSelect
+          value={entry?.id || ''}
+          options={group.entries.map((item) => ({
+            value: item.id,
+            label: item.title,
+          }))}
+          ariaLabel={`选择${group.title}模板`}
+          className='image-workshop-template-entry-select'
+          contentClassName='image-workshop-template-entry-select-content'
+          onChange={setEntryId}
+        />
         <p>{entry?.content}</p>
         <button
           type='button'

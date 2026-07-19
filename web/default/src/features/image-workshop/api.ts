@@ -49,8 +49,47 @@ export async function getImageWorkshopOptions(tokenId: number) {
 export async function createImageWorkshopGeneration(
   request: ImageWorkshopGenerationRequest
 ) {
-  const response = await api.post('/api/image-workshop/generations', request)
-  return unwrap(response.data as ApiResponse<ImageWorkshopGenerationResponse>)
+  try {
+    const response = await api.post(
+      '/api/image-workshop/generations',
+      request,
+      {
+        skipBusinessError: true,
+        skipErrorHandler: true,
+      } as Record<string, unknown>
+    )
+    return unwrap(response.data as ApiResponse<ImageWorkshopGenerationResponse>)
+  } catch (error) {
+    const responseData = (
+      error as {
+        response?: {
+          data?: {
+            message?: unknown
+            title?: unknown
+            error?: { message?: unknown }
+          }
+        }
+      }
+    )?.response?.data
+    const candidates = [
+      responseData?.message,
+      responseData?.error?.message,
+      responseData?.title,
+      error instanceof Error ? error.message : undefined,
+    ]
+    const message = candidates.find(
+      (candidate): candidate is string =>
+        typeof candidate === 'string' &&
+        Boolean(candidate.trim()) &&
+        !/^Request failed with status code \d+$/i.test(candidate.trim())
+    )
+    throw new Error(
+      message?.trim()
+        ? `任务提交失败：${message.trim()}`
+        : '任务提交失败，请稍后重试',
+      { cause: error }
+    )
+  }
 }
 
 export async function getImageWorkshopTasks(pageSize = 50) {

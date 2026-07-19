@@ -64,7 +64,7 @@ type TemplateGroupRecord = {
 
 const LIBRARY_BASE_PATH = `${import.meta.env.BASE_URL}prompt-library/`
 
-// These featured Lingqu cases were checked against their real source images.
+// These featured cases were checked against their real source images.
 // Every image is portrait or near-portrait, so homepage cards avoid harsh crops.
 export const HOMEPAGE_TEMPLATE_IDS = [
   '362',

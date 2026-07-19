@@ -25,6 +25,7 @@ import type {
   LocalImageWorkshopWork,
 } from '../types'
 import { GeneratingCard } from './generating-card'
+import { WorkshopSelect } from './workshop-select'
 
 type WorksGalleryProps = {
   tasks: ImageWorkshopTask[]
@@ -59,7 +60,6 @@ function LocalWorkCard({ work }: { work: LocalImageWorkshopWork }) {
       image={{ url, revised_prompt: work.revisedPrompt }}
       prompt={work.prompt}
       model={work.model}
-      size={work.size}
       format={work.outputFormat}
       timestamp={work.createdAt}
       local
@@ -71,7 +71,6 @@ function CompletedWorkCard({
   image,
   prompt,
   model,
-  size,
   format,
   timestamp,
   local = false,
@@ -79,7 +78,6 @@ function CompletedWorkCard({
   image: ImageWorkshopResultImage
   prompt: string
   model: string
-  size?: string
   format?: string
   timestamp?: number
   local?: boolean
@@ -87,10 +85,7 @@ function CompletedWorkCard({
   const extension = (format || 'png').toLowerCase()
   return (
     <article className='image-workshop-work-card'>
-      <div
-        className='image-workshop-work-media'
-        style={{ aspectRatio: aspectRatioForSize(size) }}
-      >
+      <div className='image-workshop-work-media image-workshop-work-media-completed'>
         <span className='image-workshop-work-type'>
           {local ? '本机' : '临时'}
         </span>
@@ -178,15 +173,17 @@ export function WorksGallery({
             服务器只短期保留图片；生成完成后会自动在当前浏览器保存一份。更换设备或清理浏览器数据后不会同步，请及时下载重要作品。
           </p>
         </div>
-        <select
-          value={limit}
-          aria-label='显示作品数量'
-          onChange={(event) => onLimitChange(Number(event.target.value))}
-        >
-          <option value={20}>20 个</option>
-          <option value={50}>50 个</option>
-          <option value={100}>100 个</option>
-        </select>
+        <WorkshopSelect
+          value={String(limit)}
+          options={[
+            { value: '20', label: '20 个' },
+            { value: '50', label: '50 个' },
+            { value: '100', label: '100 个' },
+          ]}
+          ariaLabel='显示作品数量'
+          className='image-workshop-works-limit-select'
+          onChange={(value) => onLimitChange(Number(value))}
+        />
       </div>
 
       {!hasWorks && !isLoading ? (
@@ -223,7 +220,6 @@ export function WorksGallery({
                     image={image}
                     prompt={task.prompt || ''}
                     model={task.model || ''}
-                    size={task.size}
                     format={task.output_format}
                     timestamp={task.finish_time || task.submit_time}
                   />

@@ -20,6 +20,7 @@ import { useEffect, useRef } from 'react'
 import { ArrowUp, Image, LoaderCircle, Video } from 'lucide-react'
 import { toast } from 'sonner'
 import type { ImageWorkshopModelCapability, ImageWorkshopToken } from '../types'
+import { WorkshopSelect } from './workshop-select'
 
 export type WorkshopFormState = {
   prompt: string
@@ -52,6 +53,12 @@ function optionLabel(value: string) {
     hd: '高清',
   }
   return labels[value] || value.toUpperCase()
+}
+
+function groupLabel(group: string) {
+  if (!group || group === 'default') return '默认分组'
+  if (group === 'auto') return '自动分组'
+  return group
 }
 
 export function WorkshopComposer({
@@ -88,7 +95,22 @@ export function WorkshopComposer({
       aria-labelledby='workshop-title'
     >
       <div className='image-workshop-composer-head'>
-        <h1 id='workshop-title'>图片</h1>
+        <div className='image-workshop-key-picker'>
+          <strong id='workshop-title'>选择 Key，直接开始创作</strong>
+          <WorkshopSelect
+            value={value.tokenId ? String(value.tokenId) : ''}
+            options={tokens.map((token) => ({
+              value: String(token.id),
+              label: `${token.name || `Key ${token.id}`}-${groupLabel(token.group)}-${token.key}`,
+            }))}
+            placeholder='暂无可用 Key'
+            ariaLabel='选择 Key'
+            disabled={!tokens.length}
+            className='image-workshop-key-select'
+            contentClassName='image-workshop-key-select-content'
+            onChange={(tokenId) => onChange({ tokenId: Number(tokenId) })}
+          />
+        </div>
         <div className='image-workshop-mode-switch' aria-label='创作类型'>
           <button className='is-active' type='button' aria-pressed='true'>
             <Image aria-hidden='true' />
@@ -124,111 +146,103 @@ export function WorkshopComposer({
         />
 
         <div className='image-workshop-parameter-grid'>
-          <label>
-            <span>令牌</span>
-            <select
-              value={value.tokenId || ''}
-              disabled={!tokens.length}
-              onChange={(event) =>
-                onChange({ tokenId: Number(event.target.value) })
-              }
-            >
-              {!tokens.length && <option value=''>暂无可用令牌</option>}
-              {tokens.map((token) => (
-                <option key={token.id} value={token.id}>
-                  {token.name || `令牌 ${token.id}`} · {token.key}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
+          <div className='image-workshop-parameter-field'>
             <span>尺寸</span>
-            <select
+            <WorkshopSelect
               value={value.size}
+              options={(capability?.sizes || []).map((size) => ({
+                value: size,
+                label: optionLabel(size),
+              }))}
+              placeholder='暂无可用尺寸'
+              ariaLabel='尺寸'
               disabled={!capability?.sizes.length}
-              onChange={(event) => onChange({ size: event.target.value })}
-            >
-              {(capability?.sizes || []).map((size) => (
-                <option key={size} value={size}>
-                  {optionLabel(size)}
-                </option>
-              ))}
-            </select>
-          </label>
+              onChange={(size) => onChange({ size })}
+            />
+          </div>
 
-          <label>
+          <div className='image-workshop-parameter-field'>
             <span>质量</span>
-            <select
+            <WorkshopSelect
               value={value.quality}
+              options={(capability?.qualities || []).map((quality) => ({
+                value: quality,
+                label: optionLabel(quality),
+              }))}
+              placeholder='暂无可用质量'
+              ariaLabel='质量'
               disabled={!capability?.qualities.length}
-              onChange={(event) => onChange({ quality: event.target.value })}
-            >
-              {(capability?.qualities || []).map((quality) => (
-                <option key={quality} value={quality}>
-                  {optionLabel(quality)}
-                </option>
-              ))}
-            </select>
-          </label>
+              onChange={(quality) => onChange({ quality })}
+            />
+          </div>
 
-          {Boolean(capability?.output_formats.length) && (
-            <label>
-              <span>格式</span>
-              <select
-                value={value.outputFormat}
-                onChange={(event) =>
-                  onChange({ outputFormat: event.target.value })
-                }
-              >
-                {capability?.output_formats.map((format) => (
-                  <option key={format} value={format}>
-                    {format.toUpperCase()}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          <div className='image-workshop-parameter-field'>
+            <span>格式</span>
+            <WorkshopSelect
+              value={value.outputFormat || 'auto'}
+              options={
+                capability?.output_formats.length
+                  ? capability.output_formats.map((format) => ({
+                      value: format,
+                      label: format.toUpperCase(),
+                    }))
+                  : [{ value: 'auto', label: '由模型决定' }]
+              }
+              ariaLabel='格式'
+              disabled={!capability?.output_formats.length}
+              onChange={(outputFormat) => onChange({ outputFormat })}
+            />
+          </div>
 
-          <label>
+          <div className='image-workshop-parameter-field'>
+            <span>透明背景</span>
+            <WorkshopSelect
+              value='false'
+              options={[
+                { value: 'false', label: '关闭' },
+                ...(capability?.supports_transparent_background
+                  ? [{ value: 'true', label: '开启' }]
+                  : []),
+              ]}
+              ariaLabel='透明背景'
+              disabled={!capability?.supports_transparent_background}
+              onChange={() => {}}
+            />
+          </div>
+
+          <label className='image-workshop-parameter-field'>
             <span>数量</span>
-            <select
+            <input
+              type='number'
+              min={1}
+              max={capability?.max_images || 1}
               value={value.count}
               disabled={!capability}
               onChange={(event) =>
-                onChange({ count: Number(event.target.value) })
+                onChange({
+                  count: Math.min(
+                    capability?.max_images || 1,
+                    Math.max(1, Number(event.target.value) || 1)
+                  ),
+                })
               }
-            >
-              {Array.from(
-                { length: capability?.max_images || 1 },
-                (_, index) => (
-                  <option key={index + 1} value={index + 1}>
-                    {index + 1} 张
-                  </option>
-                )
-              )}
-            </select>
+            />
           </label>
         </div>
 
         <div className='image-workshop-composer-bottom'>
-          <label className='image-workshop-model-control'>
-            <span className='sr-only'>模型</span>
-            <select
-              value={value.model}
-              disabled={!capabilities.length}
-              onChange={(event) => onChange({ model: event.target.value })}
-            >
-              {!capabilities.length && (
-                <option value=''>暂无可用生图模型</option>
-              )}
-              {capabilities.map((item) => (
-                <option key={item.model} value={item.model}>
-                  {item.model}
-                </option>
-              ))}
-            </select>
-          </label>
+          <WorkshopSelect
+            value={value.model}
+            options={capabilities.map((item) => ({
+              value: item.model,
+              label: item.model,
+            }))}
+            placeholder='暂无可用生图模型'
+            ariaLabel='模型'
+            disabled={!capabilities.length}
+            className='image-workshop-model-select'
+            onChange={(model) => onChange({ model })}
+          />
 
           <button
             className='image-workshop-generate'

@@ -52,15 +52,51 @@ const INITIAL_FORM: WorkshopFormState = {
   count: 1,
 }
 
+const HOMEPAGE_TEMPLATE_COUNT = 5
+
+function templatesFromOffset<T>(items: T[], offset: number, count: number) {
+  if (!items.length) return []
+  return Array.from(
+    { length: Math.min(count, items.length) },
+    (_, index) => items[(offset + index) % items.length]
+  )
+}
+
+function preloadTemplateImages(
+  items: Array<{ thumbnailUrl?: string }>
+): Promise<void> {
+  return Promise.allSettled(
+    items.map(
+      (item) =>
+        new Promise<void>((resolve) => {
+          if (!item.thumbnailUrl) {
+            resolve()
+            return
+          }
+          const image = new window.Image()
+          const timeout = window.setTimeout(resolve, 5000)
+          image.onload = image.onerror = () => {
+            window.clearTimeout(timeout)
+            resolve()
+          }
+          image.src = item.thumbnailUrl
+        })
+    )
+  ).then(() => undefined)
+}
+
 export function ImageWorkshop() {
   const queryClient = useQueryClient()
   const userId = useAuthStore((state) => state.auth.user?.id || 0)
+  const [tokenCheckTime] = useState(() => Math.floor(Date.now() / 1000))
   const [form, setForm] = useState(INITIAL_FORM)
   const [workLimit, setWorkLimit] = useState(20)
   const [localWorks, setLocalWorks] = useState<
     Awaited<ReturnType<typeof listLocalWorks>>
   >([])
-  const [homepageSeed, setHomepageSeed] = useState(0)
+  const [homepageOffset, setHomepageOffset] = useState(0)
+  const [isSwitchingTemplates, setIsSwitchingTemplates] = useState(false)
+  const templateSwitchId = useRef(0)
   const attemptedSaves = useRef(new Set<string>())
   const saveWarnings = useRef(new Set<string>())
 
@@ -70,14 +106,13 @@ export function ImageWorkshop() {
   })
 
   const usableTokens = useMemo(() => {
-    const now = Math.floor(Date.now() / 1000)
     return (tokensQuery.data || []).filter(
       (token) =>
         token.status === 1 &&
-        (token.expired_time === -1 || token.expired_time > now) &&
+        (token.expired_time === -1 || token.expired_time > tokenCheckTime) &&
         (token.unlimited_quota || token.remain_quota > 0)
     )
-  }, [tokensQuery.data])
+  }, [tokenCheckTime, tokensQuery.data])
 
   useEffect(() => {
     if (!usableTokens.length) return
@@ -175,11 +210,52 @@ export function ImageWorkshop() {
     staleTime: Number.POSITIVE_INFINITY,
   })
 
-  const homepageTemplates = useMemo(
-    () => pickHomepageTemplates(inspirationQuery.data || []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [inspirationQuery.data, homepageSeed]
+  const homepageCandidates = useMemo(
+    () =>
+      pickHomepageTemplates(
+        inspirationQuery.data || [],
+        Number.POSITIVE_INFINITY
+      ),
+    [inspirationQuery.data]
   )
+  const homepageTemplates = useMemo(
+    () =>
+      templatesFromOffset(
+        homepageCandidates,
+        homepageOffset,
+        HOMEPAGE_TEMPLATE_COUNT
+      ),
+    [homepageCandidates, homepageOffset]
+  )
+
+  async function switchHomepageTemplates(
+    direction: 'previous' | 'next' | 'random'
+  ) {
+    if (!homepageCandidates.length || isSwitchingTemplates) return
+    const length = homepageCandidates.length
+    let nextOffset = homepageOffset
+    if (direction === 'previous') {
+      nextOffset = (homepageOffset - HOMEPAGE_TEMPLATE_COUNT + length) % length
+    } else if (direction === 'next') {
+      nextOffset = (homepageOffset + HOMEPAGE_TEMPLATE_COUNT) % length
+    } else if (length > HOMEPAGE_TEMPLATE_COUNT) {
+      do {
+        nextOffset = Math.floor(Math.random() * length)
+      } while (nextOffset === homepageOffset)
+    }
+
+    const nextItems = templatesFromOffset(
+      homepageCandidates,
+      nextOffset,
+      HOMEPAGE_TEMPLATE_COUNT
+    )
+    const switchId = ++templateSwitchId.current
+    setIsSwitchingTemplates(true)
+    await preloadTemplateImages(nextItems)
+    if (templateSwitchId.current !== switchId) return
+    setHomepageOffset(nextOffset)
+    setIsSwitchingTemplates(false)
+  }
 
   useEffect(() => {
     const draft = takeWorkshopDraft()
@@ -198,6 +274,13 @@ export function ImageWorkshop() {
           .getElementById('image-workshop-works')
           ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       })
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : '任务提交失败，请稍后重试'
+      )
     },
   })
 
@@ -244,8 +327,11 @@ export function ImageWorkshop() {
         <InspirationStrip
           items={homepageTemplates}
           isLoading={inspirationQuery.isLoading}
+          isSwitching={isSwitchingTemplates}
           onUse={(item) => applyPrompt(item.prompt)}
-          onRefresh={() => setHomepageSeed((current) => current + 1)}
+          onPrevious={() => switchHomepageTemplates('previous')}
+          onNext={() => switchHomepageTemplates('next')}
+          onRandom={() => switchHomepageTemplates('random')}
         />
 
         <WorksGallery
