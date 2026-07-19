@@ -34,6 +34,7 @@ import {
   WorkshopComposer,
   type WorkshopFormState,
 } from './components/workshop-composer'
+import { WorkshopScrollToTop } from './components/workshop-scroll-to-top'
 import './image-workshop.css'
 import {
   loadHomepageInspirationCases,
@@ -96,6 +97,7 @@ export function ImageWorkshop() {
   >([])
   const [homepageOffset, setHomepageOffset] = useState(0)
   const [isSwitchingTemplates, setIsSwitchingTemplates] = useState(false)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const templateSwitchId = useRef(0)
   const attemptedSaves = useRef(new Set<string>())
   const saveWarnings = useRef(new Set<string>())
@@ -303,7 +305,7 @@ export function ImageWorkshop() {
   }
 
   return (
-    <div className='image-workshop-page'>
+    <div className='image-workshop-page' ref={scrollContainerRef}>
       <div className='image-workshop-inner'>
         <WorkshopComposer
           value={form}
@@ -343,6 +345,7 @@ export function ImageWorkshop() {
           onRegenerate={applyPrompt}
         />
       </div>
+      <WorkshopScrollToTop containerRef={scrollContainerRef} />
     </div>
   )
 }

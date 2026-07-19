@@ -16,11 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, ExternalLink, Search } from 'lucide-react'
 import { ImagePreviewDialog } from './components/image-preview-dialog'
+import { WorkshopScrollToTop } from './components/workshop-scroll-to-top'
 import { WorkshopSelect } from './components/workshop-select'
 import './image-workshop.css'
 import {
@@ -36,6 +37,7 @@ export function InspirationLibraryPage() {
   const [view, setView] = useState<LibraryView>('cases')
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('全部')
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   const libraryQuery = useQuery({
     queryKey: ['image-workshop', 'inspiration-library'],
@@ -77,7 +79,7 @@ export function InspirationLibraryPage() {
   }
 
   return (
-    <div className='image-workshop-library-page'>
+    <div className='image-workshop-library-page' ref={scrollContainerRef}>
       <div className='image-workshop-library-inner'>
         <header className='image-workshop-library-head'>
           <div>
@@ -195,6 +197,7 @@ export function InspirationLibraryPage() {
           </a>
         </footer>
       </div>
+      <WorkshopScrollToTop containerRef={scrollContainerRef} />
     </div>
   )
 }

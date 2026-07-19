@@ -1113,6 +1113,50 @@ For commercial licensing, please contact support@quantumnous.com
   text-align: center;
 }
 
+.image-workshop-scroll-top {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  z-index: 20;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--primary-foreground);
+  background: var(--primary);
+  box-shadow: 0 8px 24px color-mix(in oklch, var(--foreground) 18%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    background-color 160ms ease;
+}
+
+.image-workshop-scroll-top.image-workshop-scroll-top-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.image-workshop-scroll-top:hover {
+  background: color-mix(in oklch, var(--primary) 88%, var(--foreground));
+}
+
+.image-workshop-scroll-top:focus-visible {
+  outline: 3px solid color-mix(in oklch, var(--ring) 30%, transparent);
+  outline-offset: 3px;
+}
+
+.image-workshop-scroll-top svg {
+  width: 18px;
+  height: 18px;
+}
+
 @keyframes image-workshop-dots-drift {
   0%,
   100% {
@@ -1314,6 +1358,13 @@ For commercial licensing, please contact support@quantumnous.com
     bottom: 12px;
     transform: translateX(50%);
   }
+
+  .image-workshop-scroll-top {
+    right: 16px;
+    bottom: 18px;
+    width: 40px;
+    height: 40px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1325,6 +1376,10 @@ For commercial licensing, please contact support@quantumnous.com
   }
 
   .image-workshop-template-card img {
+    transition: none;
+  }
+
+  .image-workshop-scroll-top {
     transition: none;
   }
 }
