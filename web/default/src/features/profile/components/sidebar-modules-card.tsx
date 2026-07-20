@@ -66,6 +66,11 @@ export function SidebarModulesCard() {
             description: t('AI model testing environment'),
           },
           {
+            key: 'image_workshop',
+            title: '图工坊',
+            description: '创建图片并管理当前浏览器中的作品',
+          },
+          {
             key: 'chat',
             title: t('Chat'),
             description: t('Chat session management'),

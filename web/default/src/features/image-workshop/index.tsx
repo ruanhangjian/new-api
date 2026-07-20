@@ -1,0 +1,262 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+For commercial licensing, please contact support@quantumnous.com
+*/
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
+import { KeyRound } from 'lucide-react'
+import { toast } from 'sonner'
+import { useAuthStore } from '@/stores/auth-store'
+import {
+  createImageWorkshopGeneration,
+  getImageWorkshopOptions,
+  getImageWorkshopTasks,
+  getImageWorkshopTokens,
+} from './api'
+import { InspirationStrip } from './components/inspiration-strip'
+import { WorksGallery } from './components/works-gallery'
+import {
+  WorkshopComposer,
+  type WorkshopFormState,
+} from './components/workshop-composer'
+import './image-workshop.css'
+import {
+  loadHomepageInspirationCases,
+  pickHomepageTemplates,
+  takeWorkshopDraft,
+} from './lib/inspiration-library'
+import { listLocalWorks, saveTaskImagesLocally } from './lib/local-gallery'
+
+const INITIAL_FORM: WorkshopFormState = {
+  prompt: '',
+  tokenId: 0,
+  model: '',
+  size: '',
+  quality: '',
+  outputFormat: '',
+  count: 1,
+}
+
+export function ImageWorkshop() {
+  const queryClient = useQueryClient()
+  const userId = useAuthStore((state) => state.auth.user?.id || 0)
+  const [form, setForm] = useState(INITIAL_FORM)
+  const [workLimit, setWorkLimit] = useState(20)
+  const [localWorks, setLocalWorks] = useState<
+    Awaited<ReturnType<typeof listLocalWorks>>
+  >([])
+  const [homepageSeed, setHomepageSeed] = useState(0)
+  const attemptedSaves = useRef(new Set<string>())
+  const saveWarnings = useRef(new Set<string>())
+
+  const tokensQuery = useQuery({
+    queryKey: ['image-workshop', 'tokens'],
+    queryFn: getImageWorkshopTokens,
+  })
+
+  const usableTokens = useMemo(() => {
+    const now = Math.floor(Date.now() / 1000)
+    return (tokensQuery.data || []).filter(
+      (token) =>
+        token.status === 1 &&
+        (token.expired_time === -1 || token.expired_time > now) &&
+        (token.unlimited_quota || token.remain_quota > 0)
+    )
+  }, [tokensQuery.data])
+
+  useEffect(() => {
+    if (!usableTokens.length) return
+    if (!usableTokens.some((token) => token.id === form.tokenId)) {
+      setForm((current) => ({ ...current, tokenId: usableTokens[0].id }))
+    }
+  }, [form.tokenId, usableTokens])
+
+  const optionsQuery = useQuery({
+    queryKey: ['image-workshop', 'options', form.tokenId],
+    queryFn: () => getImageWorkshopOptions(form.tokenId),
+    enabled: form.tokenId > 0,
+  })
+
+  const capabilities = useMemo(
+    () => optionsQuery.data?.models || [],
+    [optionsQuery.data?.models]
+  )
+  const capability = capabilities.find((item) => item.model === form.model)
+
+  useEffect(() => {
+    if (!capabilities.length) {
+      setForm((current) => ({ ...current, model: '' }))
+      return
+    }
+    const nextCapability =
+      capabilities.find((item) => item.model === form.model) || capabilities[0]
+    setForm((current) => ({
+      ...current,
+      model: nextCapability.model,
+      size: nextCapability.sizes.includes(current.size)
+        ? current.size
+        : nextCapability.default_size,
+      quality: nextCapability.qualities.includes(current.quality)
+        ? current.quality
+        : nextCapability.default_quality,
+      outputFormat: nextCapability.output_formats.includes(current.outputFormat)
+        ? current.outputFormat
+        : nextCapability.default_output_format || '',
+      count: Math.min(Math.max(1, current.count), nextCapability.max_images),
+    }))
+  }, [capabilities, form.model])
+
+  const tasksQuery = useQuery({
+    queryKey: ['image-workshop', 'tasks', workLimit],
+    queryFn: () => getImageWorkshopTasks(workLimit),
+    refetchInterval: (query) => {
+      const hasActiveTasks = query.state.data?.items.some(
+        (task) => task.status === 'queued' || task.status === 'running'
+      )
+      return hasActiveTasks ? 2500 : 15000
+    },
+    refetchIntervalInBackground: false,
+  })
+
+  const tasks = useMemo(
+    () => tasksQuery.data?.items || [],
+    [tasksQuery.data?.items]
+  )
+
+  useEffect(() => {
+    if (!userId) return
+    listLocalWorks(userId)
+      .then(setLocalWorks)
+      .catch(() => toast.warning('无法读取当前浏览器中的本机作品'))
+  }, [userId])
+
+  useEffect(() => {
+    if (!userId) return
+    const completed = tasks.filter(
+      (task) =>
+        task.status === 'completed' &&
+        task.result_available &&
+        task.result?.data?.length &&
+        !attemptedSaves.current.has(task.task_id)
+    )
+    if (!completed.length) return
+
+    completed.forEach((task) => {
+      attemptedSaves.current.add(task.task_id)
+      saveTaskImagesLocally(userId, task)
+        .then(() => listLocalWorks(userId))
+        .then(setLocalWorks)
+        .catch(() => {
+          if (saveWarnings.current.has(task.task_id)) return
+          saveWarnings.current.add(task.task_id)
+          toast.warning('图片已生成，但未能自动保存到当前浏览器，请先下载')
+        })
+    })
+  }, [tasks, userId])
+
+  const inspirationQuery = useQuery({
+    queryKey: ['image-workshop', 'inspiration-cases'],
+    queryFn: loadHomepageInspirationCases,
+    staleTime: Number.POSITIVE_INFINITY,
+  })
+
+  const homepageTemplates = useMemo(
+    () => pickHomepageTemplates(inspirationQuery.data || []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [inspirationQuery.data, homepageSeed]
+  )
+
+  useEffect(() => {
+    const draft = takeWorkshopDraft()
+    if (draft) setForm((current) => ({ ...current, prompt: draft }))
+  }, [])
+
+  const createMutation = useMutation({
+    mutationFn: createImageWorkshopGeneration,
+    onSuccess: async () => {
+      toast.success('任务已提交，正在生成图片')
+      await queryClient.invalidateQueries({
+        queryKey: ['image-workshop', 'tasks'],
+      })
+      window.requestAnimationFrame(() => {
+        document
+          .getElementById('image-workshop-works')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
+    },
+  })
+
+  function submit() {
+    if (!capability || !form.prompt.trim()) return
+    createMutation.mutate({
+      token_id: form.tokenId,
+      model: form.model,
+      prompt: form.prompt.trim(),
+      n: form.count,
+      size: form.size,
+      quality: form.quality,
+      ...(form.outputFormat ? { output_format: form.outputFormat } : {}),
+    })
+  }
+
+  function applyPrompt(prompt: string) {
+    setForm((current) => ({ ...current, prompt }))
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  return (
+    <div className='image-workshop-page'>
+      <div className='image-workshop-inner'>
+        <WorkshopComposer
+          value={form}
+          tokens={usableTokens}
+          capabilities={capabilities}
+          capability={capability}
+          isLoading={tokensQuery.isLoading || optionsQuery.isLoading}
+          isSubmitting={createMutation.isPending}
+          onChange={(next) => setForm((current) => ({ ...current, ...next }))}
+          onSubmit={submit}
+        />
+
+        {!tokensQuery.isLoading && !usableTokens.length && (
+          <div className='image-workshop-token-notice'>
+            <KeyRound aria-hidden='true' />
+            <span>创建图片前，需要先准备一个可用的 API 令牌。</span>
+            <Link to='/keys'>前往令牌管理</Link>
+          </div>
+        )}
+
+        <InspirationStrip
+          items={homepageTemplates}
+          isLoading={inspirationQuery.isLoading}
+          onUse={(item) => applyPrompt(item.prompt)}
+          onRefresh={() => setHomepageSeed((current) => current + 1)}
+        />
+
+        <WorksGallery
+          tasks={tasks}
+          localWorks={localWorks}
+          isLoading={tasksQuery.isLoading}
+          limit={workLimit}
+          onLimitChange={setWorkLimit}
+          onRegenerate={applyPrompt}
+        />
+      </div>
+    </div>
+  )
+}

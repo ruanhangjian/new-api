@@ -46,6 +46,7 @@ import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authent
 import { Route as AuthenticatedPlaygroundIndexRouteImport } from './routes/_authenticated/playground/index'
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authenticated/keys/index'
+import { Route as AuthenticatedImageWorkshopIndexRouteImport } from './routes/_authenticated/image-workshop/index'
 import { Route as AuthenticatedEnterpriseCdkIndexRouteImport } from './routes/_authenticated/enterprise-cdk/index'
 import { Route as AuthenticatedEnterpriseCdkAdminIndexRouteImport } from './routes/_authenticated/enterprise-cdk-admin/index'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
@@ -56,6 +57,7 @@ import { Route as AuthenticatedChannelBalancesIndexRouteImport } from './routes/
 import { Route as AuthenticatedAffiliateRebateIndexRouteImport } from './routes/_authenticated/affiliate-rebate/index'
 import { Route as AuthenticatedUsageLogsSectionRouteImport } from './routes/_authenticated/usage-logs/$section'
 import { Route as AuthenticatedModelsSectionRouteImport } from './routes/_authenticated/models/$section'
+import { Route as AuthenticatedImageWorkshopLibraryRouteImport } from './routes/_authenticated/image-workshop/library'
 import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenticated/errors/$error'
 import { Route as AuthenticatedDashboardSectionRouteImport } from './routes/_authenticated/dashboard/$section'
 import { Route as AuthenticatedChatChatIdRouteImport } from './routes/_authenticated/chat/$chatId'
@@ -269,6 +271,12 @@ const AuthenticatedKeysIndexRoute = AuthenticatedKeysIndexRouteImport.update({
   path: '/keys/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedImageWorkshopIndexRoute =
+  AuthenticatedImageWorkshopIndexRouteImport.update({
+    id: '/image-workshop/',
+    path: '/image-workshop/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedEnterpriseCdkIndexRoute =
   AuthenticatedEnterpriseCdkIndexRouteImport.update({
     id: '/enterprise-cdk/',
@@ -327,6 +335,12 @@ const AuthenticatedModelsSectionRoute =
   AuthenticatedModelsSectionRouteImport.update({
     id: '/models/$section',
     path: '/models/$section',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedImageWorkshopLibraryRoute =
+  AuthenticatedImageWorkshopLibraryRouteImport.update({
+    id: '/image-workshop/library',
+    path: '/image-workshop/library',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedErrorsErrorRoute =
@@ -470,6 +484,7 @@ export interface FileRoutesByFullPath {
   '/chat/$chatId': typeof AuthenticatedChatChatIdRoute
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
+  '/image-workshop/library': typeof AuthenticatedImageWorkshopLibraryRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/affiliate-rebate/': typeof AuthenticatedAffiliateRebateIndexRoute
@@ -480,6 +495,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/enterprise-cdk-admin/': typeof AuthenticatedEnterpriseCdkAdminIndexRoute
   '/enterprise-cdk/': typeof AuthenticatedEnterpriseCdkIndexRoute
+  '/image-workshop/': typeof AuthenticatedImageWorkshopIndexRoute
   '/keys/': typeof AuthenticatedKeysIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
   '/playground/': typeof AuthenticatedPlaygroundIndexRoute
@@ -535,6 +551,7 @@ export interface FileRoutesByTo {
   '/chat/$chatId': typeof AuthenticatedChatChatIdRoute
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
+  '/image-workshop/library': typeof AuthenticatedImageWorkshopLibraryRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
   '/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/affiliate-rebate': typeof AuthenticatedAffiliateRebateIndexRoute
@@ -545,6 +562,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardIndexRoute
   '/enterprise-cdk-admin': typeof AuthenticatedEnterpriseCdkAdminIndexRoute
   '/enterprise-cdk': typeof AuthenticatedEnterpriseCdkIndexRoute
+  '/image-workshop': typeof AuthenticatedImageWorkshopIndexRoute
   '/keys': typeof AuthenticatedKeysIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
   '/playground': typeof AuthenticatedPlaygroundIndexRoute
@@ -604,6 +622,7 @@ export interface FileRoutesById {
   '/_authenticated/chat/$chatId': typeof AuthenticatedChatChatIdRoute
   '/_authenticated/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
+  '/_authenticated/image-workshop/library': typeof AuthenticatedImageWorkshopLibraryRoute
   '/_authenticated/models/$section': typeof AuthenticatedModelsSectionRoute
   '/_authenticated/usage-logs/$section': typeof AuthenticatedUsageLogsSectionRoute
   '/_authenticated/affiliate-rebate/': typeof AuthenticatedAffiliateRebateIndexRoute
@@ -614,6 +633,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
   '/_authenticated/enterprise-cdk-admin/': typeof AuthenticatedEnterpriseCdkAdminIndexRoute
   '/_authenticated/enterprise-cdk/': typeof AuthenticatedEnterpriseCdkIndexRoute
+  '/_authenticated/image-workshop/': typeof AuthenticatedImageWorkshopIndexRoute
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
   '/_authenticated/playground/': typeof AuthenticatedPlaygroundIndexRoute
@@ -672,6 +692,7 @@ export interface FileRouteTypes {
     | '/chat/$chatId'
     | '/dashboard/$section'
     | '/errors/$error'
+    | '/image-workshop/library'
     | '/models/$section'
     | '/usage-logs/$section'
     | '/affiliate-rebate/'
@@ -682,6 +703,7 @@ export interface FileRouteTypes {
     | '/dashboard/'
     | '/enterprise-cdk-admin/'
     | '/enterprise-cdk/'
+    | '/image-workshop/'
     | '/keys/'
     | '/models/'
     | '/playground/'
@@ -737,6 +759,7 @@ export interface FileRouteTypes {
     | '/chat/$chatId'
     | '/dashboard/$section'
     | '/errors/$error'
+    | '/image-workshop/library'
     | '/models/$section'
     | '/usage-logs/$section'
     | '/affiliate-rebate'
@@ -747,6 +770,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/enterprise-cdk-admin'
     | '/enterprise-cdk'
+    | '/image-workshop'
     | '/keys'
     | '/models'
     | '/playground'
@@ -805,6 +829,7 @@ export interface FileRouteTypes {
     | '/_authenticated/chat/$chatId'
     | '/_authenticated/dashboard/$section'
     | '/_authenticated/errors/$error'
+    | '/_authenticated/image-workshop/library'
     | '/_authenticated/models/$section'
     | '/_authenticated/usage-logs/$section'
     | '/_authenticated/affiliate-rebate/'
@@ -815,6 +840,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard/'
     | '/_authenticated/enterprise-cdk-admin/'
     | '/_authenticated/enterprise-cdk/'
+    | '/_authenticated/image-workshop/'
     | '/_authenticated/keys/'
     | '/_authenticated/models/'
     | '/_authenticated/playground/'
@@ -1126,6 +1152,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedKeysIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/image-workshop/': {
+      id: '/_authenticated/image-workshop/'
+      path: '/image-workshop'
+      fullPath: '/image-workshop/'
+      preLoaderRoute: typeof AuthenticatedImageWorkshopIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/enterprise-cdk/': {
       id: '/_authenticated/enterprise-cdk/'
       path: '/enterprise-cdk'
@@ -1194,6 +1227,13 @@ declare module '@tanstack/react-router' {
       path: '/models/$section'
       fullPath: '/models/$section'
       preLoaderRoute: typeof AuthenticatedModelsSectionRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/image-workshop/library': {
+      id: '/_authenticated/image-workshop/library'
+      path: '/image-workshop/library'
+      fullPath: '/image-workshop/library'
+      preLoaderRoute: typeof AuthenticatedImageWorkshopLibraryRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/errors/$error': {
@@ -1419,6 +1459,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedChatChatIdRoute: typeof AuthenticatedChatChatIdRoute
   AuthenticatedDashboardSectionRoute: typeof AuthenticatedDashboardSectionRoute
   AuthenticatedErrorsErrorRoute: typeof AuthenticatedErrorsErrorRoute
+  AuthenticatedImageWorkshopLibraryRoute: typeof AuthenticatedImageWorkshopLibraryRoute
   AuthenticatedModelsSectionRoute: typeof AuthenticatedModelsSectionRoute
   AuthenticatedUsageLogsSectionRoute: typeof AuthenticatedUsageLogsSectionRoute
   AuthenticatedAffiliateRebateIndexRoute: typeof AuthenticatedAffiliateRebateIndexRoute
@@ -1429,6 +1470,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
   AuthenticatedEnterpriseCdkAdminIndexRoute: typeof AuthenticatedEnterpriseCdkAdminIndexRoute
   AuthenticatedEnterpriseCdkIndexRoute: typeof AuthenticatedEnterpriseCdkIndexRoute
+  AuthenticatedImageWorkshopIndexRoute: typeof AuthenticatedImageWorkshopIndexRoute
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
   AuthenticatedPlaygroundIndexRoute: typeof AuthenticatedPlaygroundIndexRoute
@@ -1449,6 +1491,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedChatChatIdRoute: AuthenticatedChatChatIdRoute,
   AuthenticatedDashboardSectionRoute: AuthenticatedDashboardSectionRoute,
   AuthenticatedErrorsErrorRoute: AuthenticatedErrorsErrorRoute,
+  AuthenticatedImageWorkshopLibraryRoute:
+    AuthenticatedImageWorkshopLibraryRoute,
   AuthenticatedModelsSectionRoute: AuthenticatedModelsSectionRoute,
   AuthenticatedUsageLogsSectionRoute: AuthenticatedUsageLogsSectionRoute,
   AuthenticatedAffiliateRebateIndexRoute:
@@ -1462,6 +1506,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedEnterpriseCdkAdminIndexRoute:
     AuthenticatedEnterpriseCdkAdminIndexRoute,
   AuthenticatedEnterpriseCdkIndexRoute: AuthenticatedEnterpriseCdkIndexRoute,
+  AuthenticatedImageWorkshopIndexRoute: AuthenticatedImageWorkshopIndexRoute,
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,
   AuthenticatedPlaygroundIndexRoute: AuthenticatedPlaygroundIndexRoute,

@@ -615,6 +615,48 @@ GET /api/image-workshop/tasks?page=1&page_size=20
 feature/image-workshop-frontend
 ```
 
+### Phase 2C 实施状态（feature/image-workshop-frontend）
+
+已完成 NewAPI default 前端的原生图工坊 MVP，不使用 iframe，也没有引入独立子应用外壳。
+
+页面与交互：
+
+- 新增 `/image-workshop` 创建页和 `/image-workshop/library` 灵感库二级页，并接入现有 NewAPI 顶栏、宽侧栏、管理员侧栏开关和用户侧栏开关。
+- 创建页沿用已确认的 gpt2api `CreateStudioPage` 上下结构；桌面端提示词区与参数区实测高度为 `170:113`，约等于 `60:40`。
+- 提示词输入框会随内容自动增高，最高增至 360px 后再在输入框内部滚动；移动端初始高度收紧为 120px。
+- 保留图片/视频切换外观；图片为当前可用模式，点击视频只提示“视频功能暂未开放”，不创建空白或伪视频工作流。
+- 参数只根据 `/api/image-workshop/options` 返回的真实能力展示，包含 token、模型、尺寸、质量、输出格式和数量；审核选项不展示，透明背景和参考图等未被后端能力声明支持的控件也不展示。
+- 提交后通过 `/api/image-workshop/tasks` 轮询真实任务状态；生成中卡片复用已确认原型的点阵漂移和轮换文案动效。
+- 我的作品覆盖生成中、服务器临时结果、本机副本、失败和过期状态，并提供单图下载和按原提示词再次生成。
+
+灵感数据：
+
+- 数据与 Lingqu 当前实现保持同源，使用 `gavin20150423/lingqu-ai` 提交 `d82f47692eab7abbf9993a661b90b1213866673b` 中的 prompt library。
+- 随前端保留 392 个案例、1446 条热门提示词、13 个模板分类、分类封面，以及 MIT / CC BY 4.0 许可证文件。
+- 首页只加载案例数据，不提前下载完整热门提示词文件；热门数据仅在进入灵感库二级页时加载。
+- 首页候选案例已按真实远程图片尺寸检查，只从竖图或接近竖图的精选案例中随机展示，避免把横幅图片强裁成首页卡片。
+
+本机作品：
+
+- 生成完成后通过签名 URL 获取 Blob，并按 NewAPI 用户 ID 写入 IndexedDB；同一浏览器切换账号时不会互相展示本机作品。
+- 作品列表优先使用本机 Blob，服务器临时文件过期后仍可展示已成功保存的副本。
+- 用户可见说明使用“当前浏览器”“更换设备不会同步”“清理浏览器数据可能丢失”等直白表达，不把本机存储描述成永久云端作品库。
+
+验证：
+
+```bash
+cd web/default
+bun run typecheck
+bunx eslint src/features/image-workshop src/routes/_authenticated/image-workshop \
+  src/hooks/use-sidebar-data.ts src/hooks/use-sidebar-config.ts \
+  src/features/profile/components/sidebar-modules-card.tsx \
+  src/features/system-settings/maintenance/config.ts \
+  src/features/system-settings/maintenance/sidebar-modules-section.tsx
+bun run build
+```
+
+浏览器验证覆盖 320、375、414、768 和 1440px 宽度，主页面与灵感库均无横向溢出；同时验证了视频未开放提示、提示词自动增高、生成动效和 IndexedDB 本机副本恢复。
+
 ## Phase 3：增强能力
 
 后续增强按独立分支推进：

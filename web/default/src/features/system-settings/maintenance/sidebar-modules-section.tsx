@@ -84,6 +84,10 @@ export function SidebarModulesSection({
         title: t('Playground'),
         description: t('Experiment with prompts and models in real time.'),
       },
+      image_workshop: {
+        title: '图工坊',
+        description: '允许用户创建图片并使用本机作品画廊。',
+      },
       chat: {
         title: t('Chat'),
         description: t('Access previous conversations and start new ones.'),
