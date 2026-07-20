@@ -16,12 +16,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { KeyRound, LoaderCircle } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
+
 import { useAuthStore } from '@/stores/auth-store'
+
 import {
   createImageWorkshopGeneration,
   deleteImageWorkshopTasks,
@@ -40,6 +42,7 @@ import {
   type WorkshopFormState,
 } from './components/workshop-composer'
 import { WorkshopScrollToTop } from './components/workshop-scroll-to-top'
+
 import './image-workshop.css'
 import { isImageWorkshopSizeSupported } from './lib/image-size'
 import {
@@ -89,10 +92,12 @@ function preloadTemplateImages(
           }
           const image = new window.Image()
           const timeout = window.setTimeout(resolve, 5000)
-          image.onload = image.onerror = () => {
+          const settle = () => {
             window.clearTimeout(timeout)
             resolve()
           }
+          image.addEventListener('load', settle, { once: true })
+          image.addEventListener('error', settle, { once: true })
           image.src = item.thumbnailUrl
         })
     )
@@ -289,7 +294,7 @@ export function ImageWorkshop() {
       })
       window.requestAnimationFrame(() => {
         document
-          .getElementById('image-workshop-works')
+          .querySelector('#image-workshop-works')
           ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       })
     },

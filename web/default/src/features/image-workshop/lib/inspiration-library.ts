@@ -159,7 +159,7 @@ function normalizeTrending(record: TrendingRecord): InspirationCase | null {
   const id = String(record.id ?? record.rank ?? '')
   const prompt = record.prompt?.trim() || ''
   if (!id || !prompt) return null
-  const summary = prompt.replace(/\s+/g, ' ').slice(0, 36)
+  const summary = prompt.replaceAll(/\s+/g, ' ').slice(0, 36)
   const author = record.author_name || record.author
   const imageSource = resolveRemoteImage(record.image || record.images?.[0])
   return {

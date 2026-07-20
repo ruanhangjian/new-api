@@ -26,22 +26,30 @@ function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION)
 
-    request.onupgradeneeded = () => {
+    request.addEventListener('upgradeneeded', () => {
       const database = request.result
       if (database.objectStoreNames.contains(WORKS_STORE)) return
       const store = database.createObjectStore(WORKS_STORE, { keyPath: 'key' })
       store.createIndex('userId', 'userId', { unique: false })
       store.createIndex('taskId', 'taskId', { unique: false })
-    }
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error)
+    })
+    request.addEventListener('success', () => resolve(request.result), {
+      once: true,
+    })
+    request.addEventListener('error', () => reject(request.error), {
+      once: true,
+    })
   })
 }
 
 function requestResult<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error)
+    request.addEventListener('success', () => resolve(request.result), {
+      once: true,
+    })
+    request.addEventListener('error', () => reject(request.error), {
+      once: true,
+    })
   })
 }
 
@@ -71,9 +79,13 @@ export async function deleteLocalWorks(keys: string[]): Promise<void> {
     const store = transaction.objectStore(WORKS_STORE)
     keys.forEach((key) => store.delete(key))
     await new Promise<void>((resolve, reject) => {
-      transaction.oncomplete = () => resolve()
-      transaction.onerror = () => reject(transaction.error)
-      transaction.onabort = () => reject(transaction.error)
+      transaction.addEventListener('complete', () => resolve(), { once: true })
+      transaction.addEventListener('error', () => reject(transaction.error), {
+        once: true,
+      })
+      transaction.addEventListener('abort', () => reject(transaction.error), {
+        once: true,
+      })
     })
   } finally {
     database.close()
@@ -152,9 +164,15 @@ export async function saveTaskImagesLocally(
       const transaction = database.transaction(WORKS_STORE, 'readwrite')
       transaction.objectStore(WORKS_STORE).put(work)
       await new Promise<void>((resolve, reject) => {
-        transaction.oncomplete = () => resolve()
-        transaction.onerror = () => reject(transaction.error)
-        transaction.onabort = () => reject(transaction.error)
+        transaction.addEventListener('complete', () => resolve(), {
+          once: true,
+        })
+        transaction.addEventListener('error', () => reject(transaction.error), {
+          once: true,
+        })
+        transaction.addEventListener('abort', () => reject(transaction.error), {
+          once: true,
+        })
       })
       saved.push(work)
     }

@@ -16,14 +16,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, ExternalLink, Search } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
+
 import { ImagePreviewDialog } from './components/image-preview-dialog'
 import { InspirationImage } from './components/inspiration-image'
 import { WorkshopScrollToTop } from './components/workshop-scroll-to-top'
 import { WorkshopSelect } from './components/workshop-select'
+
 import './image-workshop.css'
 import {
   loadInspirationLibrary,
@@ -77,6 +79,36 @@ export function InspirationLibraryPage() {
   function usePrompt(prompt: string) {
     saveWorkshopDraft(prompt)
     navigate({ to: '/image-workshop' })
+  }
+
+  function renderLibraryContent() {
+    if (libraryQuery.isLoading) {
+      return (
+        <div className='image-workshop-library-loading'>正在载入灵感库...</div>
+      )
+    }
+
+    if (view === 'templates') {
+      return (
+        <div className='image-workshop-template-library-grid'>
+          {filteredGroups.map((group) => (
+            <TemplateGroupCard key={group.id} group={group} onUse={usePrompt} />
+          ))}
+        </div>
+      )
+    }
+
+    return (
+      <div className='image-workshop-library-grid'>
+        {filteredCases.map((item) => (
+          <CaseCard
+            key={`${item.kind}:${item.id}`}
+            item={item}
+            onUse={usePrompt}
+          />
+        ))}
+      </div>
+    )
   }
 
   return (
@@ -144,31 +176,7 @@ export function InspirationLibraryPage() {
           </div>
         )}
 
-        {libraryQuery.isLoading ? (
-          <div className='image-workshop-library-loading'>
-            正在载入灵感库...
-          </div>
-        ) : view === 'templates' ? (
-          <div className='image-workshop-template-library-grid'>
-            {filteredGroups.map((group) => (
-              <TemplateGroupCard
-                key={group.id}
-                group={group}
-                onUse={usePrompt}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className='image-workshop-library-grid'>
-            {filteredCases.map((item) => (
-              <CaseCard
-                key={`${item.kind}:${item.id}`}
-                item={item}
-                onUse={usePrompt}
-              />
-            ))}
-          </div>
-        )}
+        {renderLibraryContent()}
 
         {!libraryQuery.isLoading &&
           ((view === 'templates' && !filteredGroups.length) ||
@@ -249,9 +257,9 @@ function TemplateGroupCard({
   group: InspirationTemplateGroup
   onUse: (prompt: string) => void
 }) {
-  const usableEntries = group.entries.filter((entry) => entry.kind !== 'tips')
+  const firstUsableEntry = group.entries.find((entry) => entry.kind !== 'tips')
   const [entryId, setEntryId] = useState(
-    usableEntries[0]?.id || group.entries[0]?.id
+    firstUsableEntry?.id || group.entries[0]?.id
   )
   const entry =
     group.entries.find((item) => item.id === entryId) || group.entries[0]

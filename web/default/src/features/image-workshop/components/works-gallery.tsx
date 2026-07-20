@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Check,
   Download,
@@ -29,6 +28,9 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+
+import { ConfirmDialog } from '@/components/confirm-dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,7 +38,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ConfirmDialog } from '@/components/confirm-dialog'
+
 import { aspectRatioForSize } from '../lib/image-size'
 import type {
   ImageWorkshopDeleteScope,
@@ -145,7 +147,7 @@ function useWorksMasonry() {
 
     const syncObservedItems = () => {
       const currentItems = new Set(
-        Array.from(grid.children).filter(
+        [...grid.children].filter(
           (item): item is HTMLElement => item instanceof HTMLElement
         )
       )

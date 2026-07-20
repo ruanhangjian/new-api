@@ -41,8 +41,9 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+
 import { WORKSPACE_IDS } from '@/components/layout/lib/workspace-registry'
-import { type SidebarData } from '@/components/layout/types'
+import type { SidebarData } from '@/components/layout/types'
 import { getAffiliateRebateOverviewSilent } from '@/features/affiliate-rebate/api'
 import { getEnterpriseCdkPermission } from '@/features/enterprise-cdk/api'
 import { ROLE } from '@/lib/roles'
