@@ -100,6 +100,9 @@ export type ImageWorkshopTask = {
   size?: string
   quality?: string
   output_format?: string
+  billing_tier?: '1K' | '2K' | '4K'
+  billing_multiplier?: number
+  output_sizes?: string[]
   submit_time: number
   start_time?: number
   finish_time?: number

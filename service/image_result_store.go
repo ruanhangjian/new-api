@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -55,6 +56,8 @@ type ImageResultFile struct {
 	RelativePath string `json:"relative_path"`
 	MimeType     string `json:"mime_type"`
 	Size         int64  `json:"size"`
+	Width        int    `json:"width,omitempty"`
+	Height       int    `json:"height,omitempty"`
 	ExpiresAt    int64  `json:"expires_at"`
 	URL          string `json:"url"`
 }
@@ -215,6 +218,11 @@ func (s *ImageResultStore) writeBase64Image(taskID string, index int, value stri
 	if s.MaxFileBytes > 0 && int64(len(decoded)) > s.MaxFileBytes {
 		return ImageResultFile{}, fmt.Errorf("image result file exceeds %d bytes", s.MaxFileBytes)
 	}
+	width, height := 0, 0
+	if config, _, configErr := getImageConfig(bytes.NewReader(decoded)); configErr == nil {
+		width = config.Width
+		height = config.Height
+	}
 	ext := imageExtension(mimeType)
 	random, _ := common.GenerateRandomCharsKey(12)
 	fileID := fmt.Sprintf("imgfile_%d_%s", index, random)
@@ -234,6 +242,8 @@ func (s *ImageResultStore) writeBase64Image(taskID string, index int, value stri
 		RelativePath: filepath.ToSlash(rel),
 		MimeType:     mimeType,
 		Size:         int64(len(decoded)),
+		Width:        width,
+		Height:       height,
 		ExpiresAt:    expiresAt,
 		URL:          fmt.Sprintf("/v1/images/tasks/%s/files/%s", taskID, fileID),
 	}, nil

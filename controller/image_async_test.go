@@ -14,6 +14,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
@@ -68,6 +69,19 @@ func TestImageWorkshopRequestCountAndSingleImageRewrite(t *testing.T) {
 	rewritten, err := rewriteImageWorkshopRequestCount([]byte(`{"model":"gpt-image-2","prompt":"draw","n":6}`), 1)
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"model":"gpt-image-2","prompt":"draw","n":1}`, string(rewritten))
+}
+
+func TestImageAsyncTaskMetadataCapturesWorkshopBillingTier(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Set(string(constant.ContextKeyImageWorkshopRequest), true)
+
+	metadata := imageAsyncTaskMetadata(c, &dto.ImageRequest{Size: "2304x3456"})
+
+	assert.Equal(t, "image_workshop", metadata["source"])
+	assert.Equal(t, "2304x3456", metadata["request_size"])
+	assert.Equal(t, "4K", metadata["billing_tier"])
+	assert.Equal(t, 2.0, metadata["billing_multiplier"])
 }
 
 func TestSubmitAsyncImageGenerationQueuesTask(t *testing.T) {

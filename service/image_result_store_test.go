@@ -34,6 +34,8 @@ func TestImageResultStoreRewriteB64JSONWritesFileAndRemovesBase64(t *testing.T) 
 	_, err = os.Stat(path)
 	require.NoError(t, err)
 	assert.Equal(t, "image/png", files[0].MimeType)
+	assert.Equal(t, 1, files[0].Width)
+	assert.Equal(t, 1, files[0].Height)
 }
 
 func TestImageResultStoreResolveTaskFileRequiresCompletedTaskAndTTL(t *testing.T) {

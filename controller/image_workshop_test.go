@@ -132,6 +132,9 @@ func TestImageWorkshopGenerationQueuesGptImage2ThroughCompatibleChannel(t *testi
 	assert.Contains(t, string(data.Request.Body), `"size":"1040x1520"`)
 	assert.Contains(t, string(data.Request.Body), `"quality":"high"`)
 	assert.Contains(t, string(data.Request.Body), `"output_format":"webp"`)
+	assert.Equal(t, "1040x1520", data.Metadata["request_size"])
+	assert.Equal(t, "2K", data.Metadata["billing_tier"])
+	assert.Equal(t, 1.5, data.Metadata["billing_multiplier"])
 }
 
 func TestImageWorkshopOptionsRejectsDisabledToken(t *testing.T) {
@@ -571,6 +574,11 @@ func TestImageWorkshopTaskListReturnsOnlyOwnedImagesAndRefreshesSignature(t *tes
 	task.SetData(service.ImageAsyncTaskData{
 		Request: service.ImageAsyncRequest{Body: json.RawMessage(`{"model":"gpt-image-1","prompt":"draw history","n":1,"size":"1024x1024","quality":"auto","output_format":"png"}`)},
 		Result:  json.RawMessage(rewritten), Files: files, ExpiresAt: expiresAt,
+		Metadata: map[string]interface{}{
+			"source":             "image_workshop",
+			"billing_tier":       "1K",
+			"billing_multiplier": 1.0,
+		},
 	})
 	insertImageAsyncControllerTask(t, task)
 	insertImageAsyncControllerTask(t, &model.Task{TaskID: "other_history", UserId: 2, Platform: constant.TaskPlatformImage, Status: model.TaskStatusSuccess})
@@ -590,6 +598,8 @@ func TestImageWorkshopTaskListReturnsOnlyOwnedImagesAndRefreshesSignature(t *tes
 			Items []struct {
 				TaskID          string          `json:"task_id"`
 				Prompt          string          `json:"prompt"`
+				BillingTier     string          `json:"billing_tier"`
+				OutputSizes     []string        `json:"output_sizes"`
 				ResultAvailable bool            `json:"result_available"`
 				Result          json.RawMessage `json:"result"`
 			} `json:"items"`
@@ -601,6 +611,8 @@ func TestImageWorkshopTaskListReturnsOnlyOwnedImagesAndRefreshesSignature(t *tes
 	require.Len(t, response.Data.Items, 1)
 	assert.Equal(t, "task_history", response.Data.Items[0].TaskID)
 	assert.Equal(t, "draw history", response.Data.Items[0].Prompt)
+	assert.Equal(t, "1K", response.Data.Items[0].BillingTier)
+	assert.Equal(t, []string{"1x1"}, response.Data.Items[0].OutputSizes)
 	assert.True(t, response.Data.Items[0].ResultAvailable)
 	assert.Contains(t, string(response.Data.Items[0].Result), "signature=")
 	assert.Contains(t, string(response.Data.Items[0].Result), "expires=")

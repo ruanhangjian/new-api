@@ -155,6 +155,13 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		newAPIError = types.NewError(err, types.ErrorCodeModelPriceError, types.ErrOptionWithStatusCode(http.StatusBadRequest))
 		return
 	}
+	if c.GetBool(string(constant.ContextKeyImageWorkshopRequest)) {
+		if imageRequest, ok := request.(*dto.ImageRequest); ok {
+			billing := service.ResolveImageWorkshopResolutionBilling(imageRequest.Size)
+			service.ApplyImageWorkshopResolutionBilling(&priceData, billing)
+			relayInfo.PriceData = priceData
+		}
+	}
 
 	// common.SetContextKey(c, constant.ContextKeyTokenCountMeta, meta)
 

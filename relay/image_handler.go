@@ -150,6 +150,10 @@ func ImageHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *type
 	if len(request.Size) > 0 {
 		logContent = append(logContent, fmt.Sprintf("大小 %s", request.Size))
 	}
+	if c.GetBool(string(constant.ContextKeyImageWorkshopRequest)) {
+		billing := service.ResolveImageWorkshopResolutionBilling(request.Size)
+		logContent = append(logContent, fmt.Sprintf("预计计费档位 %s", billing.Tier))
+	}
 	if len(quality) > 0 {
 		logContent = append(logContent, fmt.Sprintf("品质 %s", quality))
 	}

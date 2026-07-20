@@ -50,22 +50,25 @@ type imageWorkshopGenerationRequest struct {
 }
 
 type imageWorkshopTaskResponse struct {
-	TaskID          string                       `json:"task_id"`
-	Status          string                       `json:"status"`
-	Progress        string                       `json:"progress"`
-	Model           string                       `json:"model,omitempty"`
-	Prompt          string                       `json:"prompt,omitempty"`
-	N               uint                         `json:"n"`
-	Size            string                       `json:"size,omitempty"`
-	Quality         string                       `json:"quality,omitempty"`
-	OutputFormat    string                       `json:"output_format,omitempty"`
-	SubmitTime      int64                        `json:"submit_time"`
-	StartTime       int64                        `json:"start_time,omitempty"`
-	FinishTime      int64                        `json:"finish_time,omitempty"`
-	ExpiresAt       int64                        `json:"expires_at,omitempty"`
-	ResultAvailable bool                         `json:"result_available"`
-	Result          json.RawMessage              `json:"result,omitempty"`
-	Error           *service.ImageAsyncTaskError `json:"error,omitempty"`
+	TaskID            string                       `json:"task_id"`
+	Status            string                       `json:"status"`
+	Progress          string                       `json:"progress"`
+	Model             string                       `json:"model,omitempty"`
+	Prompt            string                       `json:"prompt,omitempty"`
+	N                 uint                         `json:"n"`
+	Size              string                       `json:"size,omitempty"`
+	Quality           string                       `json:"quality,omitempty"`
+	OutputFormat      string                       `json:"output_format,omitempty"`
+	BillingTier       string                       `json:"billing_tier,omitempty"`
+	BillingMultiplier float64                      `json:"billing_multiplier,omitempty"`
+	OutputSizes       []string                     `json:"output_sizes,omitempty"`
+	SubmitTime        int64                        `json:"submit_time"`
+	StartTime         int64                        `json:"start_time,omitempty"`
+	FinishTime        int64                        `json:"finish_time,omitempty"`
+	ExpiresAt         int64                        `json:"expires_at,omitempty"`
+	ResultAvailable   bool                         `json:"result_available"`
+	Result            json.RawMessage              `json:"result,omitempty"`
+	Error             *service.ImageAsyncTaskError `json:"error,omitempty"`
 }
 
 type imageWorkshopDeleteTasksRequest struct {
@@ -76,8 +79,6 @@ var imageWorkshopGenerationFields = map[string]struct{}{
 	"token_id": {}, "model": {}, "prompt": {}, "n": {}, "size": {}, "quality": {},
 	"output_format": {}, "response_format": {}, "moderation": {},
 }
-
-const imageWorkshopRequestContextKey = "image_workshop_request"
 
 const imageWorkshopPromptSuffix = "不需要反问我任何问题，直接按照我提示词的要求生成图片。"
 
@@ -154,7 +155,7 @@ func PrepareImageWorkshopGeneration(c *gin.Context) {
 	if c.Request.Header.Get("Content-Type") == "" {
 		c.Request.Header.Set("Content-Type", "application/json")
 	}
-	c.Set(imageWorkshopRequestContextKey, true)
+	c.Set(string(constant.ContextKeyImageWorkshopRequest), true)
 }
 
 func CreateImageWorkshopGeneration(c *gin.Context) {
@@ -426,6 +427,24 @@ func buildImageWorkshopTaskResponse(task *model.Task, now time.Time) (imageWorks
 		}
 	}
 	response.ExpiresAt = data.ExpiresAt
+	if data.Metadata != nil {
+		if tier, ok := data.Metadata["billing_tier"].(string); ok {
+			response.BillingTier = tier
+		}
+		switch multiplier := data.Metadata["billing_multiplier"].(type) {
+		case float64:
+			response.BillingMultiplier = multiplier
+		case float32:
+			response.BillingMultiplier = float64(multiplier)
+		case int:
+			response.BillingMultiplier = float64(multiplier)
+		}
+	}
+	for _, file := range data.Files {
+		if file.Width > 0 && file.Height > 0 {
+			response.OutputSizes = append(response.OutputSizes, fmt.Sprintf("%dx%d", file.Width, file.Height))
+		}
+	}
 	if task.Status == model.TaskStatusFailure {
 		response.Error = data.Error
 		if response.Error == nil {

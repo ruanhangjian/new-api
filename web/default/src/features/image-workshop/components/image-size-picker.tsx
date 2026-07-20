@@ -39,6 +39,7 @@ import {
 import {
   calculateImageSize,
   findImageSizePreset,
+  imageBillingTierForSize,
   imageSizeSummary,
   isImageWorkshopSizeSupported,
   normalizeImageSize,
@@ -137,6 +138,8 @@ function SizePickerPanel({
   const previewSupported = Boolean(
     previewSize && isImageWorkshopSizeSupported(capability, previewSize)
   )
+
+  const billingTier = imageBillingTierForSize(previewSize || pendingValue)
 
   const apply = () => {
     if (!previewSize || !previewSupported) return
@@ -406,10 +409,18 @@ function SizePickerPanel({
 
         <div className='image-workshop-size-current'>
           <Info aria-hidden='true' />
-          <span>
-            将使用：
-            <strong>{imageSizeSummary(previewSize || pendingValue)}</strong>
-          </span>
+          <div>
+            <span>
+              将使用：
+              <strong>{imageSizeSummary(previewSize || pendingValue)}</strong>
+            </span>
+            {Boolean(capability.size_tiers?.length) && (
+              <span>
+                预计计费档位：<strong>{billingTier}</strong>
+                <small>按实际请求尺寸判定</small>
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

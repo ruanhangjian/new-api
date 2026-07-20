@@ -284,6 +284,15 @@ export function imageSizeSummary(size: string) {
   return size
 }
 
+export function imageBillingTierForSize(size: string): ImageSizeTier {
+  const parsed = parseImageSize(size)
+  if (!parsed) return '2K'
+  const maxEdge = Math.max(parsed.width, parsed.height)
+  if (maxEdge <= 1024) return '1K'
+  if (maxEdge <= 2048) return '2K'
+  return '4K'
+}
+
 export function aspectRatioForSize(size?: string) {
   if (!size || size === 'auto') return '1 / 1'
   const [width, height] = size.split('x').map(Number)

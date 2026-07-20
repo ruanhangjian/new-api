@@ -161,7 +161,7 @@ func enqueueAsyncImageGeneration(c *gin.Context) (*model.Task, *imageAsyncSubmit
 			Body:        json.RawMessage(body),
 			Headers:     sanitizeImageAsyncHeaders(relayInfo.RequestHeaders),
 		},
-		Metadata: imageAsyncTaskMetadata(c),
+		Metadata: imageAsyncTaskMetadata(c, imageReq),
 	})
 	if err = task.Insert(); err != nil {
 		return nil, newImageAsyncSubmitError(http.StatusInternalServerError, err.Error(), "server_error")
@@ -272,6 +272,21 @@ func executeAsyncImageTaskOnce(taskID string) error {
 	data.Files = files
 	data.ExpiresAt = expiresAt
 	data.Error = nil
+	if isImageWorkshopTask(data) {
+		requestSize := ""
+		billingTier := ""
+		if data.Metadata != nil {
+			requestSize, _ = data.Metadata["request_size"].(string)
+			billingTier, _ = data.Metadata["billing_tier"].(string)
+		}
+		outputSizes := make([]string, 0, len(files))
+		for _, file := range files {
+			if file.Width > 0 && file.Height > 0 {
+				outputSizes = append(outputSizes, fmt.Sprintf("%dx%d", file.Width, file.Height))
+			}
+		}
+		logger.LogInfo(nil, fmt.Sprintf("image workshop task %s completed: request_size=%s billing_tier=%s output_sizes=%s", task.TaskID, requestSize, billingTier, strings.Join(outputSizes, ",")))
+	}
 	task.SetData(data)
 	task.Status = model.TaskStatusSuccess
 	task.Progress = "100%"
@@ -410,9 +425,17 @@ func executeImageWorkshopBatch(task *model.Task, data service.ImageAsyncTaskData
 	return common.Marshal(merged)
 }
 
-func imageAsyncTaskMetadata(c *gin.Context) map[string]interface{} {
-	if c.GetBool(imageWorkshopRequestContextKey) {
-		return map[string]interface{}{"source": "image_workshop"}
+func imageAsyncTaskMetadata(c *gin.Context, request *dto.ImageRequest) map[string]interface{} {
+	if c.GetBool(string(constant.ContextKeyImageWorkshopRequest)) {
+		metadata := map[string]interface{}{"source": "image_workshop"}
+		if request != nil {
+			billing := service.ResolveImageWorkshopResolutionBilling(request.Size)
+			metadata["request_size"] = request.Size
+			metadata["billing_tier"] = billing.Tier
+			metadata["billing_multiplier"] = billing.Multiplier
+			metadata["billing_source"] = billing.Source
+		}
+		return metadata
 	}
 	return nil
 }
@@ -442,6 +465,9 @@ func buildAsyncImageRelayContext(task *model.Task, data service.ImageAsyncTaskDa
 	}
 	req.Header.Set("Authorization", "Bearer sk-"+token.Key)
 	c.Request = req
+	if isImageWorkshopTask(data) {
+		c.Set(string(constant.ContextKeyImageWorkshopRequest), true)
+	}
 
 	middleware.TokenAuth()(c)
 	if c.IsAborted() {

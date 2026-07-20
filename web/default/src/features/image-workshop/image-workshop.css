@@ -532,6 +532,23 @@ For commercial licensing, please contact support@quantumnous.com
   color: var(--primary);
 }
 
+.image-workshop-size-current > div {
+  display: grid;
+  gap: 3px;
+}
+
+.image-workshop-size-current span {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.image-workshop-size-current small {
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+
 .image-workshop-size-current strong {
   color: var(--foreground);
   font-weight: 650;
