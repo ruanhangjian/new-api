@@ -629,6 +629,8 @@ feature/image-workshop-frontend
 - 参数只根据 `/api/image-workshop/options` 返回的真实能力启用；审核选项不展示，透明背景在后端未声明支持时显示为不可操作的“关闭”，不向请求中伪造无效字段。
 - `gpt-image-2` 的参数能力按模型声明，不再要求渠道地址必须是 `api.openai.com`。OpenAI 兼容中转开放 `auto`、1K / 2K / 4K 三档尺寸、`1:1`、`3:2`、`2:3`、`16:9`、`9:16`、`4:3`、`3:4`、`21:9` 八种预设比例、自定义比例和自定义宽高，同时保留 `auto/low/medium/high` 质量、`png/jpeg/webp` 格式和最多 4 张输出。
 - `gpt-image-2` 自定义尺寸沿用 Lingqu 的规整边界：宽高为 16 的倍数，最大边长 3840px，宽高比不超过 3:1，总像素限制为 655,360 到 8,294,400。前端先展示规整后的最终尺寸，服务端再次执行同样的规整和校验，最终只向上游发送规范化后的 `widthxheight`。
+- 尺寸选择面板固定外框高度，模式内容在独立区域内滚动，避免在“自动 / 按比例 / 自定义宽高”之间切换时窗口跳动；选中状态使用浅灰背景和柔和边框，并保留 1K、1:1 卡片左侧描边的安全边距。
+- 每次从“自动”或“自定义宽高”进入“按比例”时，默认选择 `1:1` 并同步更新预览尺寸；用户已经选择其他比例后，切换 1K、2K、4K 只重新计算尺寸，不重置用户比例。
 - 当前完成的是尺寸生成能力，不代表已完成分辨率差异计费。现有 Images 计费链路仍按模型基础价格和生成张数结算，尚未为 1K / 2K / 4K 增加独立倍率；正式对外按分辨率收费前仍需完成 Phase 6 计费配置。
 - 提交后通过 `/api/image-workshop/tasks` 轮询真实任务状态；生成中卡片复用已确认原型的点阵漂移和轮换文案动效。
 - 我的作品覆盖生成中、服务器临时结果、本机副本、失败和过期状态，并提供单图下载和按原提示词再次生成。
@@ -672,6 +674,19 @@ bunx eslint src/features/image-workshop src/routes/_authenticated/image-workshop
   src/features/system-settings/maintenance/sidebar-modules-section.tsx
 bun run build
 ```
+
+尺寸选择器最近一次修复的提交：
+
+```text
+777fb548 修正图工坊尺寸控件布局
+299e6e9f 稳定尺寸弹窗内容布局
+89de67c5 优化尺寸档位默认选择样式
+88f900f3 保留尺寸档位间的用户比例选择
+0023af3b 同步按比例模式默认选择状态
+61f8a829 合并按比例模式默认状态修正
+```
+
+最近一次前端集成验证：`bunx prettier --check src/features/image-workshop/components/image-size-picker.tsx`、`bun run typecheck`、`bunx eslint src/features/image-workshop` 和 `bun run build:check` 均通过。由于当前验证账号没有可用生图 Key，尺寸控件处于禁用状态，未触发真实生图请求完成最终点击复验。
 
 浏览器验证覆盖 320、375、414、768 和 1440px 宽度，主页面与灵感库均无横向溢出；同时验证了视频未开放提示、提示词自动增高、生成动效和 IndexedDB 本机副本恢复。
 
