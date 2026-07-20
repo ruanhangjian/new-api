@@ -231,9 +231,10 @@ function SizePickerPanel({
                           supported ? `${item} 基准分辨率` : '当前模型不支持'
                         }
                         onClick={() => {
-                          setRatio('1:1')
                           setTier(item)
-                          const nextSize = calculateImageSize(item, '1:1')
+                          const activeRatio =
+                            ratio === 'custom' ? customRatio : ratio
+                          const nextSize = calculateImageSize(item, activeRatio)
                           if (
                             nextSize &&
                             isImageWorkshopSizeSupported(capability, nextSize)
