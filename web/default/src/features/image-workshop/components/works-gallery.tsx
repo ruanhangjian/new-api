@@ -129,10 +129,15 @@ function LocalWorkCard({
   work: LocalImageWorkshopWork
   controls: WorkControlsProps
 }) {
-  const [url] = useState(() => URL.createObjectURL(work.blob))
+  const [url, setUrl] = useState('')
+
   useEffect(() => {
-    return () => URL.revokeObjectURL(url)
-  }, [url])
+    const objectUrl = URL.createObjectURL(work.blob)
+    setUrl(objectUrl)
+    return () => URL.revokeObjectURL(objectUrl)
+  }, [work.blob])
+
+  if (!url) return null
 
   return (
     <CompletedWorkCard
