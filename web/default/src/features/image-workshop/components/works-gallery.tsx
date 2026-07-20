@@ -45,6 +45,7 @@ import type {
   LocalImageWorkshopWork,
 } from '../types'
 import { GeneratingCard } from './generating-card'
+import { ImagePreviewDialog } from './image-preview-dialog'
 import { WorkshopSelect } from './workshop-select'
 
 export type ImageWorkshopDeletionRequest =
@@ -253,6 +254,8 @@ function CompletedWorkCard({
   local?: boolean
 }) {
   const extension = (format || 'png').toLowerCase()
+  const imageAlt = prompt || model || '生成图片'
+  const imageElement = <img src={image.url} alt={imageAlt} loading='lazy' />
   return (
     <article
       className='image-workshop-work-card'
@@ -263,7 +266,23 @@ function CompletedWorkCard({
           {local ? '本机' : '临时'}
         </span>
         <WorkSelectionControl {...controls} />
-        <img src={image.url} alt={prompt || '生成图片'} loading='lazy' />
+        {controls.selectionMode ? (
+          <button
+            type='button'
+            className='image-workshop-work-preview-trigger is-selecting'
+            aria-label={`选择作品：${imageAlt}`}
+            onClick={() => controls.onToggle(controls.work.id)}
+          >
+            {imageElement}
+          </button>
+        ) : (
+          <ImagePreviewDialog
+            src={image.url}
+            alt={imageAlt}
+            className='image-workshop-work-preview-trigger'
+            trigger={imageElement}
+          />
+        )}
         {!controls.selectionMode && (
           <div className='image-workshop-work-actions'>
             <a

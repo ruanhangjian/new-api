@@ -16,7 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useState } from 'react'
+import {
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import { Eye, Maximize2, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { InspirationImage } from './inspiration-image'
@@ -26,20 +32,65 @@ type ImagePreviewDialogProps = {
   fallbackSrc?: string
   alt: string
   className?: string
+  trigger?: ReactNode
 }
 
 const MIN_SCALE = 0.5
 const MAX_SCALE = 3
 const SCALE_STEP = 0.25
+const WHEEL_SCALE_SENSITIVITY = 0.01
+
+function clampScale(scale: number) {
+  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale))
+}
 
 export function ImagePreviewDialog({
   src,
   fallbackSrc,
   alt,
   className,
+  trigger,
 }: ImagePreviewDialogProps) {
   const [open, setOpen] = useState(false)
   const [scale, setScale] = useState(1)
+  const viewportRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const viewport = viewportRef.current
+    if (!viewport) return
+
+    const handleWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) return
+      event.preventDefault()
+      setScale((current) =>
+        clampScale(
+          Number(
+            (
+              current * Math.exp(-event.deltaY * WHEEL_SCALE_SENSITIVITY)
+            ).toFixed(2)
+          )
+        )
+      )
+    }
+
+    viewport.addEventListener('wheel', handleWheel, { passive: false })
+    return () => viewport.removeEventListener('wheel', handleWheel)
+  }, [open])
+
+  useLayoutEffect(() => {
+    if (!open) return
+    const viewport = viewportRef.current
+    if (!viewport) return
+    viewport.scrollLeft = Math.max(
+      0,
+      (viewport.scrollWidth - viewport.clientWidth) / 2
+    )
+    viewport.scrollTop = Math.max(
+      0,
+      (viewport.scrollHeight - viewport.clientHeight) / 2
+    )
+  }, [open, scale])
 
   if (!src) return null
 
@@ -60,7 +111,7 @@ export function ImagePreviewDialog({
           changeOpen(true)
         }}
       >
-        <Eye aria-hidden='true' />
+        {trigger || <Eye aria-hidden='true' />}
       </button>
 
       <Dialog open={open} onOpenChange={changeOpen}>
@@ -70,6 +121,7 @@ export function ImagePreviewDialog({
         >
           <DialogTitle className='sr-only'>{alt}</DialogTitle>
           <div
+            ref={viewportRef}
             className='image-workshop-preview-viewport'
             onClick={(event) => {
               if (event.target === event.currentTarget) changeOpen(false)
@@ -104,7 +156,7 @@ export function ImagePreviewDialog({
               aria-label='缩小图片'
               disabled={scale <= MIN_SCALE}
               onClick={() =>
-                setScale((current) => Math.max(MIN_SCALE, current - SCALE_STEP))
+                setScale((current) => clampScale(current - SCALE_STEP))
               }
             >
               <ZoomOut aria-hidden='true' />
@@ -116,7 +168,7 @@ export function ImagePreviewDialog({
               aria-label='放大图片'
               disabled={scale >= MAX_SCALE}
               onClick={() =>
-                setScale((current) => Math.min(MAX_SCALE, current + SCALE_STEP))
+                setScale((current) => clampScale(current + SCALE_STEP))
               }
             >
               <ZoomIn aria-hidden='true' />
