@@ -573,18 +573,15 @@ For commercial licensing, please contact support@quantumnous.com
 }
 
 .image-workshop-works-grid {
-  column-width: 260px;
-  column-count: 5;
-  column-gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+  align-items: start;
+  gap: 16px 12px;
 }
 
 .image-workshop-work-card {
   min-width: 0;
   width: 100%;
-  display: inline-block;
-  margin-bottom: 16px;
-  break-inside: avoid;
-  vertical-align: top;
 }
 
 .image-workshop-work-media {
