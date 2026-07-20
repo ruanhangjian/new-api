@@ -175,7 +175,18 @@ function SizePickerPanel({
             role='tab'
             aria-selected={mode === 'ratio'}
             className={mode === 'ratio' ? 'is-active' : ''}
-            onClick={() => setMode('ratio')}
+            onClick={() => {
+              if (mode === 'ratio') return
+              setMode('ratio')
+              setRatio('1:1')
+              const nextSize = calculateImageSize(tier, '1:1')
+              if (
+                nextSize &&
+                isImageWorkshopSizeSupported(capability, nextSize)
+              ) {
+                setPendingValue(nextSize)
+              }
+            }}
           >
             按比例
           </button>
