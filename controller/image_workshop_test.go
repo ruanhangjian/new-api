@@ -95,7 +95,7 @@ func TestImageWorkshopOptionsReturnsTokenLimitedImageModels(t *testing.T) {
 	assert.True(t, response.Data.Models[0].SupportsCustomSize)
 	assert.Contains(t, response.Data.Models[0].Qualities, "auto")
 	assert.Equal(t, []string{"png", "jpeg", "webp"}, response.Data.Models[0].OutputFormats)
-	assert.Equal(t, 4, response.Data.Models[0].MaxImages)
+	assert.Equal(t, 6, response.Data.Models[0].MaxImages)
 
 	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", 101).Update("base_url", "https://images.example.com/v1").Error)
 	recorder = httptest.NewRecorder()
@@ -107,7 +107,7 @@ func TestImageWorkshopOptionsReturnsTokenLimitedImageModels(t *testing.T) {
 	require.Len(t, response.Data.Models, 1)
 	assert.Equal(t, []string{"auto", "low", "medium", "high"}, response.Data.Models[0].Qualities)
 	assert.Equal(t, []string{"png", "jpeg", "webp"}, response.Data.Models[0].OutputFormats)
-	assert.Equal(t, 4, response.Data.Models[0].MaxImages)
+	assert.Equal(t, 6, response.Data.Models[0].MaxImages)
 }
 
 func TestImageWorkshopGenerationQueuesGptImage2ThroughCompatibleChannel(t *testing.T) {

@@ -241,27 +241,23 @@ func executeAsyncImageTaskOnce(taskID string) error {
 	if err = task.GetData(&data); err != nil {
 		return err
 	}
-	c, recorder, err := buildAsyncImageRelayContext(task, data)
+	var resultBody []byte
+	if isImageWorkshopTask(data) {
+		imageCount, err := imageWorkshopRequestCount(data.Request.Body)
+		if err != nil {
+			return err
+		}
+		if imageCount > 1 {
+			resultBody, err = executeImageWorkshopBatch(task, data, imageCount)
+		} else {
+			resultBody, err = executeImageAsyncRelay(task, data, data.Request.Body)
+		}
+	} else {
+		resultBody, err = executeImageAsyncRelay(task, data, data.Request.Body)
+	}
 	if err != nil {
 		return err
 	}
-	if c.IsAborted() {
-		return fmt.Errorf("%s", strings.TrimSpace(recorder.Body.String()))
-	}
-	if data.Metadata["source"] == "image_workshop" {
-		if err := finalizeImageWorkshopRequestForSelectedChannel(c); err != nil {
-			return err
-		}
-	}
-	Relay(c, types.RelayFormatOpenAIImage)
-	statusCode := recorder.Code
-	if statusCode == 0 {
-		statusCode = http.StatusOK
-	}
-	if statusCode >= http.StatusBadRequest {
-		return fmt.Errorf("%s", strings.TrimSpace(recorder.Body.String()))
-	}
-	resultBody := recorder.Body.Bytes()
 	imageAsyncResultLifecycleMu.RLock()
 	defer imageAsyncResultLifecycleMu.RUnlock()
 	rewritten, files, expiresAt, err := imageResultStore.RewriteB64JSON(task.TaskID, resultBody, time.Now())
@@ -283,6 +279,135 @@ func executeAsyncImageTaskOnce(taskID string) error {
 	task.UpdatedAt = task.FinishTime
 	_, err = task.UpdateWithStatus(model.TaskStatusInProgress)
 	return err
+}
+
+func isImageWorkshopTask(data service.ImageAsyncTaskData) bool {
+	return data.Metadata != nil && data.Metadata["source"] == "image_workshop"
+}
+
+func imageWorkshopRequestCount(body []byte) (uint, error) {
+	var request struct {
+		N *uint `json:"n,omitempty"`
+	}
+	if err := common.Unmarshal(body, &request); err != nil {
+		return 0, err
+	}
+	if request.N == nil || *request.N == 0 {
+		return 1, nil
+	}
+	return *request.N, nil
+}
+
+func rewriteImageWorkshopRequestCount(body []byte, count uint) ([]byte, error) {
+	var payload map[string]json.RawMessage
+	if err := common.Unmarshal(body, &payload); err != nil {
+		return nil, err
+	}
+	encodedCount, err := common.Marshal(count)
+	if err != nil {
+		return nil, err
+	}
+	payload["n"] = encodedCount
+	return common.Marshal(payload)
+}
+
+func executeImageAsyncRelay(task *model.Task, data service.ImageAsyncTaskData, body []byte) ([]byte, error) {
+	relayData := data
+	relayData.Request.Body = json.RawMessage(body)
+	c, recorder, err := buildAsyncImageRelayContext(task, relayData)
+	if err != nil {
+		return nil, err
+	}
+	if c.IsAborted() {
+		return nil, fmt.Errorf("%s", strings.TrimSpace(recorder.Body.String()))
+	}
+	if isImageWorkshopTask(data) {
+		if err := finalizeImageWorkshopRequestForSelectedChannel(c); err != nil {
+			return nil, err
+		}
+	}
+	Relay(c, types.RelayFormatOpenAIImage)
+	statusCode := recorder.Code
+	if statusCode == 0 {
+		statusCode = http.StatusOK
+	}
+	if statusCode >= http.StatusBadRequest {
+		return nil, fmt.Errorf("%s", strings.TrimSpace(recorder.Body.String()))
+	}
+	return append([]byte(nil), recorder.Body.Bytes()...), nil
+}
+
+func executeImageWorkshopBatch(task *model.Task, data service.ImageAsyncTaskData, count uint) ([]byte, error) {
+	type batchResult struct {
+		index int
+		body  []byte
+		err   error
+	}
+	results := make(chan batchResult, count)
+	var waitGroup sync.WaitGroup
+	for index := 0; index < int(count); index++ {
+		waitGroup.Add(1)
+		go func(index int) {
+			defer waitGroup.Done()
+			body, err := rewriteImageWorkshopRequestCount(data.Request.Body, 1)
+			if err != nil {
+				results <- batchResult{index: index, err: err}
+				return
+			}
+			body, err = executeImageAsyncRelay(task, data, body)
+			results <- batchResult{index: index, body: body, err: err}
+		}(index)
+	}
+	waitGroup.Wait()
+	close(results)
+
+	ordered := make([][]byte, count)
+	errorsByIndex := make([]error, count)
+	for result := range results {
+		if result.err != nil {
+			errorsByIndex[result.index] = result.err
+			continue
+		}
+		ordered[result.index] = result.body
+	}
+
+	merged := dto.ImageResponse{Data: make([]dto.ImageData, 0, count), Created: time.Now().Unix()}
+	for index, body := range ordered {
+		if len(body) == 0 {
+			continue
+		}
+		var response dto.ImageResponse
+		if err := common.Unmarshal(body, &response); err != nil {
+			errorsByIndex[index] = fmt.Errorf("响应格式无效: %w", err)
+			continue
+		}
+		if len(response.Data) == 0 {
+			errorsByIndex[index] = fmt.Errorf("没有返回图片结果")
+			continue
+		}
+		if response.Created > merged.Created {
+			merged.Created = response.Created
+		}
+		merged.Data = append(merged.Data, response.Data...)
+	}
+	if len(merged.Data) == 0 {
+		for index, batchErr := range errorsByIndex {
+			if batchErr != nil {
+				return nil, fmt.Errorf("第 %d 张图片生成失败: %w", index+1, batchErr)
+			}
+		}
+		return nil, fmt.Errorf("所有图片生成请求均未返回结果")
+	}
+	if len(merged.Data) < int(count) {
+		failures := make([]string, 0)
+		for index, batchErr := range errorsByIndex {
+			if batchErr != nil {
+				failures = append(failures, fmt.Sprintf("第 %d 张: %s", index+1, batchErr.Error()))
+			}
+		}
+		logger.LogWarn(nil, fmt.Sprintf("image workshop task %s partially completed (%d/%d): %s", task.TaskID, len(merged.Data), count, strings.Join(failures, "; ")))
+	}
+	return common.Marshal(merged)
 }
 
 func imageAsyncTaskMetadata(c *gin.Context) map[string]interface{} {

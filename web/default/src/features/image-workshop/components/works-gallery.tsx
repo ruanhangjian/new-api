@@ -71,6 +71,40 @@ type DeleteConfirmation = {
   request: ImageWorkshopDeletionRequest
 }
 
+type GalleryItem =
+  | {
+      kind: 'generating'
+      id: string
+      task: ImageWorkshopTask
+      imageIndex: number
+      sortTime: number
+      sourceOrder: number
+    }
+  | {
+      kind: 'completed'
+      id: string
+      task: ImageWorkshopTask
+      image: ImageWorkshopResultImage
+      imageIndex: number
+      sortTime: number
+      sourceOrder: number
+    }
+  | {
+      kind: 'state'
+      id: string
+      task: ImageWorkshopTask
+      sortTime: number
+      sourceOrder: number
+    }
+  | {
+      kind: 'local'
+      id: string
+      work: LocalImageWorkshopWork
+      imageIndex: number
+      sortTime: number
+      sourceOrder: number
+    }
+
 type WorkControlsProps = {
   work: DeletableWork
   selectionMode: boolean
@@ -86,7 +120,7 @@ type WorksGalleryProps = {
   isDeleting: boolean
   limit: number
   onLimitChange: (limit: number) => void
-  onRegenerate: (prompt: string) => void
+  onRegenerate: (task: ImageWorkshopTask) => void
   onDelete: (request: ImageWorkshopDeletionRequest) => Promise<unknown>
 }
 
@@ -320,7 +354,7 @@ function TaskStateCard({
   controls,
 }: {
   task: ImageWorkshopTask
-  onRegenerate: (prompt: string) => void
+  onRegenerate: (task: ImageWorkshopTask) => void
   controls: WorkControlsProps
 }) {
   const failed = task.status === 'failed'
@@ -353,7 +387,7 @@ function TaskStateCard({
             : '服务器上的临时图片已清理，本机也没有找到副本'}
         </p>
         {task.prompt && (
-          <button type='button' onClick={() => onRegenerate(task.prompt || '')}>
+          <button type='button' onClick={() => onRegenerate(task)}>
             <RefreshCw aria-hidden='true' />
             再次生成
           </button>
@@ -395,6 +429,74 @@ export function WorksGallery({
       new Set(localWorks.map((work) => `${work.taskId}:${work.imageIndex}`)),
     [localWorks]
   )
+
+  const galleryItems = useMemo(() => {
+    const items: GalleryItem[] = []
+    const taskOrder = new Map(
+      tasks.map((task, index) => [task.task_id, index] as const)
+    )
+
+    tasks.forEach((task, sourceOrder) => {
+      const sortTime = task.submit_time || task.start_time || 0
+      if (task.status === 'queued' || task.status === 'running') {
+        Array.from({ length: Math.max(1, task.n || 1) }, (_, imageIndex) => {
+          items.push({
+            kind: 'generating',
+            id: `${task.task_id}:${imageIndex}`,
+            task,
+            imageIndex,
+            sortTime,
+            sourceOrder,
+          })
+        })
+        return
+      }
+
+      if (task.status === 'completed' && task.result_available) {
+        ;(task.result?.data || []).forEach((image, imageIndex) => {
+          if (localImageKeys.has(`${task.task_id}:${imageIndex}`)) return
+          items.push({
+            kind: 'completed',
+            id: `${task.task_id}:${imageIndex}`,
+            task,
+            image,
+            imageIndex,
+            sortTime,
+            sourceOrder,
+          })
+        })
+        return
+      }
+
+      items.push({
+        kind: 'state',
+        id: task.task_id,
+        task,
+        sortTime,
+        sourceOrder,
+      })
+    })
+
+    visibleLocalWorks.forEach((work, localIndex) => {
+      items.push({
+        kind: 'local',
+        id: work.key,
+        work,
+        imageIndex: work.imageIndex,
+        sortTime: work.submittedAt || work.createdAt,
+        sourceOrder: taskOrder.get(work.taskId) ?? tasks.length + localIndex,
+      })
+    })
+
+    return items.sort(
+      (left, right) =>
+        right.sortTime - left.sortTime ||
+        left.sourceOrder - right.sourceOrder ||
+        ('imageIndex' in left ? left.imageIndex : 0) -
+          ('imageIndex' in right ? right.imageIndex : 0) ||
+        left.id.localeCompare(right.id)
+    )
+  }, [localImageKeys, tasks, visibleLocalWorks])
 
   const deletableWorks = useMemo(() => {
     const items: DeletableWork[] = []
@@ -629,65 +731,55 @@ export function WorksGallery({
           className='image-workshop-works-grid'
           aria-busy={isLoading}
         >
-          {tasks.flatMap((task) => {
-            if (task.status === 'queued' || task.status === 'running') {
-              return Array.from(
-                { length: Math.max(1, task.n || 1) },
-                (_, index) => (
-                  <GeneratingCard
-                    key={`${task.task_id}:${index}`}
-                    model={task.model || ''}
-                    size={task.size}
-                    phraseOffset={index}
-                  />
-                )
+          {galleryItems.map((item) => {
+            if (item.kind === 'generating') {
+              return (
+                <GeneratingCard
+                  key={item.id}
+                  model={item.task.model || ''}
+                  size={item.task.size}
+                  phraseOffset={item.imageIndex}
+                />
               )
             }
 
-            if (task.status === 'completed' && task.result_available) {
-              return (task.result?.data || [])
-                .map((image, index) => ({ image, index }))
-                .filter(
-                  ({ index }) => !localImageKeys.has(`${task.task_id}:${index}`)
-                )
-                .map(({ image, index }) => {
-                  const work = deletableWorkMap.get(
-                    `task:${task.task_id}:${index}`
-                  )
-                  if (!work) return null
-                  return (
-                    <CompletedWorkCard
-                      key={`${task.task_id}:${index}`}
-                      image={image}
-                      prompt={task.prompt || ''}
-                      model={task.model || ''}
-                      format={task.output_format}
-                      timestamp={task.finish_time || task.submit_time}
-                      controls={controlsFor(work)}
-                    />
-                  )
-                })
+            if (item.kind === 'completed') {
+              const work = deletableWorkMap.get(
+                `task:${item.task.task_id}:${item.imageIndex}`
+              )
+              if (!work) return null
+              return (
+                <CompletedWorkCard
+                  key={item.id}
+                  image={item.image}
+                  prompt={item.task.prompt || ''}
+                  model={item.task.model || ''}
+                  format={item.task.output_format}
+                  timestamp={item.task.finish_time || item.task.submit_time}
+                  controls={controlsFor(work)}
+                />
+              )
             }
 
-            const work = deletableWorkMap.get(`task:${task.task_id}`)
-            if (!work) return []
-            return (
-              <TaskStateCard
-                key={task.task_id}
-                task={task}
-                controls={controlsFor(work)}
-                onRegenerate={onRegenerate}
-              />
-            )
-          })}
+            if (item.kind === 'state') {
+              const work = deletableWorkMap.get(`task:${item.task.task_id}`)
+              if (!work) return null
+              return (
+                <TaskStateCard
+                  key={item.id}
+                  task={item.task}
+                  controls={controlsFor(work)}
+                  onRegenerate={onRegenerate}
+                />
+              )
+            }
 
-          {visibleLocalWorks.map((work) => {
-            const deletable = deletableWorkMap.get(`local:${work.key}`)
+            const deletable = deletableWorkMap.get(`local:${item.work.key}`)
             if (!deletable) return null
             return (
               <LocalWorkCard
-                key={work.key}
-                work={work}
+                key={item.id}
+                work={item.work}
                 controls={controlsFor(deletable)}
               />
             )

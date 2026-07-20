@@ -101,6 +101,7 @@ function SizePickerPanel({
   const [customHeight, setCustomHeight] = useState(
     String(parsedValue?.height || 1024)
   )
+
   const options = capability.sizes
   const hasAuto = options.includes('auto')
   const ratios = capability.aspect_ratios || []
@@ -441,7 +442,11 @@ export function ImageSizePicker(props: ImageSizePickerProps) {
         <ChevronDown aria-hidden='true' />
       </DialogTrigger>
       <DialogContent className='image-workshop-size-dialog' showCloseButton>
-        <SizePickerPanel {...props} onClose={() => setOpen(false)} />
+        <SizePickerPanel
+          key={`${props.value}:${open ? 'open' : 'closed'}`}
+          {...props}
+          onClose={() => setOpen(false)}
+        />
       </DialogContent>
     </Dialog>
   )

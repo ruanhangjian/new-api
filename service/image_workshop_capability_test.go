@@ -22,7 +22,7 @@ func TestImageWorkshopCapabilityForModel(t *testing.T) {
 	assert.EqualValues(t, 8_294_400, capability.SizeConstraints.MaxPixels)
 	assert.Equal(t, []string{"auto", "low", "medium", "high"}, capability.Qualities)
 	assert.Equal(t, []string{"png", "jpeg", "webp"}, capability.OutputFormats)
-	assert.Equal(t, 4, capability.MaxImages)
+	assert.Equal(t, 6, capability.MaxImages)
 
 	capability, ok = imageWorkshopCapabilityForModel("gpt-image-1.5", true)
 	require.True(t, ok)

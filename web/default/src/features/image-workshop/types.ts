@@ -135,6 +135,7 @@ export type LocalImageWorkshopWork = {
   quality: string
   outputFormat: string
   createdAt: number
+  submittedAt?: number
   revisedPrompt?: string
 }
 

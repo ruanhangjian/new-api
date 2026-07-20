@@ -56,6 +56,20 @@ func TestSanitizeImageAsyncHeadersDropsCredentials(t *testing.T) {
 	assert.Equal(t, map[string]string{"Content-Type": "application/json"}, headers)
 }
 
+func TestImageWorkshopRequestCountAndSingleImageRewrite(t *testing.T) {
+	count, err := imageWorkshopRequestCount([]byte(`{"model":"gpt-image-2","prompt":"draw"}`))
+	require.NoError(t, err)
+	assert.Equal(t, uint(1), count)
+
+	count, err = imageWorkshopRequestCount([]byte(`{"model":"gpt-image-2","prompt":"draw","n":6}`))
+	require.NoError(t, err)
+	assert.Equal(t, uint(6), count)
+
+	rewritten, err := rewriteImageWorkshopRequestCount([]byte(`{"model":"gpt-image-2","prompt":"draw","n":6}`), 1)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"model":"gpt-image-2","prompt":"draw","n":1}`, string(rewritten))
+}
+
 func TestSubmitAsyncImageGenerationQueuesTask(t *testing.T) {
 	db := setupImageAsyncControllerTestDB(t)
 	seedImageAsyncControllerUserAndToken(t, 1, 11)

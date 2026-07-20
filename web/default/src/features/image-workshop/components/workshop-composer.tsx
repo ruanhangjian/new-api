@@ -218,24 +218,22 @@ export function WorkshopComposer({
             />
           </div>
 
-          <label className='image-workshop-parameter-field'>
+          <div className='image-workshop-parameter-field'>
             <span>数量</span>
-            <input
-              type='number'
-              min={1}
-              max={capability?.max_images || 1}
-              value={value.count}
+            <WorkshopSelect
+              value={String(value.count)}
+              options={Array.from(
+                { length: Math.min(capability?.max_images || 1, 6) },
+                (_, index) => {
+                  const count = index + 1
+                  return { value: String(count), label: `${count} 张` }
+                }
+              )}
+              ariaLabel='数量'
               disabled={!capability}
-              onChange={(event) =>
-                onChange({
-                  count: Math.min(
-                    capability?.max_images || 1,
-                    Math.max(1, Number(event.target.value) || 1)
-                  ),
-                })
-              }
+              onChange={(count) => onChange({ count: Number(count) })}
             />
-          </label>
+          </div>
         </div>
 
         <div className='image-workshop-composer-bottom'>

@@ -58,6 +58,7 @@ import {
   listLocalWorks,
   saveTaskImagesLocally,
 } from './lib/local-gallery'
+import type { ImageWorkshopGenerationRequest, ImageWorkshopTask } from './types'
 
 const INITIAL_FORM: WorkshopFormState = {
   prompt: '',
@@ -70,6 +71,10 @@ const INITIAL_FORM: WorkshopFormState = {
 }
 
 const HOMEPAGE_TEMPLATE_COUNT = 5
+
+type WorkshopSubmission = ImageWorkshopGenerationRequest & {
+  replaceTaskId?: string
+}
 
 function templatesFromOffset<T>(items: T[], offset: number, count: number) {
   if (!items.length) return []
@@ -286,8 +291,18 @@ export function ImageWorkshop() {
   }, [])
 
   const createMutation = useMutation({
-    mutationFn: createImageWorkshopGeneration,
-    onSuccess: async () => {
+    mutationFn: ({
+      replaceTaskId: _replaceTaskId,
+      ...request
+    }: WorkshopSubmission) => createImageWorkshopGeneration(request),
+    onSuccess: async (_response, variables) => {
+      if (variables.replaceTaskId) {
+        try {
+          await deleteImageWorkshopTasks([variables.replaceTaskId])
+        } catch {
+          toast.warning('新任务已提交，但旧失败记录未能自动删除')
+        }
+      }
       toast.success('任务已提交，正在生成图片')
       await queryClient.invalidateQueries({
         queryKey: ['image-workshop', 'tasks'],
@@ -346,11 +361,12 @@ export function ImageWorkshop() {
   })
 
   function submit() {
-    if (!capability || !form.prompt.trim()) return
+    const prompt = form.prompt.trim()
+    if (!capability || !prompt) return
     createMutation.mutate({
       token_id: form.tokenId,
       model: form.model,
-      prompt: form.prompt.trim(),
+      prompt,
       n: form.count,
       size: form.size,
       quality: form.quality,
@@ -360,7 +376,22 @@ export function ImageWorkshop() {
 
   function applyPrompt(prompt: string) {
     setForm((current) => ({ ...current, prompt }))
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function regenerate(task: ImageWorkshopTask) {
+    if (!form.tokenId || !task.prompt?.trim() || !task.model) return
+    createMutation.mutate({
+      token_id: form.tokenId,
+      model: task.model,
+      prompt: task.prompt.trim(),
+      n: 1,
+      size: task.size || 'auto',
+      quality: task.quality || 'auto',
+      ...(task.output_format ? { output_format: task.output_format } : {}),
+      replaceTaskId: task.task_id,
+    })
   }
 
   async function retryServiceQueries() {
@@ -485,7 +516,7 @@ export function ImageWorkshop() {
           isLoading={tasksQuery.isLoading && !isRetryingService}
           limit={workLimit}
           onLimitChange={setWorkLimit}
-          onRegenerate={applyPrompt}
+          onRegenerate={regenerate}
           onDelete={deleteWorksMutation.mutateAsync}
           isDeleting={deleteWorksMutation.isPending}
         />

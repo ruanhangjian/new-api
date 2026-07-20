@@ -159,6 +159,7 @@ export async function saveTaskImagesLocally(
         outputFormat: task.output_format || blob.type.split('/')[1] || 'png',
         createdAt:
           task.finish_time || task.submit_time || Math.floor(Date.now() / 1000),
+        submittedAt: task.submit_time,
         revisedPrompt: image.revised_prompt,
       }
       const transaction = database.transaction(WORKS_STORE, 'readwrite')

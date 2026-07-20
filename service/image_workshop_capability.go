@@ -264,6 +264,7 @@ func imageWorkshopCapabilityForModel(modelName string, fullCapability bool) (Ima
 
 func gptImage2WorkshopCapability(capability ImageWorkshopModelCapability) ImageWorkshopModelCapability {
 	capability = fullGPTImageWorkshopCapability(capability)
+	capability.MaxImages = 6
 	capability.Sizes = append([]string{"auto"}, gptImage2PresetSizes...)
 	capability.SizeTiers = []string{"1K", "2K", "4K"}
 	capability.AspectRatios = []string{"1:1", "3:2", "2:3", "16:9", "9:16", "4:3", "3:4", "21:9"}
