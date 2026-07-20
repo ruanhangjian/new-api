@@ -235,6 +235,40 @@ func TestImageWorkshopGenerationRejectsUnsupportedFieldsAndParameters(t *testing
 	}
 }
 
+func TestEnhanceImageWorkshopPromptAddsRatioAndInstruction(t *testing.T) {
+	tests := []struct {
+		name string
+		size string
+		want string
+	}{
+		{
+			name: "landscape ratio",
+			size: "1536x1024",
+			want: "draw\n\n将宽高比设为 3:2\n\n" + imageWorkshopPromptSuffix,
+		},
+		{
+			name: "portrait ratio",
+			size: "1024x1536",
+			want: "draw\n\n将宽高比设为 2:3\n\n" + imageWorkshopPromptSuffix,
+		},
+		{
+			name: "square only adds default instruction",
+			size: "1024x1024",
+			want: "draw\n\n" + imageWorkshopPromptSuffix,
+		},
+		{
+			name: "auto only adds default instruction",
+			size: "auto",
+			want: "draw\n\n" + imageWorkshopPromptSuffix,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.want, enhanceImageWorkshopPrompt("draw", test.size))
+		})
+	}
+}
+
 func TestFinalizeImageWorkshopRequestRemovesModerationForCompatibleUpstream(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -249,7 +283,7 @@ func TestFinalizeImageWorkshopRequestRemovesModerationForCompatibleUpstream(t *t
 			recorder := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(recorder)
 			c.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", nil)
-			require.NoError(t, replaceImageWorkshopRequestBody(c, []byte(`{"model":"gpt-image-1","prompt":"draw","moderation":"auto"}`)))
+			require.NoError(t, replaceImageWorkshopRequestBody(c, []byte(`{"model":"gpt-image-1","prompt":"draw","size":"1536x1024","moderation":"auto"}`)))
 			common.SetContextKey(c, constant.ContextKeyChannelBaseUrl, test.baseURL)
 
 			require.NoError(t, finalizeImageWorkshopRequestForSelectedChannel(c))
@@ -262,13 +296,15 @@ func TestFinalizeImageWorkshopRequestRemovesModerationForCompatibleUpstream(t *t
 			} else {
 				assert.NotContains(t, string(body), "moderation")
 			}
+			assert.Contains(t, string(body), `将宽高比设为 3:2`)
+			assert.Contains(t, string(body), imageWorkshopPromptSuffix)
 		})
 	}
 
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", nil)
-	require.NoError(t, replaceImageWorkshopRequestBody(c, []byte(`{"model":"dall-e-3","prompt":"draw","moderation":"auto"}`)))
+	require.NoError(t, replaceImageWorkshopRequestBody(c, []byte(`{"model":"dall-e-3","prompt":"draw","size":"1024x1024","moderation":"auto"}`)))
 	common.SetContextKey(c, constant.ContextKeyChannelBaseUrl, "https://api.openai.com")
 	require.NoError(t, finalizeImageWorkshopRequestForSelectedChannel(c))
 	storage, err := common.GetBodyStorage(c)
@@ -276,6 +312,8 @@ func TestFinalizeImageWorkshopRequestRemovesModerationForCompatibleUpstream(t *t
 	body, err := storage.Bytes()
 	require.NoError(t, err)
 	assert.NotContains(t, string(body), "moderation")
+	assert.NotContains(t, string(body), "将宽高比设为")
+	assert.Contains(t, string(body), imageWorkshopPromptSuffix)
 }
 
 func TestImageWorkshopGenerationRevalidatesTokenStateBeforeQueueing(t *testing.T) {

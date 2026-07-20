@@ -79,6 +79,8 @@ var imageWorkshopGenerationFields = map[string]struct{}{
 
 const imageWorkshopRequestContextKey = "image_workshop_request"
 
+const imageWorkshopPromptSuffix = "不需要反问我任何问题，直接按照我提示词的要求生成图片。"
+
 func ListImageWorkshopTokens(c *gin.Context) {
 	limit := operation_setting.GetMaxUserTokens()
 	if limit <= 0 {
@@ -483,21 +485,59 @@ func finalizeImageWorkshopRequestForSelectedChannel(c *gin.Context) error {
 	if err := common.Unmarshal(body, &payload); err != nil {
 		return err
 	}
+	var prompt string
+	_ = common.Unmarshal(payload["prompt"], &prompt)
+	var size string
+	_ = common.Unmarshal(payload["size"], &size)
+	payload["prompt"], err = common.Marshal(enhanceImageWorkshopPrompt(prompt, size))
+	if err != nil {
+		return err
+	}
 	var modelName string
 	_ = common.Unmarshal(payload["model"], &modelName)
 	lowerModel := strings.ToLower(modelName)
 	baseURL := common.GetContextKeyString(c, constant.ContextKeyChannelBaseUrl)
 	parsed, parseErr := url.Parse(baseURL)
-	if parseErr == nil && strings.EqualFold(parsed.Hostname(), "api.openai.com") &&
-		(strings.HasPrefix(lowerModel, "gpt-image-") || lowerModel == "chatgpt-image-latest") {
-		return nil
+	if !(parseErr == nil && strings.EqualFold(parsed.Hostname(), "api.openai.com") &&
+		(strings.HasPrefix(lowerModel, "gpt-image-") || lowerModel == "chatgpt-image-latest")) {
+		delete(payload, "moderation")
 	}
-	delete(payload, "moderation")
 	rewritten, err := common.Marshal(payload)
 	if err != nil {
 		return err
 	}
 	return replaceImageWorkshopRequestBody(c, rewritten)
+}
+
+func enhanceImageWorkshopPrompt(prompt, size string) string {
+	prompt = strings.TrimSpace(prompt)
+	parts := make([]string, 0, 3)
+	if prompt != "" {
+		parts = append(parts, prompt)
+	}
+	if ratio := imageWorkshopAspectRatio(size); ratio != "" && ratio != "1:1" {
+		parts = append(parts, "将宽高比设为 "+ratio)
+	}
+	parts = append(parts, imageWorkshopPromptSuffix)
+	return strings.Join(parts, "\n\n")
+}
+
+func imageWorkshopAspectRatio(size string) string {
+	size = strings.NewReplacer("×", "x", "X", "x").Replace(strings.TrimSpace(size))
+	parts := strings.Split(size, "x")
+	if len(parts) != 2 {
+		return ""
+	}
+	width, widthErr := strconv.Atoi(strings.TrimSpace(parts[0]))
+	height, heightErr := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if widthErr != nil || heightErr != nil || width <= 0 || height <= 0 {
+		return ""
+	}
+	originalWidth, originalHeight := width, height
+	for height != 0 {
+		width, height = height, width%height
+	}
+	return fmt.Sprintf("%d:%d", originalWidth/width, originalHeight/width)
 }
 
 func replaceImageWorkshopRequestBody(c *gin.Context, body []byte) error {
