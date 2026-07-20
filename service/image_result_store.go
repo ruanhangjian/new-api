@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -23,8 +24,8 @@ const (
 	maxImageResultTTLHours     = 24
 	defaultImageMaxFileMB      = 50
 	defaultImageMaxTaskMB      = 200
-	defaultImageCacheMaxGB     = 20
-	defaultImageMinFreeGB      = 20
+	defaultImageCacheMaxGB     = 1
+	defaultImageMinFreeGB      = 2
 )
 
 type ImageAsyncTaskData struct {
@@ -59,6 +60,7 @@ type ImageResultFile struct {
 }
 
 type ImageResultStore struct {
+	mu            sync.RWMutex
 	RootDir       string
 	TTL           time.Duration
 	MaxFileBytes  int64
@@ -94,6 +96,8 @@ func (s *ImageResultStore) RewriteB64JSON(taskID string, body []byte, now time.T
 	if s == nil {
 		s = NewImageResultStoreFromEnv()
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	var imageResp dto.ImageResponse
 	if err := common.Unmarshal(body, &imageResp); err != nil {
 		return nil, nil, 0, err
@@ -128,6 +132,8 @@ func (s *ImageResultStore) ResolveTaskFile(task *model.Task, fileID string, now 
 	if s == nil {
 		s = NewImageResultStoreFromEnv()
 	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if task == nil {
 		return "", "", errors.New("task not found")
 	}
@@ -149,6 +155,12 @@ func (s *ImageResultStore) ResolveTaskFile(task *model.Task, fileID string, now 
 		if err != nil {
 			return "", "", err
 		}
+		if _, err := os.Stat(path); err != nil {
+			if os.IsNotExist(err) {
+				return "", "", errors.New("image file not found")
+			}
+			return "", "", err
+		}
 		return path, f.MimeType, nil
 	}
 	return "", "", errors.New("image file not found")
@@ -158,6 +170,8 @@ func (s *ImageResultStore) CleanExpired(now time.Time) error {
 	if s == nil {
 		s = NewImageResultStoreFromEnv()
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	root, err := filepath.Abs(filepath.Join(s.RootDir, "results"))
 	if err != nil {
 		return err
@@ -212,7 +226,7 @@ func (s *ImageResultStore) writeBase64Image(taskID string, index int, value stri
 	if err = os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return ImageResultFile{}, err
 	}
-	if err = os.WriteFile(path, decoded, 0o640); err != nil {
+	if err = writeImageFileAtomically(path, decoded); err != nil {
 		return ImageResultFile{}, err
 	}
 	return ImageResultFile{
@@ -223,6 +237,27 @@ func (s *ImageResultStore) writeBase64Image(taskID string, index int, value stri
 		ExpiresAt:    expiresAt,
 		URL:          fmt.Sprintf("/v1/images/tasks/%s/files/%s", taskID, fileID),
 	}, nil
+}
+
+func writeImageFileAtomically(path string, data []byte) error {
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".image-workshop-*")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	defer func() { _ = os.Remove(temporaryPath) }()
+	if err := temporary.Chmod(0o640); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if _, err := temporary.Write(data); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	return os.Rename(temporaryPath, path)
 }
 
 func (s *ImageResultStore) safePath(rel string) (string, error) {

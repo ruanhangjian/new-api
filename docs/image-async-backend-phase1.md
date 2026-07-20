@@ -52,8 +52,13 @@ data/image-workshop/results/YYYY/MM/DD/<task_id>/<file_id>.png
 - `IMAGE_WORKSHOP_MAX_TASK_MB`
 - `IMAGE_WORKSHOP_CACHE_MAX_GB`
 - `IMAGE_WORKSHOP_MIN_FREE_GB`
+- `IMAGE_WORKSHOP_TASK_TTL_HOURS`
+- `IMAGE_WORKSHOP_TASK_MAX_COUNT`
+- `IMAGE_WORKSHOP_MAINTENANCE_INTERVAL_MINUTES`
 
-提交异步任务时会触发一次后台清理：删除过期文件，并在缓存超过上限或磁盘空闲低于水位时按最旧文件清理。
+服务启动时和每次提交异步任务时会触发清理，后台默认每 10 分钟再执行一次。清理会删除过期文件，并在缓存超过上限或磁盘空闲低于水位时按最旧文件清理。图片任务记录默认保留 24 小时、全局最多 100 条，只会删除已完成或已失败的记录。
+
+针对小磁盘部署，本地图片缓存默认上限为 1 GB，默认保留至少 2 GB 磁盘剩余空间。部署时应根据实际数据盘大小调整，且 `IMAGE_WORKSHOP_MIN_FREE_GB` 必须低于磁盘常态可用空间。
 
 ## 失败、计费与幂等
 

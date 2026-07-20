@@ -4,7 +4,7 @@
 
 **Goal:** 在 Phase 1 异步文生图后端之上，先补齐 NewAPI 登录用户到异步生图 API 的桥接层，再开始迁移生图工坊前端。
 
-**Architecture:** Phase 1 的 `/v1/images/generations?async=true` 仍作为底层 relay/计费入口，继续使用 API token、Distribute 和 OpenAIImage relay。Phase 2A 新增 `/api/image-workshop/*` 登录态桥接接口，让前端用 NewAPI session 调用，不把 API key 暴露给浏览器。Phase 2B 前端只依赖桥接层轮询结果和 Phase 1 返回的签名图片 URL，不依赖本地文件路径或 Authorization header 来展示图片。
+**Architecture:** Phase 1 的 `/v1/images/generations?async=true` 仍作为底层 relay/计费入口，继续使用 API token、Distribute 和 OpenAIImage relay。Phase 2A 新增 `/api/image-workshop/*` 登录态桥接接口，让前端用 NewAPI session 调用，不把 API key 暴露给浏览器。Phase 2B 补齐参数、模型能力、任务历史和短期清理契约。Phase 2C 前端只依赖桥接层和签名图片 URL，不依赖本地文件路径或 Authorization header 展示图片。
 
 **Tech Stack:** Go + Gin + GORM + NewAPI existing TokenAuth/UserAuth/Distribute/Relay, React frontend in existing NewAPI web app, local disk result storage.
 
@@ -558,9 +558,35 @@ git add controller/image_workshop.go controller/image_workshop_test.go controlle
 git commit -m "新增生图工坊登录态桥接接口"
 ```
 
-## Phase 2B：前端工坊 MVP
+## Phase 2B：后端契约与短期任务历史
 
-只有 Phase 2A 完成后再开始 Phase 2B。
+实施分支：
+
+```text
+feature/image-workshop-api-contract
+```
+
+新增接口：
+
+```http
+GET /api/image-workshop/options?token_id=:token_id
+GET /api/image-workshop/tasks?page=1&page_size=20
+```
+
+已实现：
+
+- 按当前用户、token 分组和 token 模型限制返回可用图片模型及参数能力。
+- 提交请求使用严格字段白名单，校验 `model`、`prompt`、`n`、`size`、`quality` 和 `output_format`。
+- 强制 `response_format=b64_json`，将客户端传入的审核值覆盖为 `moderation=auto`。
+- worker 在实际渠道分配后保留官方 OpenAI 的 `moderation=auto`，对其他兼容上游删除该字段。
+- 用户任务历史只返回当前用户的 `platform=image` 任务，不暴露渠道、token 和本地路径。
+- 临时文件未过期时动态重新签名；文件过期或丢失时返回 `result_available=false`。
+- 任务记录默认保留 24 小时、全局最多 100 条，只清理已完成或已失败任务。
+- 服务启动时执行一次维护，之后默认每 10 分钟执行，提交任务时仍会触发一次非阻塞维护。
+
+## Phase 2C：前端工坊 MVP
+
+只有 Phase 2B 完成并集成验收后再开始 Phase 2C。
 
 前端 MVP 目标：
 

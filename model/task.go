@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	commonRelay "github.com/QuantumNous/new-api/relay/common"
+	"gorm.io/gorm"
 )
 
 type TaskStatus string
@@ -243,6 +244,75 @@ func TaskGetAllUserTask(userId int, startIdx int, num int, queryParams SyncTaskQ
 	}
 
 	return tasks
+}
+
+func ListUserImageTasks(userID int, offset int, limit int) ([]*Task, int64, error) {
+	if offset < 0 {
+		offset = 0
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	query := DB.Model(&Task{}).
+		Where("user_id = ? AND platform = ?", userID, constant.TaskPlatformImage)
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var tasks []*Task
+	if err := query.Order("id DESC").Offset(offset).Limit(limit).Find(&tasks).Error; err != nil {
+		return nil, 0, err
+	}
+	return tasks, total, nil
+}
+
+func CleanupImageTasks(cutoffUnix int64, maxCount int) (int64, error) {
+	terminalStatuses := []TaskStatus{TaskStatusSuccess, TaskStatusFailure}
+	var deleted int64
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		if cutoffUnix > 0 {
+			result := tx.Where("platform = ? AND status IN ? AND submit_time > 0 AND submit_time < ?", constant.TaskPlatformImage, terminalStatuses, cutoffUnix).
+				Delete(&Task{})
+			if result.Error != nil {
+				return result.Error
+			}
+			deleted += result.RowsAffected
+		}
+
+		if maxCount <= 0 {
+			return nil
+		}
+		var count int64
+		if err := tx.Model(&Task{}).Where("platform = ?", constant.TaskPlatformImage).Count(&count).Error; err != nil {
+			return err
+		}
+		overflow := count - int64(maxCount)
+		if overflow <= 0 {
+			return nil
+		}
+		var ids []int64
+		if err := tx.Model(&Task{}).
+			Where("platform = ? AND status IN ?", constant.TaskPlatformImage, terminalStatuses).
+			Order("id ASC").
+			Limit(int(overflow)).
+			Pluck("id", &ids).Error; err != nil {
+			return err
+		}
+		if len(ids) == 0 {
+			return nil
+		}
+		result := tx.Where("id IN ?", ids).Delete(&Task{})
+		if result.Error != nil {
+			return result.Error
+		}
+		deleted += result.RowsAffected
+		return nil
+	})
+	return deleted, err
 }
 
 func TaskGetAllTasks(startIdx int, num int, queryParams SyncTaskQueryParams) []*Task {

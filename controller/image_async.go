@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -27,18 +28,48 @@ import (
 
 var (
 	imageResultStore            = service.NewImageResultStoreFromEnv()
+	imageAsyncMaintenanceMu     sync.Mutex
+	imageAsyncResultLifecycleMu sync.RWMutex
 	imageAsyncMaintenanceRunner = func() {
-		go func() {
-			_ = imageResultStore.CleanExpired(time.Now())
-			if constant.TaskTimeoutMinutes > 0 {
-				service.MarkStaleImageTasksFailed(time.Duration(constant.TaskTimeoutMinutes)*time.Minute, 100)
-			}
-		}()
+		go runImageAsyncMaintenance(time.Now())
 	}
 	imageAsyncTaskRunner = func(taskID string) {
 		go executeAsyncImageTask(taskID)
 	}
 )
+
+func StartImageWorkshopMaintenanceTask() {
+	go func() {
+		runImageAsyncMaintenance(time.Now())
+		minutes := common.GetEnvOrDefault("IMAGE_WORKSHOP_MAINTENANCE_INTERVAL_MINUTES", 10)
+		if minutes <= 0 {
+			minutes = 10
+		}
+		ticker := time.NewTicker(time.Duration(minutes) * time.Minute)
+		defer ticker.Stop()
+		for now := range ticker.C {
+			runImageAsyncMaintenance(now)
+		}
+	}()
+}
+
+func runImageAsyncMaintenance(now time.Time) {
+	if !imageAsyncMaintenanceMu.TryLock() {
+		return
+	}
+	defer imageAsyncMaintenanceMu.Unlock()
+	imageAsyncResultLifecycleMu.Lock()
+	defer imageAsyncResultLifecycleMu.Unlock()
+	if constant.TaskTimeoutMinutes > 0 {
+		service.MarkStaleImageTasksFailed(time.Duration(constant.TaskTimeoutMinutes)*time.Minute, 100)
+	}
+	if _, err := service.CleanupImageTaskRecords(now); err != nil {
+		logger.LogError(nil, fmt.Sprintf("cleanup image workshop task records failed: %v", err))
+	}
+	if err := imageResultStore.CleanExpired(now); err != nil {
+		logger.LogError(nil, fmt.Sprintf("cleanup image workshop result files failed: %v", err))
+	}
+}
 
 func ImageGenerations(c *gin.Context) {
 	if !isImageAsyncQuery(c) {
@@ -130,6 +161,7 @@ func enqueueAsyncImageGeneration(c *gin.Context) (*model.Task, *imageAsyncSubmit
 			Body:        json.RawMessage(body),
 			Headers:     sanitizeImageAsyncHeaders(relayInfo.RequestHeaders),
 		},
+		Metadata: imageAsyncTaskMetadata(c),
 	})
 	if err = task.Insert(); err != nil {
 		return nil, newImageAsyncSubmitError(http.StatusInternalServerError, err.Error(), "server_error")
@@ -216,6 +248,11 @@ func executeAsyncImageTaskOnce(taskID string) error {
 	if c.IsAborted() {
 		return fmt.Errorf("%s", strings.TrimSpace(recorder.Body.String()))
 	}
+	if data.Metadata["source"] == "image_workshop" {
+		if err := finalizeImageWorkshopRequestForSelectedChannel(c); err != nil {
+			return err
+		}
+	}
 	Relay(c, types.RelayFormatOpenAIImage)
 	statusCode := recorder.Code
 	if statusCode == 0 {
@@ -225,6 +262,8 @@ func executeAsyncImageTaskOnce(taskID string) error {
 		return fmt.Errorf("%s", strings.TrimSpace(recorder.Body.String()))
 	}
 	resultBody := recorder.Body.Bytes()
+	imageAsyncResultLifecycleMu.RLock()
+	defer imageAsyncResultLifecycleMu.RUnlock()
 	rewritten, files, expiresAt, err := imageResultStore.RewriteB64JSON(task.TaskID, resultBody, time.Now())
 	if err != nil {
 		return err
@@ -244,6 +283,13 @@ func executeAsyncImageTaskOnce(taskID string) error {
 	task.UpdatedAt = task.FinishTime
 	_, err = task.UpdateWithStatus(model.TaskStatusInProgress)
 	return err
+}
+
+func imageAsyncTaskMetadata(c *gin.Context) map[string]interface{} {
+	if c.GetBool(imageWorkshopRequestContextKey) {
+		return map[string]interface{}{"source": "image_workshop"}
+	}
+	return nil
 }
 
 func buildAsyncImageRelayContext(task *model.Task, data service.ImageAsyncTaskData) (*gin.Context, *httptest.ResponseRecorder, error) {

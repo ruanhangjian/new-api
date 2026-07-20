@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/gin-gonic/gin"
@@ -114,6 +115,18 @@ func MarkStaleImageTasksFailed(timeout time.Duration, limit int) {
 		task.SetData(data)
 		_, _ = task.UpdateWithStatus(preStatus)
 	}
+}
+
+func CleanupImageTaskRecords(now time.Time) (int64, error) {
+	ttlHours := common.GetEnvOrDefault("IMAGE_WORKSHOP_TASK_TTL_HOURS", 24)
+	if ttlHours <= 0 || ttlHours > 24 {
+		ttlHours = 24
+	}
+	maxCount := common.GetEnvOrDefault("IMAGE_WORKSHOP_TASK_MAX_COUNT", 100)
+	if maxCount <= 0 {
+		maxCount = 100
+	}
+	return model.CleanupImageTasks(now.Add(-time.Duration(ttlHours)*time.Hour).Unix(), maxCount)
 }
 
 func WriteImageTaskNotFound(c *gin.Context) {

@@ -30,6 +30,27 @@ type AbilityWithChannel struct {
 	ChannelType int `json:"channel_type"`
 }
 
+type ImageWorkshopChannelCandidate struct {
+	Model         string
+	ChannelType   int
+	BaseURL       string
+	ModelMapping  string
+	ParamOverride string
+}
+
+func GetImageWorkshopChannelCandidates(groups []string) ([]ImageWorkshopChannelCandidate, error) {
+	if len(groups) == 0 {
+		return []ImageWorkshopChannelCandidate{}, nil
+	}
+	var candidates []ImageWorkshopChannelCandidate
+	err := DB.Table("abilities").
+		Select("abilities.model AS model, channels.type AS channel_type, COALESCE(channels.base_url, '') AS base_url, COALESCE(channels.model_mapping, '') AS model_mapping, COALESCE(channels.param_override, '') AS param_override").
+		Joins("JOIN channels ON abilities.channel_id = channels.id").
+		Where("abilities."+commonGroupCol+" IN ? AND abilities.enabled = ? AND channels.status = ?", groups, true, common.ChannelStatusEnabled).
+		Scan(&candidates).Error
+	return candidates, err
+}
+
 func GetAllEnableAbilityWithChannels() ([]AbilityWithChannel, error) {
 	var abilities []AbilityWithChannel
 	err := DB.Table("abilities").

@@ -52,6 +52,72 @@ func TestImageWorkshopTokensReturnsOnlyCurrentUserMaskedTokens(t *testing.T) {
 	assert.NotContains(t, recorder.Body.String(), "token_22")
 }
 
+func TestImageWorkshopOptionsReturnsTokenLimitedImageModels(t *testing.T) {
+	setupImageAsyncControllerTestDB(t)
+	seedImageAsyncControllerUserAndToken(t, 1, 11)
+	seedImageAsyncControllerChannel(t, "gpt-image-1,gpt-4o-mini")
+	require.NoError(t, model.DB.Model(&model.Token{}).Where("id = ?", 11).Updates(map[string]any{
+		"model_limits_enabled": true,
+		"model_limits":         "gpt-image-1",
+	}).Error)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/image-workshop/options?token_id=11", nil)
+	c.Set("id", 1)
+	GetImageWorkshopOptions(c)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var response struct {
+		Success bool `json:"success"`
+		Data    struct {
+			TokenID int `json:"token_id"`
+			Models  []struct {
+				Model         string   `json:"model"`
+				Qualities     []string `json:"qualities"`
+				OutputFormats []string `json:"output_formats"`
+				MaxImages     int      `json:"max_images"`
+			} `json:"models"`
+		} `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+	require.True(t, response.Success)
+	assert.Equal(t, 11, response.Data.TokenID)
+	require.Len(t, response.Data.Models, 1)
+	assert.Equal(t, "gpt-image-1", response.Data.Models[0].Model)
+	assert.Contains(t, response.Data.Models[0].Qualities, "auto")
+	assert.Equal(t, []string{"png", "jpeg", "webp"}, response.Data.Models[0].OutputFormats)
+	assert.Equal(t, 4, response.Data.Models[0].MaxImages)
+
+	require.NoError(t, model.DB.Model(&model.Channel{}).Where("id = ?", 101).Update("base_url", "https://images.example.com/v1").Error)
+	recorder = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/image-workshop/options?token_id=11", nil)
+	c.Set("id", 1)
+	GetImageWorkshopOptions(c)
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+	require.Len(t, response.Data.Models, 1)
+	assert.Equal(t, []string{"auto"}, response.Data.Models[0].Qualities)
+	assert.Empty(t, response.Data.Models[0].OutputFormats)
+	assert.Equal(t, 1, response.Data.Models[0].MaxImages)
+}
+
+func TestImageWorkshopOptionsRejectsDisabledToken(t *testing.T) {
+	setupImageAsyncControllerTestDB(t)
+	seedImageAsyncControllerUserAndToken(t, 1, 11)
+	require.NoError(t, model.DB.Model(&model.Token{}).Where("id = ?", 11).Update("status", common.TokenStatusDisabled).Error)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/image-workshop/options?token_id=11", nil)
+	c.Set("id", 1)
+
+	GetImageWorkshopOptions(c)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), `"success":false`)
+	assert.Contains(t, recorder.Body.String(), "token is disabled")
+}
+
 func TestImageWorkshopGenerationRejectsOtherUserToken(t *testing.T) {
 	db := setupImageAsyncControllerTestDB(t)
 	seedImageAsyncControllerUserAndToken(t, 1, 11)
@@ -73,7 +139,7 @@ func TestImageWorkshopGenerationQueuesOwnedTokenAndStripsTokenID(t *testing.T) {
 	seedImageAsyncControllerChannel(t, "gpt-image-1")
 	disableImageAsyncControllerBackgroundWork(t)
 
-	body := []byte(`{"token_id":11,"model":"gpt-image-1","prompt":"draw","n":1,"size":"1024x1024","quality":"auto","response_format":"url"}`)
+	body := []byte(`{"token_id":11,"model":"gpt-image-1","prompt":"draw","n":1,"size":"1024x1024","quality":"auto","output_format":"PNG","moderation":"low","response_format":"url"}`)
 	recorder := performImageWorkshopGenerationRouteRequest(t, 1, body)
 
 	require.Equal(t, http.StatusOK, recorder.Code)
@@ -102,6 +168,82 @@ func TestImageWorkshopGenerationQueuesOwnedTokenAndStripsTokenID(t *testing.T) {
 	assert.NotContains(t, string(data.Request.Body), "token_id")
 	assert.NotContains(t, string(task.Data), "token_11")
 	assert.Contains(t, string(data.Request.Body), `"response_format":"b64_json"`)
+	assert.Contains(t, string(data.Request.Body), `"moderation":"auto"`)
+	assert.NotContains(t, string(data.Request.Body), `"moderation":"low"`)
+	assert.Contains(t, string(data.Request.Body), `"output_format":"png"`)
+	assert.Equal(t, "image_workshop", data.Metadata["source"])
+}
+
+func TestImageWorkshopGenerationRejectsUnsupportedFieldsAndParameters(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "unknown field", body: `{"token_id":11,"model":"gpt-image-1","prompt":"draw","style":"vivid"}`, want: "unsupported fields"},
+		{name: "invalid count", body: `{"token_id":11,"model":"gpt-image-1","prompt":"draw","n":5}`, want: "n must be between 1 and 4"},
+		{name: "invalid quality", body: `{"token_id":11,"model":"gpt-image-1","prompt":"draw","quality":"ultra"}`, want: "quality is not supported"},
+		{name: "invalid format", body: `{"token_id":11,"model":"gpt-image-1","prompt":"draw","output_format":"gif"}`, want: "output_format is not supported"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			db := setupImageAsyncControllerTestDB(t)
+			seedImageAsyncControllerUserAndToken(t, 1, 11)
+			seedImageAsyncControllerChannel(t, "gpt-image-1")
+			disableImageAsyncControllerBackgroundWork(t)
+
+			recorder := performImageWorkshopGenerationRouteRequest(t, 1, []byte(test.body))
+
+			require.Equal(t, http.StatusOK, recorder.Code)
+			assert.Contains(t, recorder.Body.String(), test.want)
+			var count int64
+			require.NoError(t, db.Model(&model.Task{}).Count(&count).Error)
+			assert.Zero(t, count)
+		})
+	}
+}
+
+func TestFinalizeImageWorkshopRequestRemovesModerationForCompatibleUpstream(t *testing.T) {
+	tests := []struct {
+		name           string
+		baseURL        string
+		wantModeration bool
+	}{
+		{name: "official openai", baseURL: "https://api.openai.com", wantModeration: true},
+		{name: "compatible upstream", baseURL: "https://images.example.com/v1", wantModeration: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", nil)
+			require.NoError(t, replaceImageWorkshopRequestBody(c, []byte(`{"model":"gpt-image-1","prompt":"draw","moderation":"auto"}`)))
+			common.SetContextKey(c, constant.ContextKeyChannelBaseUrl, test.baseURL)
+
+			require.NoError(t, finalizeImageWorkshopRequestForSelectedChannel(c))
+			storage, err := common.GetBodyStorage(c)
+			require.NoError(t, err)
+			body, err := storage.Bytes()
+			require.NoError(t, err)
+			if test.wantModeration {
+				assert.Contains(t, string(body), `"moderation":"auto"`)
+			} else {
+				assert.NotContains(t, string(body), "moderation")
+			}
+		})
+	}
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", nil)
+	require.NoError(t, replaceImageWorkshopRequestBody(c, []byte(`{"model":"dall-e-3","prompt":"draw","moderation":"auto"}`)))
+	common.SetContextKey(c, constant.ContextKeyChannelBaseUrl, "https://api.openai.com")
+	require.NoError(t, finalizeImageWorkshopRequestForSelectedChannel(c))
+	storage, err := common.GetBodyStorage(c)
+	require.NoError(t, err)
+	body, err := storage.Bytes()
+	require.NoError(t, err)
+	assert.NotContains(t, string(body), "moderation")
 }
 
 func TestImageWorkshopGenerationRevalidatesTokenStateBeforeQueueing(t *testing.T) {
@@ -215,9 +357,7 @@ func TestImageWorkshopTaskReturnsSignedResultURL(t *testing.T) {
 			TokenId: 11,
 		},
 	}
-	task.SetData(service.ImageAsyncTaskData{
-		Result: json.RawMessage(`{"created":1,"data":[{"url":"/v1/images/tasks/task_signed_result/files/imgfile_0_test?expires=` + strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10) + `&signature=test"}]}`),
-	})
+	task.SetData(service.ImageAsyncTaskData{Result: json.RawMessage(`{"created":1,"data":[{"url":"https://example.com/image.png?expires=` + strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10) + `&signature=test"}]}`)})
 	insertImageAsyncControllerTask(t, task)
 
 	recorder := httptest.NewRecorder()
@@ -231,6 +371,110 @@ func TestImageWorkshopTaskReturnsSignedResultURL(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code)
 	assert.Contains(t, recorder.Body.String(), "signature=")
 	assert.NotContains(t, recorder.Body.String(), "relative_path")
+}
+
+func TestImageWorkshopTaskDoesNotTrustLocalResultWithoutFilesMetadata(t *testing.T) {
+	setupImageAsyncControllerTestDB(t)
+	seedImageAsyncControllerUserAndToken(t, 1, 11)
+	task := &model.Task{TaskID: "task_missing_files", UserId: 1, Platform: constant.TaskPlatformImage, Status: model.TaskStatusSuccess}
+	task.SetData(service.ImageAsyncTaskData{
+		Result: json.RawMessage(`{"data":[{"url":"/v1/images/tasks/task_missing_files/files/file_1?expires=9999999999&signature=old"}]}`),
+	})
+	insertImageAsyncControllerTask(t, task)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/image-workshop/tasks/task_missing_files", nil)
+	c.Params = gin.Params{{Key: "task_id", Value: "task_missing_files"}}
+	c.Set("id", 1)
+	GetImageWorkshopTask(c)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), `"result_available":false`)
+	assert.NotContains(t, recorder.Body.String(), `"result":`)
+}
+
+func TestImageWorkshopTaskListReturnsOnlyOwnedImagesAndRefreshesSignature(t *testing.T) {
+	setupImageAsyncControllerTestDB(t)
+	seedImageAsyncControllerUserAndToken(t, 1, 11)
+	seedImageAsyncControllerUserAndToken(t, 2, 22)
+	store := &service.ImageResultStore{RootDir: t.TempDir(), TTL: time.Hour}
+	imageResultStore = store
+	t.Cleanup(func() { imageResultStore = service.NewImageResultStoreFromEnv() })
+
+	rewritten, files, expiresAt, err := store.RewriteB64JSON("task_history", []byte(`{"created":1,"data":[{"b64_json":"`+testTinyPNGBase64+`"}]}`), time.Now())
+	require.NoError(t, err)
+	task := &model.Task{
+		TaskID:     "task_history",
+		UserId:     1,
+		Platform:   constant.TaskPlatformImage,
+		Status:     model.TaskStatusSuccess,
+		Progress:   "100%",
+		SubmitTime: time.Now().Unix(),
+		Properties: model.Properties{OriginModelName: "gpt-image-1"},
+	}
+	task.SetData(service.ImageAsyncTaskData{
+		Request: service.ImageAsyncRequest{Body: json.RawMessage(`{"model":"gpt-image-1","prompt":"draw history","n":1,"size":"1024x1024","quality":"auto","output_format":"png"}`)},
+		Result:  json.RawMessage(rewritten), Files: files, ExpiresAt: expiresAt,
+	})
+	insertImageAsyncControllerTask(t, task)
+	insertImageAsyncControllerTask(t, &model.Task{TaskID: "other_history", UserId: 2, Platform: constant.TaskPlatformImage, Status: model.TaskStatusSuccess})
+	insertImageAsyncControllerTask(t, &model.Task{TaskID: "video_history", UserId: 1, Platform: constant.TaskPlatformSuno, Status: model.TaskStatusSuccess})
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/image-workshop/tasks?page=1&page_size=20", nil)
+	c.Set("id", 1)
+	ListImageWorkshopTasks(c)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var response struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Total int `json:"total"`
+			Items []struct {
+				TaskID          string          `json:"task_id"`
+				Prompt          string          `json:"prompt"`
+				ResultAvailable bool            `json:"result_available"`
+				Result          json.RawMessage `json:"result"`
+			} `json:"items"`
+		} `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+	require.True(t, response.Success)
+	assert.Equal(t, 1, response.Data.Total)
+	require.Len(t, response.Data.Items, 1)
+	assert.Equal(t, "task_history", response.Data.Items[0].TaskID)
+	assert.Equal(t, "draw history", response.Data.Items[0].Prompt)
+	assert.True(t, response.Data.Items[0].ResultAvailable)
+	assert.Contains(t, string(response.Data.Items[0].Result), "signature=")
+	assert.Contains(t, string(response.Data.Items[0].Result), "expires=")
+}
+
+func TestImageWorkshopTaskMarksExpiredLocalResultUnavailable(t *testing.T) {
+	setupImageAsyncControllerTestDB(t)
+	seedImageAsyncControllerUserAndToken(t, 1, 11)
+	store := &service.ImageResultStore{RootDir: t.TempDir(), TTL: time.Hour}
+	imageResultStore = store
+	t.Cleanup(func() { imageResultStore = service.NewImageResultStoreFromEnv() })
+
+	rewritten, files, _, err := store.RewriteB64JSON("task_expired", []byte(`{"data":[{"b64_json":"`+testTinyPNGBase64+`"}]}`), time.Now())
+	require.NoError(t, err)
+	files[0].ExpiresAt = time.Now().Add(-time.Minute).Unix()
+	task := &model.Task{TaskID: "task_expired", UserId: 1, Platform: constant.TaskPlatformImage, Status: model.TaskStatusSuccess}
+	task.SetData(service.ImageAsyncTaskData{Result: json.RawMessage(rewritten), Files: files, ExpiresAt: files[0].ExpiresAt})
+	insertImageAsyncControllerTask(t, task)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/image-workshop/tasks/task_expired", nil)
+	c.Params = gin.Params{{Key: "task_id", Value: "task_expired"}}
+	c.Set("id", 1)
+	GetImageWorkshopTask(c)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), `"result_available":false`)
+	assert.NotContains(t, recorder.Body.String(), `"result":`)
 }
 
 func performImageWorkshopGenerationRouteRequest(t *testing.T, userID int, body []byte) *httptest.ResponseRecorder {
