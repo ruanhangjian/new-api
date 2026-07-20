@@ -14,6 +14,14 @@
 
 ## 当前状态
 
+当前整体进度：
+
+- Phase 1 异步生图后端 MVP：已完成并集成。
+- Phase 2A 登录态桥接层：已完成并集成。
+- Phase 2B 后端契约、模型能力和短期任务历史：已完成并集成。
+- Phase 2C NewAPI 原生前端工坊 MVP：已完成；当前主要是 UI 细节和真实 Key / 渠道环境验收。
+- Phase 3 增强能力：尚未开始，按独立功能继续拆分开发。
+
 Phase 1 后端分支：
 
 ```text
@@ -85,7 +93,7 @@ Authorization: Bearer sk-...
 
 ## Phase 2A：登录态桥接层
 
-### 实施状态（feature/image-workshop-bridge）
+### 实施状态（已完成，feature/image-workshop-bridge）
 
 Phase 2A 已在独立 worktree/分支中实现：
 
@@ -330,7 +338,7 @@ docs/image-workshop-phase2-plan.md
 
 ### 实现步骤
 
-- [ ] **Step 1：创建独立 worktree/分支**
+- [x] **Step 1：创建独立 worktree/分支**
 
 如果继续在现有 Phase 1 分支上做：
 
@@ -352,7 +360,7 @@ git worktree add .worktrees/image-workshop-bridge -b feature/image-workshop-brid
 feature/image-workshop-bridge
 ```
 
-- [ ] **Step 2：补 service 测试**
+- [x] **Step 2：补 service 测试**
 
 在 `service/image_async_task_test.go` 增加测试：
 
@@ -373,7 +381,7 @@ go test ./service -run TestGetUserImageTaskAllowsSameUserRegardlessToken -count=
 
 先失败，因为 `GetUserImageTask` 尚未实现。
 
-- [ ] **Step 3：实现 GetUserImageTask**
+- [x] **Step 3：实现 GetUserImageTask**
 
 在 `service/image_async_task.go` 增加：
 
@@ -396,7 +404,7 @@ func GetUserImageTask(userID int, taskID string) (*model.Task, bool, error) {
 go test ./service -run TestGetUserImageTaskAllowsSameUserRegardlessToken -count=1
 ```
 
-- [ ] **Step 4：抽出异步提交 helper**
+- [x] **Step 4：抽出异步提交 helper**
 
 在 `controller/image_async.go` 中把 `SubmitAsyncImageGeneration` 的核心逻辑抽成可复用 helper。目标是让：
 
@@ -439,7 +447,7 @@ func SubmitAsyncImageGeneration(c *gin.Context) {
 - 错误类型可以先保持最小实现，但测试必须覆盖 bad request 和 forbidden/unauthorized 场景。
 - 不要改变同步 `/v1/images/generations` 行为。
 
-- [ ] **Step 5：创建 bridge controller 测试**
+- [x] **Step 5：创建 bridge controller 测试**
 
 在 `controller/image_workshop_test.go` 增加测试：
 
@@ -467,7 +475,7 @@ func TestImageWorkshopPollTaskRequiresOwner(t *testing.T) {
 go test ./controller -run 'TestImageWorkshop' -count=1
 ```
 
-- [ ] **Step 6：实现 controller/image_workshop.go**
+- [x] **Step 6：实现 controller/image_workshop.go**
 
 实现：
 
@@ -486,7 +494,7 @@ func PollImageWorkshopTask(c *gin.Context)
 - 转给底层异步提交前，从 body 中移除 `token_id`。
 - 输出使用 `common.ApiSuccess` / `common.ApiError` 风格。
 
-- [ ] **Step 7：注册路由**
+- [x] **Step 7：注册路由**
 
 在 `router/api-router.go` 增加：
 
@@ -506,7 +514,7 @@ imageWorkshopRoute.Use(middleware.UserAuth())
 go test ./router -count=1
 ```
 
-- [ ] **Step 8：跑后端相关测试**
+- [x] **Step 8：跑后端相关测试**
 
 ```bash
 go test -count=1 ./model ./service ./controller ./router
@@ -518,7 +526,7 @@ go test -count=1 ./model ./service ./controller ./router
 docker run --rm -v "$PWD":/app -v new-api-go125-mod:/go/pkg/mod -v new-api-go125-build:/root/.cache/go-build -w /app golang:1.25.1 sh -lc '/usr/local/go/bin/go test -count=1 ./model ./service ./controller ./router'
 ```
 
-- [ ] **Step 9：做 bridge smoke**
+- [ ] **Step 9：做 bridge smoke（未执行，核心行为已由真实 Gin route chain 自动化测试覆盖）**
 
 使用本地 Docker 环境时，保持原 NewAPI：
 
@@ -541,7 +549,7 @@ http://127.0.0.1:3001
 - user 2 无法查询 user 1 的 task。
 - user 1 无法使用 user 2 的 token_id 提交。
 
-- [ ] **Step 10：更新文档并提交**
+- [x] **Step 10：更新文档并提交**
 
 更新：
 
@@ -571,6 +579,7 @@ feature/image-workshop-api-contract
 ```http
 GET /api/image-workshop/options?token_id=:token_id
 GET /api/image-workshop/tasks?page=1&page_size=20
+DELETE /api/image-workshop/tasks
 ```
 
 已实现：
@@ -581,14 +590,15 @@ GET /api/image-workshop/tasks?page=1&page_size=20
 - worker 在实际渠道分配后保留官方 OpenAI 的 `moderation=auto`，对其他兼容上游删除该字段。
 - 用户任务历史只返回当前用户的 `platform=image` 任务，不暴露渠道、token 和本地路径。
 - 临时文件未过期时动态重新签名；文件过期或丢失时返回 `result_available=false`。
+- 支持按当前用户的任务 ID 批量删除，以及按 3 天前、7 天前或全部历史范围删除；只删除已完成或失败的图片任务，保留 queued/running 任务。
 - 任务记录默认保留 24 小时、全局最多 100 条，只清理已完成或已失败任务。
 - 服务启动时执行一次维护，之后默认每 10 分钟执行，提交任务时仍会触发一次非阻塞维护。
 
 ## Phase 2C：前端工坊 MVP
 
-只有 Phase 2B 完成并集成验收后再开始 Phase 2C。
+Phase 2B 已完成并集成验收，Phase 2C 已按以下范围完成。
 
-前端 MVP 目标：
+已完成的前端 MVP 范围：
 
 - 生图工坊页面入口。
 - token 选择器。
@@ -606,8 +616,51 @@ GET /api/image-workshop/tasks?page=1&page_size=20
 - 不保存真实 API key。
 - 不直接访问本地文件路径。
 - 不假设 `<img>` 可以带 Authorization header。
-- 不先做图片编辑、Agent 模式、作品库和多实例能力。
+- 不做 Agent 模式、图工坊内多 provider / 自定义 provider 配置、About 和版本检查；图工坊只消费 NewAPI 后端返回的 Key、模型和能力。
+- 不建设云端永久作品库，继续使用“服务器短期中转 + 当前浏览器 IndexedDB 副本”的存储逻辑。
+- 首版不做图片编辑、参考图、局部重绘和多实例任务恢复。
 - UI 可以参考 `CookSleep/gpt_image_playground 0.6.1`，但不要不加筛选地整包搬入。
+
+### 图片参数契约
+
+审核强度不作为图工坊用户可配置项。后续前后端开发统一按以下规则处理：
+
+- 前端不展示审核选项，也不提交用户可控的 `moderation` 字段。
+- `/api/image-workshop/generations` 在服务端将审核强度规范化为 `moderation: "auto"`，不接受客户端通过绕过 UI 提交 `low`。
+- 转发到明确支持 `moderation` 的 Images/Responses 上游时发送 `auto`。
+- 上游不支持该字段时，由对应适配器删除 `moderation`，避免因未知字段导致请求失败。
+- 自动化测试至少覆盖客户端提交 `low` 时被覆盖为 `auto`，以及不支持该字段的适配器不会向上游发送它。
+
+这样做是因为 `low` 不是关闭审核，且兼容上游可能忽略该字段。将它暴露给普通用户会产生“设置必然生效”的错误预期，同时增加前端和渠道适配复杂度。
+
+### 图片与作品存储决策
+
+确认采用 Lingqu 的核心存储逻辑：服务端只承担异步任务和图片的短期中转，用户画廊中的本机图片副本保存在浏览器 IndexedDB。不为首版增加对象存储、CDN、独立 Redis 服务或其他付费基础设施。
+
+服务端逻辑：
+
+- 任务状态继续保存在 NewAPI 现有 task 体系中，不照搬 Lingqu 的 Redis 实现。
+- 任务最长保留 24 小时，全局最多保留最近 100 条 `platform=image` 任务；超限时优先清理已完成或已失败任务。保留时间和数量上限做成可配置项。
+- 上游返回的 `b64_json` 写入 NewAPI 本地临时目录，任务结果只返回受控签名 URL，不在数据库中长期保存大段 base64。
+- 图片文件使用独立 TTL；继续使用现有默认 6 小时、最大 24 小时的策略，并允许部署时根据磁盘大小调低。
+- 文件清理同时受 TTL、缓存总容量和磁盘最低剩余空间约束；超限时优先删除最旧图片。
+- 已补强为“服务启动时执行一次 + 后台定时执行”，提交任务时仍保留一次非阻塞维护。
+- 任务查询和历史列表在临时文件未过期时重新生成签名 URL，不复用已过期的签名。
+
+浏览器逻辑：
+
+- 任务完成后，前端立即通过签名 URL 获取图片 `Blob`，并保存到当前 NewAPI 域名下的 IndexedDB。
+- IndexedDB 同时保存必要的任务元数据，作品列表优先读取本机 `Blob`，服务器文件过期后不影响已成功写入本机的图片。
+- 本地数据必须按 NewAPI 用户 ID 分区，不允许同一浏览器中不同账号相互看到本机作品。
+- 不使用 `localStorage` 或普通 HTTP 缓存保存图片本体。
+- 保留单图下载；批量 ZIP 导出和 SHA-256 去重可以在本机画廊稳定后追加。
+
+用户体验边界：
+
+- IndexedDB 只属于当前设备、当前浏览器和当前域名，不提供跨设备同步。
+- 用户清理站点数据、使用无痕模式或浏览器因存储压力淘汰数据时，本机作品可能丢失。
+- “我的作品”要区分服务器临时可用、仅本机可用和已过期三种状态，不将本机缓存表述为永久云端作品库。
+- 服务器与本机都无图片时，保留原提示词和参数，允许用户重新生成。
 
 建议分支：
 
@@ -615,7 +668,7 @@ GET /api/image-workshop/tasks?page=1&page_size=20
 feature/image-workshop-frontend
 ```
 
-### Phase 2C 实施状态（feature/image-workshop-frontend）
+### Phase 2C 实施状态（已完成，feature/image-workshop-frontend / fix/image-workshop-ui-refinement）
 
 已完成 NewAPI default 前端的原生图工坊 MVP，不使用 iframe，也没有引入独立子应用外壳。
 
@@ -626,6 +679,7 @@ feature/image-workshop-frontend
 - 提示词输入框会随内容自动增高，最高增至 360px 后再在输入框内部滚动；移动端初始高度收紧为 120px。
 - 保留图片/视频切换外观；图片为当前可用模式，点击视频只提示“视频功能暂未开放”，不创建空白或伪视频工作流。
 - Key 选择器位于创建区标题行，使用“Key 名称-分组名称-脱敏 Key”展示；参数区固定为尺寸、质量、格式、透明背景和数量，模型选择保留在提交按钮左侧。尺寸不再使用普通下拉框，而是使用与 Lingqu 当前实现一致的“自动 / 按比例 / 自定义宽高”选择面板。
+- 参数下拉框统一使用图工坊自定义选择控件，补齐无可用 Key、无可用模型、能力加载失败和重新加载状态，避免原生下拉框样式不一致或出现空选项。
 - 参数只根据 `/api/image-workshop/options` 返回的真实能力启用；审核选项不展示，透明背景在后端未声明支持时显示为不可操作的“关闭”，不向请求中伪造无效字段。
 - `gpt-image-2` 的参数能力按模型声明，不再要求渠道地址必须是 `api.openai.com`。OpenAI 兼容中转开放 `auto`、1K / 2K / 4K 三档尺寸、`1:1`、`3:2`、`2:3`、`16:9`、`9:16`、`4:3`、`3:4`、`21:9` 八种预设比例、自定义比例和自定义宽高，同时保留 `auto/low/medium/high` 质量、`png/jpeg/webp` 格式和最多 4 张输出。
 - `gpt-image-2` 自定义尺寸沿用 Lingqu 的规整边界：宽高为 16 的倍数，最大边长 3840px，宽高比不超过 3:1，总像素限制为 655,360 到 8,294,400。前端先展示规整后的最终尺寸，服务端再次执行同样的规整和校验，最终只向上游发送规范化后的 `widthxheight`。
@@ -633,7 +687,9 @@ feature/image-workshop-frontend
 - 每次从“自动”或“自定义宽高”进入“按比例”时，默认选择 `1:1` 并同步更新预览尺寸；用户已经选择其他比例后，切换 1K、2K、4K 只重新计算尺寸，不重置用户比例。
 - 当前完成的是尺寸生成能力，不代表已完成分辨率差异计费。现有 Images 计费链路仍按模型基础价格和生成张数结算，尚未为 1K / 2K / 4K 增加独立倍率；正式对外按分辨率收费前仍需完成 Phase 6 计费配置。
 - 提交后通过 `/api/image-workshop/tasks` 轮询真实任务状态；生成中卡片复用已确认原型的点阵漂移和轮换文案动效。
-- 我的作品覆盖生成中、服务器临时结果、本机副本、失败和过期状态，并提供单图下载和按原提示词再次生成。
+- 生成中卡片按请求尺寸保持稳定画幅，空作品区和已有作品时都不会因卡片数量改变而异常拉伸；多张不同画幅作品使用自适应瀑布流，减少不同尺寸之间的无意义留白。
+- 我的作品覆盖生成中、服务器临时结果、本机副本、失败和过期状态，并提供单图下载、按原提示词再次生成、完成图片点击预览和删除。
+- 作品管理支持单图二次确认删除、多选后批量删除，以及“删除 3 天前 / 删除 7 天前 / 删除全部”；删除会同时处理服务器任务记录和当前浏览器中的对应副本，正在生成的任务不会被范围删除误删。
 - 创建页和灵感库各自监听内容区滚动；下滑超过 320px 后在右下角显示回到顶部按钮，点击后平滑滚回当前页面顶部。
 
 灵感数据：
@@ -643,7 +699,7 @@ feature/image-workshop-frontend
 - 首页只加载案例数据，不提前下载完整热门提示词文件；热门数据仅在进入灵感库二级页时加载。
 - 首页候选案例已按真实远程图片尺寸检查，只从竖图或接近竖图的精选案例中随机展示，避免把横幅图片强裁成首页卡片。
 - 首页上一批、下一批和随机换一批使用独立切换逻辑；切换前由用户浏览器预加载目标 5 张图片，当前模板会保留到预加载结束，NewAPI 服务端不代理这些远程图片。
-- 首页和灵感库全部图片卡片提供原图预览，支持 50% 至 300% 缩放、恢复适合窗口、关闭按钮和点击空白区域关闭。
+- 首页、灵感库和我的作品全部图片卡片提供原图预览，支持 50% 至 300% 缩放、恢复适合窗口、关闭按钮和点击空白区域关闭；触摸板捏合缩放和带 Ctrl 的滚轮缩放会转换为同一套缩放逻辑，预览图片始终按窗口居中处理。
 - GitHub 案例图片优先使用 jsDelivr CDN，并保留 GitHub Raw 作为加载失败时的备用地址，避免单一图片域名不可用导致整个灵感库空白。
 - 页面不展示 Lingqu 名称，只保留开源数据源及对应许可证信息。
 
@@ -661,6 +717,7 @@ feature/image-workshop-frontend
 - 后端未返回错误文案时显示“任务提交失败，请稍后重试”，不再出现只有错误图标而没有文字的空白提示。
 - 成功响应仍在拿到任务 ID 后刷新任务列表，并自动滚动到“我的作品”；失败时不滚动。
 - Key、模型能力和任务查询失败时不弹通用 HTTP 错误，页面内分别提示“服务接口不可用”“能力读取失败”或“当前 Key 没有生图模型”，避免把后端版本问题误报成没有 Key。
+- 重新加载服务或模型能力时保留现有页面骨架，只更新对应区域的加载状态，不再通过整页内容替换造成屏幕闪烁。
 
 验证：
 
@@ -675,9 +732,23 @@ bunx eslint src/features/image-workshop src/routes/_authenticated/image-workshop
 bun run build
 ```
 
-尺寸选择器最近一次修复的提交：
+Phase 2C 前端与交互优化的关键提交：
 
 ```text
+0462b604 实现原生图工坊前端与本机作品画廊
+5417e3d3 优化图工坊界面与作品展示
+28872468 增加图工坊回到顶部按钮
+b80f74d5 修复图工坊运行接口与灵感图片加载
+4774b5ff 修复图工坊重试时页面闪烁
+ce05539b 修正图工坊作品卡片布局
+c398c541 修正图工坊作品卡片排列顺序
+12b00828 增加图工坊作品管理功能
+6e974a01 修复本机作品图片显示异常
+a0213052 统一图工坊作品勾选样式
+a88cfaa8 优化图工坊作品瀑布流布局
+c03ae1d2 完善图工坊图片预览交互
+733239f3 放开 GPT Image 2 兼容渠道参数能力
+21e28f5d 完善 GPT Image 2 尺寸选择能力
 777fb548 修正图工坊尺寸控件布局
 299e6e9f 稳定尺寸弹窗内容布局
 89de67c5 优化尺寸档位默认选择样式
@@ -690,25 +761,29 @@ bun run build
 
 浏览器验证覆盖 320、375、414、768 和 1440px 宽度，主页面与灵感库均无横向溢出；同时验证了视频未开放提示、提示词自动增高、生成动效和 IndexedDB 本机副本恢复。
 
+作品删除的后端自动化测试已覆盖：只能删除当前用户已结束的图片任务、按任务 ID 批量删除，以及删除 3 天前、7 天前和全部历史时保留 queued/running 任务。
+
+### Phase 2C 待验收项
+
+- 使用真实可用的 `gpt-image-2` Key 和渠道完成一次端到端验证：读取能力、提交任务、轮询完成、展示真实尺寸、写入 IndexedDB、下载和删除。
+- 在真实任务中分别验证 1K、2K、4K、非 1:1 比例和自定义宽高的上游接受情况；当前只完成能力声明、前后端规整校验和 UI 交互验证。
+- 分辨率差异计费、管理员存储参数配置和其他模型接入仍属于 Phase 3，不计入 Phase 2C MVP 已完成范围。
+
 ## Phase 3：增强能力
 
 后续增强按独立分支推进：
 
 - 1K、2K、4K 分辨率差异计费。
-- 多生图模型配置，例如 `gpt-image-2`、`nano banana`。
+- 基于 NewAPI 后端 capability 接入更多生图模型，例如 Grok、Gemini；不在图工坊重复建设 provider 配置。
 - 图片编辑、参考图、局部重绘。
-- Agent 模式。
-- 用户作品库、收藏、再次编辑。
 - 管理员配置页：TTL、磁盘上限、清理策略、签名 URL TTL。
 - 生产级补偿退款策略：上游成功但本地落盘失败时进行补偿。
 
-## 合并建议
+## 当前集成状态
 
-推荐顺序：
-
-1. `feature/image-async-backend` 作为后端底座完成最终验收。
-2. `feature/image-workshop-bridge` 基于 `feature/image-async-backend` 开发并提交。
-3. bridge 验收通过后，再决定是先串行合入 main，还是继续基于 bridge 开前端分支。
-4. `feature/image-workshop-frontend` 只做前端 MVP，不混入计费、多模型和作品库。
+- `feature/image-workshop-rc20-migration` 基于最新 `main@402ffdea`，已经迁移 Phase 2B 后端契约和 Phase 2C 原生前端，是当前功能最完整的跟进分支。
+- 旧的 `fix/image-workshop-ui-refinement` 仅作为 rc8 实现参考，不再继续开发或直接合入主线。
+- 当前完整图工坊尚未合入 `main`；完成 rc20 回归和真实 `gpt-image-2` Key / 渠道验收后，再从迁移分支串行合入目标分支。
+- 后续计费、多模型适配、图片编辑和管理员存储配置继续使用独立分支和独立 worktree，不在当前迁移分支中并行开发。
 
 不要在 `main` / `master` 上直接开发。
