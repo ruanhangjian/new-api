@@ -242,7 +242,8 @@ For commercial licensing, please contact support@quantumnous.com
 
 .image-workshop-size-panel-body {
   min-height: 0;
-  padding-right: 2px;
+  padding: 2px;
+  padding-top: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-color: var(--border) transparent;
@@ -347,6 +348,7 @@ For commercial licensing, please contact support@quantumnous.com
   min-width: 0;
   border: 1px solid var(--border);
   border-radius: 10px;
+  outline: 0;
   color: var(--foreground);
   background: var(--background);
   transition:
@@ -408,9 +410,15 @@ For commercial licensing, please contact support@quantumnous.com
 
 .image-workshop-tier-list button.is-selected,
 .image-workshop-ratio-grid button.is-selected {
-  border-color: var(--primary);
-  background: color-mix(in oklch, var(--primary) 10%, var(--background));
-  box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 30%, transparent);
+  border-color: color-mix(in oklch, var(--primary) 42%, var(--border));
+  background: color-mix(in oklch, var(--primary) 5%, var(--background));
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--primary) 10%, transparent);
+}
+
+.image-workshop-tier-list button:focus-visible,
+.image-workshop-ratio-grid button:focus-visible {
+  border-color: color-mix(in oklch, var(--primary) 50%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 10%, transparent);
 }
 
 .image-workshop-tier-list button.is-disabled,
