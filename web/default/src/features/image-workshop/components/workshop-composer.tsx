@@ -148,6 +148,7 @@ export function WorkshopComposer({
 
         <div className='image-workshop-parameter-grid'>
           <div className='image-workshop-parameter-field'>
+            <span>尺寸</span>
             {capability ? (
               <ImageSizePicker
                 value={value.size}
@@ -160,7 +161,6 @@ export function WorkshopComposer({
                 className='image-workshop-size-trigger'
                 disabled
               >
-                <span className='image-workshop-size-trigger-label'>尺寸</span>
                 <span className='image-workshop-size-trigger-value'>
                   暂无可用尺寸
                 </span>

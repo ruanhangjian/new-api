@@ -418,7 +418,6 @@ export function ImageSizePicker(props: ImageSizePickerProps) {
         }
         aria-label='尺寸'
       >
-        <span className='image-workshop-size-trigger-label'>尺寸</span>
         <span className='image-workshop-size-trigger-value'>
           {imageSizeSummary(props.value)}
         </span>
