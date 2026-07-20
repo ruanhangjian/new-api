@@ -118,18 +118,13 @@ func imageWorkshopCapabilityForModel(modelName string, fullCapability bool) (Ima
 	}
 
 	switch {
+	case lowerName == "gpt-image-2":
+		return fullGPTImageWorkshopCapability(capability), true
 	case strings.HasPrefix(lowerName, "gpt-image-") || lowerName == "chatgpt-image-latest":
 		if !fullCapability {
 			return conservativeImageWorkshopCapability(capability), true
 		}
-		capability.Sizes = []string{"auto", "1024x1024", "1536x1024", "1024x1536"}
-		capability.Qualities = []string{"auto", "low", "medium", "high"}
-		capability.OutputFormats = []string{"png", "jpeg", "webp"}
-		capability.DefaultSize = "auto"
-		capability.DefaultQuality = "auto"
-		capability.DefaultOutputFormat = "png"
-		capability.MaxImages = 4
-		return capability, true
+		return fullGPTImageWorkshopCapability(capability), true
 	case lowerName == "dall-e-3":
 		if !fullCapability {
 			return conservativeImageWorkshopCapability(capability), true
@@ -158,6 +153,17 @@ func imageWorkshopCapabilityForModel(modelName string, fullCapability bool) (Ima
 	default:
 		return ImageWorkshopModelCapability{}, false
 	}
+}
+
+func fullGPTImageWorkshopCapability(capability ImageWorkshopModelCapability) ImageWorkshopModelCapability {
+	capability.Sizes = []string{"auto", "1024x1024", "1536x1024", "1024x1536"}
+	capability.Qualities = []string{"auto", "low", "medium", "high"}
+	capability.OutputFormats = []string{"png", "jpeg", "webp"}
+	capability.DefaultSize = "auto"
+	capability.DefaultQuality = "auto"
+	capability.DefaultOutputFormat = "png"
+	capability.MaxImages = 4
+	return capability
 }
 
 func conservativeImageWorkshopCapability(capability ImageWorkshopModelCapability) ImageWorkshopModelCapability {

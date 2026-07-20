@@ -55,10 +55,10 @@ func TestImageWorkshopTokensReturnsOnlyCurrentUserMaskedTokens(t *testing.T) {
 func TestImageWorkshopOptionsReturnsTokenLimitedImageModels(t *testing.T) {
 	setupImageAsyncControllerTestDB(t)
 	seedImageAsyncControllerUserAndToken(t, 1, 11)
-	seedImageAsyncControllerChannel(t, "gpt-image-1,gpt-4o-mini")
+	seedImageAsyncControllerChannel(t, "gpt-image-2,gpt-4o-mini")
 	require.NoError(t, model.DB.Model(&model.Token{}).Where("id = ?", 11).Updates(map[string]any{
 		"model_limits_enabled": true,
-		"model_limits":         "gpt-image-1",
+		"model_limits":         "gpt-image-2",
 	}).Error)
 
 	recorder := httptest.NewRecorder()
@@ -84,7 +84,7 @@ func TestImageWorkshopOptionsReturnsTokenLimitedImageModels(t *testing.T) {
 	require.True(t, response.Success)
 	assert.Equal(t, 11, response.Data.TokenID)
 	require.Len(t, response.Data.Models, 1)
-	assert.Equal(t, "gpt-image-1", response.Data.Models[0].Model)
+	assert.Equal(t, "gpt-image-2", response.Data.Models[0].Model)
 	assert.Contains(t, response.Data.Models[0].Qualities, "auto")
 	assert.Equal(t, []string{"png", "jpeg", "webp"}, response.Data.Models[0].OutputFormats)
 	assert.Equal(t, 4, response.Data.Models[0].MaxImages)
@@ -97,9 +97,33 @@ func TestImageWorkshopOptionsReturnsTokenLimitedImageModels(t *testing.T) {
 	GetImageWorkshopOptions(c)
 	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
 	require.Len(t, response.Data.Models, 1)
-	assert.Equal(t, []string{"auto"}, response.Data.Models[0].Qualities)
-	assert.Empty(t, response.Data.Models[0].OutputFormats)
-	assert.Equal(t, 1, response.Data.Models[0].MaxImages)
+	assert.Equal(t, []string{"auto", "low", "medium", "high"}, response.Data.Models[0].Qualities)
+	assert.Equal(t, []string{"png", "jpeg", "webp"}, response.Data.Models[0].OutputFormats)
+	assert.Equal(t, 4, response.Data.Models[0].MaxImages)
+}
+
+func TestImageWorkshopGenerationQueuesGptImage2ThroughCompatibleChannel(t *testing.T) {
+	db := setupImageAsyncControllerTestDB(t)
+	seedImageAsyncControllerUserAndToken(t, 1, 11)
+	seedImageAsyncControllerChannel(t, "gpt-image-2")
+	require.NoError(t, db.Model(&model.Channel{}).Where("id = ?", 101).Update("base_url", "https://images.example.com/v1").Error)
+	disableImageAsyncControllerBackgroundWork(t)
+
+	body := []byte(`{"token_id":11,"model":"gpt-image-2","prompt":"draw","n":4,"size":"1536x1024","quality":"high","output_format":"webp"}`)
+	recorder := performImageWorkshopGenerationRouteRequest(t, 1, body)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), `"success":true`)
+
+	var task model.Task
+	require.NoError(t, db.Where("user_id = ?", 1).First(&task).Error)
+	var data service.ImageAsyncTaskData
+	require.NoError(t, task.GetData(&data))
+	assert.Contains(t, string(data.Request.Body), `"model":"gpt-image-2"`)
+	assert.Contains(t, string(data.Request.Body), `"n":4`)
+	assert.Contains(t, string(data.Request.Body), `"size":"1536x1024"`)
+	assert.Contains(t, string(data.Request.Body), `"quality":"high"`)
+	assert.Contains(t, string(data.Request.Body), `"output_format":"webp"`)
 }
 
 func TestImageWorkshopOptionsRejectsDisabledToken(t *testing.T) {

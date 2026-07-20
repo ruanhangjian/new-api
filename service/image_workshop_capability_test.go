@@ -8,7 +8,14 @@ import (
 )
 
 func TestImageWorkshopCapabilityForModel(t *testing.T) {
-	capability, ok := imageWorkshopCapabilityForModel("gpt-image-1.5", true)
+	capability, ok := imageWorkshopCapabilityForModel("gpt-image-2", false)
+	require.True(t, ok)
+	assert.Equal(t, []string{"auto", "1024x1024", "1536x1024", "1024x1536"}, capability.Sizes)
+	assert.Equal(t, []string{"auto", "low", "medium", "high"}, capability.Qualities)
+	assert.Equal(t, []string{"png", "jpeg", "webp"}, capability.OutputFormats)
+	assert.Equal(t, 4, capability.MaxImages)
+
+	capability, ok = imageWorkshopCapabilityForModel("gpt-image-1.5", true)
 	require.True(t, ok)
 	assert.Equal(t, "auto", capability.DefaultQuality)
 	assert.Equal(t, []string{"png", "jpeg", "webp"}, capability.OutputFormats)
