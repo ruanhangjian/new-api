@@ -1,3 +1,4 @@
+import { ArrowUp } from 'lucide-react'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -17,7 +18,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useState, type RefObject } from 'react'
-import { ArrowUp } from 'lucide-react'
+
 import { cn } from '@/lib/utils'
 
 const SCROLL_TOP_VISIBILITY_THRESHOLD = 320

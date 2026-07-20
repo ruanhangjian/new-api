@@ -23,6 +23,7 @@ import {
   ChevronRight,
   RefreshCw,
 } from 'lucide-react'
+
 import type { InspirationCase } from '../types'
 import { ImagePreviewDialog } from './image-preview-dialog'
 import { InspirationImage } from './inspiration-image'

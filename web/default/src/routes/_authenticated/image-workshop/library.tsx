@@ -17,9 +17,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { isSidebarModuleEnabled } from '@/lib/nav-modules'
+
 import { Main } from '@/components/layout'
 import { InspirationLibraryPage } from '@/features/image-workshop/inspiration-library-page'
+import { isSidebarModuleEnabled } from '@/lib/nav-modules'
 
 export const Route = createFileRoute('/_authenticated/image-workshop/library')({
   beforeLoad: () => {

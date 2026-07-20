@@ -1,3 +1,4 @@
+import { ArrowUp, Image, LoaderCircle, Video } from 'lucide-react'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -17,8 +18,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useEffect, useRef } from 'react'
-import { ArrowUp, Image, LoaderCircle, Video } from 'lucide-react'
 import { toast } from 'sonner'
+
 import type { ImageWorkshopModelCapability, ImageWorkshopToken } from '../types'
 import { ImageSizePicker } from './image-size-picker'
 import { WorkshopSelect } from './workshop-select'

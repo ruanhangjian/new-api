@@ -1,3 +1,4 @@
+import { Eye, Maximize2, X, ZoomIn, ZoomOut } from 'lucide-react'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -23,8 +24,9 @@ import {
   useRef,
   useState,
 } from 'react'
-import { Eye, Maximize2, X, ZoomIn, ZoomOut } from 'lucide-react'
+
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+
 import { InspirationImage } from './inspiration-image'
 
 type ImagePreviewDialogProps = {

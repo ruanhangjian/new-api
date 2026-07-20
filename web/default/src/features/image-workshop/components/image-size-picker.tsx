@@ -1,3 +1,12 @@
+import {
+  Check,
+  ChevronDown,
+  Info,
+  RectangleHorizontal,
+  RectangleVertical,
+  Sparkles,
+  Square,
+} from 'lucide-react'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -15,15 +24,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 import { useMemo, useState } from 'react'
-import {
-  Check,
-  ChevronDown,
-  Info,
-  RectangleHorizontal,
-  RectangleVertical,
-  Sparkles,
-  Square,
-} from 'lucide-react'
+
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -34,6 +35,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+
 import {
   calculateImageSize,
   findImageSizePreset,
