@@ -328,8 +328,13 @@ For commercial licensing, please contact support@quantumnous.com
 
 .image-workshop-token-notice button {
   min-height: 30px;
+  width: 92px;
   margin-left: auto;
   padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   border: 1px solid var(--border);
   border-radius: 7px;
   color: var(--foreground);
@@ -339,9 +344,19 @@ For commercial licensing, please contact support@quantumnous.com
   white-space: nowrap;
 }
 
-.image-workshop-token-notice button:hover {
+.image-workshop-token-notice button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.image-workshop-token-notice button:hover:not(:disabled) {
   border-color: var(--ring);
   background: var(--accent);
+}
+
+.image-workshop-token-notice button:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .image-workshop-token-notice.is-error {

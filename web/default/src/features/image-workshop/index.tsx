@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { KeyRound } from 'lucide-react'
+import { KeyRound, LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
 import {
@@ -98,6 +98,8 @@ export function ImageWorkshop() {
   >([])
   const [homepageOffset, setHomepageOffset] = useState(0)
   const [isSwitchingTemplates, setIsSwitchingTemplates] = useState(false)
+  const [isRetryingService, setIsRetryingService] = useState(false)
+  const [isRetryingOptions, setIsRetryingOptions] = useState(false)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const templateSwitchId = useRef(0)
   const attemptedSaves = useRef(new Set<string>())
@@ -305,6 +307,29 @@ export function ImageWorkshop() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  async function retryServiceQueries() {
+    if (isRetryingService) return
+    setIsRetryingService(true)
+    try {
+      await Promise.all([tokensQuery.refetch(), tasksQuery.refetch()])
+    } finally {
+      setIsRetryingService(false)
+    }
+  }
+
+  async function retryOptionsQuery() {
+    if (isRetryingOptions) return
+    setIsRetryingOptions(true)
+    try {
+      await optionsQuery.refetch()
+    } finally {
+      setIsRetryingOptions(false)
+    }
+  }
+
+  const showTokensError = tokensQuery.isError || isRetryingService
+  const showOptionsError = optionsQuery.isError || isRetryingOptions
+
   return (
     <div className='image-workshop-page' ref={scrollContainerRef}>
       <div className='image-workshop-inner'>
@@ -313,30 +338,38 @@ export function ImageWorkshop() {
           tokens={usableTokens}
           capabilities={capabilities}
           capability={capability}
-          isLoading={tokensQuery.isLoading || optionsQuery.isLoading}
+          isLoading={
+            (tokensQuery.isLoading && !isRetryingService) ||
+            (optionsQuery.isLoading && !isRetryingOptions)
+          }
           isSubmitting={createMutation.isPending}
           onChange={(next) => setForm((current) => ({ ...current, ...next }))}
           onSubmit={submit}
         />
 
-        {tokensQuery.isError && (
-          <div className='image-workshop-token-notice is-error'>
+        {showTokensError && (
+          <div
+            className='image-workshop-token-notice is-error'
+            aria-live='polite'
+          >
             <KeyRound aria-hidden='true' />
             <span>图工坊服务接口暂不可用，请确认后端已更新并重新加载。</span>
             <button
               type='button'
-              onClick={() => {
-                tokensQuery.refetch()
-                tasksQuery.refetch()
-              }}
+              disabled={isRetryingService}
+              aria-busy={isRetryingService}
+              onClick={retryServiceQueries}
             >
-              重新加载
+              {isRetryingService && (
+                <LoaderCircle className='animate-spin' aria-hidden='true' />
+              )}
+              {isRetryingService ? '正在加载' : '重新加载'}
             </button>
           </div>
         )}
 
         {!tokensQuery.isLoading &&
-          !tokensQuery.isError &&
+          !showTokensError &&
           !usableTokens.length && (
             <div className='image-workshop-token-notice'>
               <KeyRound aria-hidden='true' />
@@ -345,18 +378,29 @@ export function ImageWorkshop() {
             </div>
           )}
 
-        {optionsQuery.isError && form.tokenId > 0 && (
-          <div className='image-workshop-token-notice is-error'>
+        {showOptionsError && form.tokenId > 0 && (
+          <div
+            className='image-workshop-token-notice is-error'
+            aria-live='polite'
+          >
             <KeyRound aria-hidden='true' />
             <span>无法读取当前 Key 的生图模型能力。</span>
-            <button type='button' onClick={() => optionsQuery.refetch()}>
-              重试
+            <button
+              type='button'
+              disabled={isRetryingOptions}
+              aria-busy={isRetryingOptions}
+              onClick={retryOptionsQuery}
+            >
+              {isRetryingOptions && (
+                <LoaderCircle className='animate-spin' aria-hidden='true' />
+              )}
+              {isRetryingOptions ? '正在加载' : '重试'}
             </button>
           </div>
         )}
 
         {!optionsQuery.isLoading &&
-          !optionsQuery.isError &&
+          !showOptionsError &&
           form.tokenId > 0 &&
           !capabilities.length && (
             <div className='image-workshop-token-notice'>
@@ -384,7 +428,7 @@ export function ImageWorkshop() {
         <WorksGallery
           tasks={tasks}
           localWorks={localWorks}
-          isLoading={tasksQuery.isLoading}
+          isLoading={tasksQuery.isLoading && !isRetryingService}
           limit={workLimit}
           onLimitChange={setWorkLimit}
           onRegenerate={applyPrompt}
