@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Check,
   Download,
@@ -100,6 +100,87 @@ function formatTime(timestamp?: number) {
   }).format(new Date(timestamp * 1000))
 }
 
+function useWorksMasonry() {
+  const gridRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const grid = gridRef.current
+    if (!grid) return
+
+    let animationFrame = 0
+    const observedItems = new Set<HTMLElement>()
+
+    const measureItems = () => {
+      animationFrame = 0
+      const styles = window.getComputedStyle(grid)
+      const rowHeight =
+        Number.parseFloat(
+          styles.getPropertyValue('--image-workshop-masonry-row-height')
+        ) || 4
+      const verticalGap =
+        Number.parseFloat(
+          styles.getPropertyValue('--image-workshop-masonry-gap')
+        ) || 16
+
+      observedItems.forEach((item) => {
+        const height = item.getBoundingClientRect().height
+        const rowSpan = Math.max(
+          1,
+          Math.ceil((height + verticalGap) / rowHeight)
+        )
+        const nextValue = `span ${rowSpan}`
+        if (item.style.gridRowEnd !== nextValue) {
+          item.style.gridRowEnd = nextValue
+        }
+      })
+    }
+
+    const scheduleMeasure = () => {
+      if (animationFrame) window.cancelAnimationFrame(animationFrame)
+      animationFrame = window.requestAnimationFrame(measureItems)
+    }
+
+    const resizeObserver = new ResizeObserver(scheduleMeasure)
+
+    const syncObservedItems = () => {
+      const currentItems = new Set(
+        Array.from(grid.children).filter(
+          (item): item is HTMLElement => item instanceof HTMLElement
+        )
+      )
+
+      observedItems.forEach((item) => {
+        if (currentItems.has(item)) return
+        resizeObserver.unobserve(item)
+        observedItems.delete(item)
+      })
+      currentItems.forEach((item) => {
+        if (observedItems.has(item)) return
+        observedItems.add(item)
+        resizeObserver.observe(item)
+      })
+    }
+
+    const mutationObserver = new MutationObserver(() => {
+      syncObservedItems()
+      scheduleMeasure()
+    })
+
+    resizeObserver.observe(grid)
+    mutationObserver.observe(grid, { childList: true })
+    syncObservedItems()
+    scheduleMeasure()
+
+    return () => {
+      if (animationFrame) window.cancelAnimationFrame(animationFrame)
+      mutationObserver.disconnect()
+      resizeObserver.disconnect()
+    }
+  }, [])
+
+  return gridRef
+}
+
 function WorkSelectionControl({
   work,
   selectionMode,
@@ -133,6 +214,8 @@ function LocalWorkCard({
 
   useEffect(() => {
     const objectUrl = URL.createObjectURL(work.blob)
+    // Strict Mode remounts effects, so the URL must be recreated here before cleanup.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUrl(objectUrl)
     return () => URL.revokeObjectURL(objectUrl)
   }, [work.blob])
@@ -279,6 +362,7 @@ export function WorksGallery({
   onRegenerate,
   onDelete,
 }: WorksGalleryProps) {
+  const masonryGridRef = useWorksMasonry()
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedIDs, setSelectedIDs] = useState<Set<string>>(new Set())
   const [confirmation, setConfirmation] = useState<DeleteConfirmation | null>(
@@ -519,7 +603,11 @@ export function WorksGallery({
           <p>生成图片后，作品会显示在这里</p>
         </div>
       ) : (
-        <div className='image-workshop-works-grid' aria-busy={isLoading}>
+        <div
+          ref={masonryGridRef}
+          className='image-workshop-works-grid'
+          aria-busy={isLoading}
+        >
           {tasks.flatMap((task) => {
             if (task.status === 'queued' || task.status === 'running') {
               return Array.from(
