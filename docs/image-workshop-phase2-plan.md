@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go + Gin + GORM + NewAPI existing TokenAuth/UserAuth/Distribute/Relay, React frontend in existing NewAPI web app, local disk result storage.
 
-**当前 rc20 升级范围说明：** 本次 NewAPI 升级只保留 Phase 1 异步生图后端和 Phase 2A 登录态桥接接口；Phase 2B 图工坊前端不纳入本次合并，也不应随升级分支部署。
+**当前 rc20 迁移状态：** `feature/image-workshop-rc20-migration` 已基于最新 `main@402ffdea` 迁移 Phase 2B 后端契约和 Phase 2C 原生前端。旧的 rc8 图工坊分支只作为实现参考，不再直接部署或合入主线。
 
 ---
 
@@ -19,7 +19,7 @@
 - Phase 1 异步生图后端 MVP：已完成并集成。
 - Phase 2A 登录态桥接层：已完成并集成。
 - Phase 2B 后端契约、模型能力和短期任务历史：已完成并集成。
-- Phase 2C NewAPI 原生前端工坊 MVP：已完成；当前主要是 UI 细节和真实 Key / 渠道环境验收。
+- Phase 2C NewAPI 原生前端工坊 MVP：已完成 rc20 迁移和本地容器验收；当前主要剩余真实 Key / 渠道端到端验收。
 - Phase 3 增强能力：尚未开始，按独立功能继续拆分开发。
 
 Phase 1 后端分支：
@@ -668,7 +668,7 @@ Phase 2B 已完成并集成验收，Phase 2C 已按以下范围完成。
 feature/image-workshop-frontend
 ```
 
-### Phase 2C 实施状态（已完成，feature/image-workshop-frontend / fix/image-workshop-ui-refinement）
+### Phase 2C 实施状态（已完成并迁移至 feature/image-workshop-rc20-migration）
 
 已完成 NewAPI default 前端的原生图工坊 MVP，不使用 iframe，也没有引入独立子应用外壳。
 
@@ -724,12 +724,17 @@ feature/image-workshop-frontend
 ```bash
 cd web/default
 bun run typecheck
-bunx eslint src/features/image-workshop src/routes/_authenticated/image-workshop \
+bunx oxlint -c .oxlintrc.json src/features/image-workshop src/routes/_authenticated/image-workshop \
   src/hooks/use-sidebar-data.ts src/hooks/use-sidebar-config.ts \
   src/features/profile/components/sidebar-modules-card.tsx \
   src/features/system-settings/maintenance/config.ts \
   src/features/system-settings/maintenance/sidebar-modules-section.tsx
-bun run build
+bunx oxfmt --check src/features/image-workshop src/routes/_authenticated/image-workshop \
+  src/hooks/use-sidebar-data.ts src/hooks/use-sidebar-config.ts \
+  src/features/profile/components/sidebar-modules-card.tsx \
+  src/features/system-settings/maintenance/config.ts \
+  src/features/system-settings/maintenance/sidebar-modules-section.tsx
+bun run build:check
 ```
 
 Phase 2C 前端与交互优化的关键提交：
@@ -757,9 +762,20 @@ c03ae1d2 完善图工坊图片预览交互
 61f8a829 合并按比例模式默认状态修正
 ```
 
-最近一次前端集成验证：`bunx prettier --check src/features/image-workshop/components/image-size-picker.tsx`、`bun run typecheck`、`bunx eslint src/features/image-workshop` 和 `bun run build:check` 均通过。由于当前验证账号没有可用生图 Key，尺寸控件处于禁用状态，未触发真实生图请求完成最终点击复验。
+rc20 迁移关键提交：
 
-浏览器验证覆盖 320、375、414、768 和 1440px 宽度，主页面与灵感库均无横向溢出；同时验证了视频未开放提示、提示词自动增高、生成动效和 IndexedDB 本机副本恢复。
+```text
+75a92864 迁移图工坊后端契约到最新主线
+b10e9744 迁移图工坊前端底座到最新主线
+ea906c6b 适配图工坊前端到 rc20 代码规范
+16798ace 统一迁移后图工坊前端格式
+```
+
+最近一次 rc20 集成验证：后端 `go test -count=1 ./model ./service ./controller ./router`、前端 `bun run typecheck`、图工坊范围 Oxlint、Oxfmt 和 `bun run build:check` 均通过。全仓 `bun run lint` 仍有最新 `main@402ffdea` 可复现的非图工坊基线错误，本迁移分支不修改这些无关模块。
+
+独立镜像 `new-api-image-workshop-rc20:16798ace` 已构建并运行在 `http://127.0.0.1:3004`，容器名为 `new-api-image-workshop-rc20`，使用 `/tmp/newapi-image-workshop-rc20/data` 独立 SQLite 数据目录，不复用现有 `3000` / `3003` 实例数据。
+
+rc20 浏览器验收已覆盖默认桌面视口和 390x844 移动视口：登录、侧栏图工坊入口、创建页、灵感模板、灵感库二级页、远程模板图片和空作品状态均正常，控制台无错误。当前临时实例没有可用 Key，因此未触发真实生图请求；旧版验证中覆盖的 320、375、414、768 和 1440px 视口结果仅保留为迁移前参考。
 
 作品删除的后端自动化测试已覆盖：只能删除当前用户已结束的图片任务、按任务 ID 批量删除，以及删除 3 天前、7 天前和全部历史时保留 queued/running 任务。
 
