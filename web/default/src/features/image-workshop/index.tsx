@@ -41,6 +41,7 @@ import {
 } from './components/workshop-composer'
 import { WorkshopScrollToTop } from './components/workshop-scroll-to-top'
 import './image-workshop.css'
+import { isImageWorkshopSizeSupported } from './lib/image-size'
 import {
   loadHomepageInspirationCases,
   pickHomepageTemplates,
@@ -160,7 +161,7 @@ export function ImageWorkshop() {
     setForm((current) => ({
       ...current,
       model: nextCapability.model,
-      size: nextCapability.sizes.includes(current.size)
+      size: isImageWorkshopSizeSupported(nextCapability, current.size)
         ? current.size
         : nextCapability.default_size,
       quality: nextCapability.qualities.includes(current.quality)

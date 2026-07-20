@@ -36,6 +36,16 @@ export type ImageWorkshopToken = {
 export type ImageWorkshopModelCapability = {
   model: string
   sizes: string[]
+  size_tiers?: Array<'1K' | '2K' | '4K'>
+  aspect_ratios?: string[]
+  supports_custom_size?: boolean
+  size_constraints?: {
+    multiple: number
+    max_edge: number
+    max_aspect_ratio: number
+    min_pixels: number
+    max_pixels: number
+  }
   qualities: string[]
   output_formats: string[]
   default_size: string

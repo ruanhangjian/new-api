@@ -347,12 +347,9 @@ func normalizeImageWorkshopGenerationRequest(request imageWorkshopGenerationRequ
 	if n == 0 || int(n) > capability.MaxImages {
 		return nil, fmt.Errorf("n must be between 1 and %d", capability.MaxImages)
 	}
-	size := strings.ToLower(strings.TrimSpace(request.Size))
-	if size == "" {
-		size = capability.DefaultSize
-	}
-	if !containsImageWorkshopOption(capability.Sizes, size) {
-		return nil, fmt.Errorf("size is not supported by model %s", capability.Model)
+	size, err := service.NormalizeImageWorkshopSize(capability, request.Size)
+	if err != nil {
+		return nil, err
 	}
 	quality := strings.ToLower(strings.TrimSpace(request.Quality))
 	if quality == "" {

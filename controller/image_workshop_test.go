@@ -73,10 +73,14 @@ func TestImageWorkshopOptionsReturnsTokenLimitedImageModels(t *testing.T) {
 		Data    struct {
 			TokenID int `json:"token_id"`
 			Models  []struct {
-				Model         string   `json:"model"`
-				Qualities     []string `json:"qualities"`
-				OutputFormats []string `json:"output_formats"`
-				MaxImages     int      `json:"max_images"`
+				Model              string   `json:"model"`
+				Sizes              []string `json:"sizes"`
+				SizeTiers          []string `json:"size_tiers"`
+				AspectRatios       []string `json:"aspect_ratios"`
+				SupportsCustomSize bool     `json:"supports_custom_size"`
+				Qualities          []string `json:"qualities"`
+				OutputFormats      []string `json:"output_formats"`
+				MaxImages          int      `json:"max_images"`
 			} `json:"models"`
 		} `json:"data"`
 	}
@@ -85,6 +89,10 @@ func TestImageWorkshopOptionsReturnsTokenLimitedImageModels(t *testing.T) {
 	assert.Equal(t, 11, response.Data.TokenID)
 	require.Len(t, response.Data.Models, 1)
 	assert.Equal(t, "gpt-image-2", response.Data.Models[0].Model)
+	assert.Contains(t, response.Data.Models[0].Sizes, "3840x2160")
+	assert.Equal(t, []string{"1K", "2K", "4K"}, response.Data.Models[0].SizeTiers)
+	assert.Contains(t, response.Data.Models[0].AspectRatios, "21:9")
+	assert.True(t, response.Data.Models[0].SupportsCustomSize)
 	assert.Contains(t, response.Data.Models[0].Qualities, "auto")
 	assert.Equal(t, []string{"png", "jpeg", "webp"}, response.Data.Models[0].OutputFormats)
 	assert.Equal(t, 4, response.Data.Models[0].MaxImages)
@@ -109,7 +117,7 @@ func TestImageWorkshopGenerationQueuesGptImage2ThroughCompatibleChannel(t *testi
 	require.NoError(t, db.Model(&model.Channel{}).Where("id = ?", 101).Update("base_url", "https://images.example.com/v1").Error)
 	disableImageAsyncControllerBackgroundWork(t)
 
-	body := []byte(`{"token_id":11,"model":"gpt-image-2","prompt":"draw","n":4,"size":"1536x1024","quality":"high","output_format":"webp"}`)
+	body := []byte(`{"token_id":11,"model":"gpt-image-2","prompt":"draw","n":4,"size":"1033x1522","quality":"high","output_format":"webp"}`)
 	recorder := performImageWorkshopGenerationRouteRequest(t, 1, body)
 
 	require.Equal(t, http.StatusOK, recorder.Code)
@@ -121,7 +129,7 @@ func TestImageWorkshopGenerationQueuesGptImage2ThroughCompatibleChannel(t *testi
 	require.NoError(t, task.GetData(&data))
 	assert.Contains(t, string(data.Request.Body), `"model":"gpt-image-2"`)
 	assert.Contains(t, string(data.Request.Body), `"n":4`)
-	assert.Contains(t, string(data.Request.Body), `"size":"1536x1024"`)
+	assert.Contains(t, string(data.Request.Body), `"size":"1040x1520"`)
 	assert.Contains(t, string(data.Request.Body), `"quality":"high"`)
 	assert.Contains(t, string(data.Request.Body), `"output_format":"webp"`)
 }

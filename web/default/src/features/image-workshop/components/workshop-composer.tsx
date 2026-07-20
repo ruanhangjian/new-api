@@ -20,6 +20,7 @@ import { useEffect, useRef } from 'react'
 import { ArrowUp, Image, LoaderCircle, Video } from 'lucide-react'
 import { toast } from 'sonner'
 import type { ImageWorkshopModelCapability, ImageWorkshopToken } from '../types'
+import { ImageSizePicker } from './image-size-picker'
 import { WorkshopSelect } from './workshop-select'
 
 export type WorkshopFormState = {
@@ -147,18 +148,24 @@ export function WorkshopComposer({
 
         <div className='image-workshop-parameter-grid'>
           <div className='image-workshop-parameter-field'>
-            <span>尺寸</span>
-            <WorkshopSelect
-              value={value.size}
-              options={(capability?.sizes || []).map((size) => ({
-                value: size,
-                label: optionLabel(size),
-              }))}
-              placeholder='暂无可用尺寸'
-              ariaLabel='尺寸'
-              disabled={!capability?.sizes.length}
-              onChange={(size) => onChange({ size })}
-            />
+            {capability ? (
+              <ImageSizePicker
+                value={value.size}
+                capability={capability}
+                onChange={(size) => onChange({ size })}
+              />
+            ) : (
+              <button
+                type='button'
+                className='image-workshop-size-trigger'
+                disabled
+              >
+                <span className='image-workshop-size-trigger-label'>尺寸</span>
+                <span className='image-workshop-size-trigger-value'>
+                  暂无可用尺寸
+                </span>
+              </button>
+            )}
           </div>
 
           <div className='image-workshop-parameter-field'>
