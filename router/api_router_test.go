@@ -95,6 +95,7 @@ func TestImageWorkshopRoutesRequireUserAuth(t *testing.T) {
 		{method: http.MethodGet, path: "/api/image-workshop/options?token_id=1"},
 		{method: http.MethodPost, path: "/api/image-workshop/generations"},
 		{method: http.MethodGet, path: "/api/image-workshop/tasks"},
+		{method: http.MethodDelete, path: "/api/image-workshop/tasks"},
 		{method: http.MethodGet, path: "/api/image-workshop/tasks/task_x"},
 	}
 

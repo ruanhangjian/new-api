@@ -21,6 +21,8 @@ import type {
   ApiResponse,
   ImageWorkshopGenerationRequest,
   ImageWorkshopGenerationResponse,
+  ImageWorkshopDeleteResponse,
+  ImageWorkshopDeleteScope,
   ImageWorkshopOptions,
   ImageWorkshopTask,
   ImageWorkshopTaskPage,
@@ -117,4 +119,24 @@ export async function getImageWorkshopTask(taskId: string) {
     } as Record<string, unknown>
   )
   return unwrap(response.data as ApiResponse<ImageWorkshopTask>)
+}
+
+export async function deleteImageWorkshopTasks(taskIds: string[]) {
+  const response = await api.delete('/api/image-workshop/tasks', {
+    data: { task_ids: taskIds },
+    skipBusinessError: true,
+    skipErrorHandler: true,
+  } as Record<string, unknown>)
+  return unwrap(response.data as ApiResponse<ImageWorkshopDeleteResponse>)
+}
+
+export async function deleteImageWorkshopTasksByScope(
+  scope: ImageWorkshopDeleteScope
+) {
+  const response = await api.delete('/api/image-workshop/tasks', {
+    params: { scope },
+    skipBusinessError: true,
+    skipErrorHandler: true,
+  } as Record<string, unknown>)
+  return unwrap(response.data as ApiResponse<ImageWorkshopDeleteResponse>)
 }

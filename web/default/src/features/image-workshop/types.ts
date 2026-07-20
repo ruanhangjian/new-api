@@ -106,6 +106,13 @@ export type ImageWorkshopTaskPage = {
   items: ImageWorkshopTask[]
 }
 
+export type ImageWorkshopDeleteScope = 'before_3d' | 'before_7d' | 'all'
+
+export type ImageWorkshopDeleteResponse = {
+  deleted: number
+  task_ids: string[]
+}
+
 export type LocalImageWorkshopWork = {
   key: string
   userId: number

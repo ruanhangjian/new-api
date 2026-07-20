@@ -68,6 +68,10 @@ type imageWorkshopTaskResponse struct {
 	Error           *service.ImageAsyncTaskError `json:"error,omitempty"`
 }
 
+type imageWorkshopDeleteTasksRequest struct {
+	TaskIDs []string `json:"task_ids"`
+}
+
 var imageWorkshopGenerationFields = map[string]struct{}{
 	"token_id": {}, "model": {}, "prompt": {}, "n": {}, "size": {}, "quality": {},
 	"output_format": {}, "response_format": {}, "moderation": {},
@@ -205,6 +209,60 @@ func ListImageWorkshopTasks(c *gin.Context) {
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(items)
 	common.ApiSuccess(c, pageInfo)
+}
+
+func DeleteImageWorkshopTasks(c *gin.Context) {
+	userID := c.GetInt("id")
+	scope := strings.ToLower(strings.TrimSpace(c.Query("scope")))
+	var (
+		deletedTaskIDs []string
+		err            error
+	)
+
+	switch scope {
+	case "before_3d":
+		deletedTaskIDs, err = model.DeleteUserImageTasksBefore(userID, time.Now().AddDate(0, 0, -3).Unix())
+	case "before_7d":
+		deletedTaskIDs, err = model.DeleteUserImageTasksBefore(userID, time.Now().AddDate(0, 0, -7).Unix())
+	case "all":
+		deletedTaskIDs, err = model.DeleteAllUserImageTasks(userID)
+	case "":
+		var request imageWorkshopDeleteTasksRequest
+		if bindErr := c.ShouldBindJSON(&request); bindErr != nil {
+			common.ApiErrorMsg(c, "task_ids is required")
+			return
+		}
+		seen := make(map[string]struct{}, len(request.TaskIDs))
+		taskIDs := make([]string, 0, len(request.TaskIDs))
+		for _, taskID := range request.TaskIDs {
+			taskID = strings.TrimSpace(taskID)
+			if taskID == "" {
+				continue
+			}
+			if _, exists := seen[taskID]; exists {
+				continue
+			}
+			seen[taskID] = struct{}{}
+			taskIDs = append(taskIDs, taskID)
+		}
+		if len(taskIDs) == 0 || len(taskIDs) > 100 {
+			common.ApiErrorMsg(c, "task_ids must contain between 1 and 100 items")
+			return
+		}
+		deletedTaskIDs, err = model.DeleteUserImageTasksByIDs(userID, taskIDs)
+	default:
+		common.ApiErrorMsg(c, "scope must be before_3d, before_7d or all")
+		return
+	}
+
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"deleted":  len(deletedTaskIDs),
+		"task_ids": deletedTaskIDs,
+	})
 }
 
 func buildImageWorkshopGenerationBody(c *gin.Context) (*model.Token, []byte, bool) {

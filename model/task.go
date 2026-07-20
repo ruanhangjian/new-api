@@ -270,6 +270,67 @@ func ListUserImageTasks(userID int, offset int, limit int) ([]*Task, int64, erro
 	return tasks, total, nil
 }
 
+type userImageTaskDeleteFilter struct {
+	taskIDs    []string
+	beforeUnix int64
+	deleteAll  bool
+}
+
+func DeleteUserImageTasksByIDs(userID int, taskIDs []string) ([]string, error) {
+	if len(taskIDs) == 0 {
+		return []string{}, nil
+	}
+	return deleteUserImageTasks(userID, userImageTaskDeleteFilter{taskIDs: taskIDs})
+}
+
+func DeleteUserImageTasksBefore(userID int, beforeUnix int64) ([]string, error) {
+	if beforeUnix <= 0 {
+		return []string{}, nil
+	}
+	return deleteUserImageTasks(userID, userImageTaskDeleteFilter{beforeUnix: beforeUnix})
+}
+
+func DeleteAllUserImageTasks(userID int) ([]string, error) {
+	return deleteUserImageTasks(userID, userImageTaskDeleteFilter{deleteAll: true})
+}
+
+func deleteUserImageTasks(userID int, filter userImageTaskDeleteFilter) ([]string, error) {
+	if userID <= 0 || (!filter.deleteAll && filter.beforeUnix <= 0 && len(filter.taskIDs) == 0) {
+		return []string{}, nil
+	}
+
+	terminalStatuses := []TaskStatus{TaskStatusSuccess, TaskStatusFailure}
+	deletedTaskIDs := make([]string, 0)
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		query := tx.Model(&Task{}).
+			Where("user_id = ? AND platform = ? AND status IN ?", userID, constant.TaskPlatformImage, terminalStatuses)
+		if len(filter.taskIDs) > 0 {
+			query = query.Where("task_id IN ?", filter.taskIDs)
+		} else if filter.beforeUnix > 0 {
+			query = query.Where(
+				"COALESCE(NULLIF(finish_time, 0), NULLIF(submit_time, 0), created_at) < ?",
+				filter.beforeUnix,
+			)
+		}
+
+		var tasks []Task
+		if err := query.Select("id", "task_id").Order("id ASC").Find(&tasks).Error; err != nil {
+			return err
+		}
+		if len(tasks) == 0 {
+			return nil
+		}
+
+		ids := make([]int64, 0, len(tasks))
+		for _, task := range tasks {
+			ids = append(ids, task.ID)
+			deletedTaskIDs = append(deletedTaskIDs, task.TaskID)
+		}
+		return tx.Where("id IN ?", ids).Delete(&Task{}).Error
+	})
+	return deletedTaskIDs, err
+}
+
 func CleanupImageTasks(cutoffUnix int64, maxCount int) (int64, error) {
 	terminalStatuses := []TaskStatus{TaskStatusSuccess, TaskStatusFailure}
 	var deleted int64

@@ -345,6 +345,91 @@ func TestImageWorkshopTaskRequiresCurrentUserAndImagePlatform(t *testing.T) {
 	}
 }
 
+func TestDeleteImageWorkshopTasksOnlyDeletesOwnedTerminalTasks(t *testing.T) {
+	db := setupImageAsyncControllerTestDB(t)
+	now := time.Now().Unix()
+	seedImageAsyncControllerTask := func(taskID string, userID int, platform constant.TaskPlatform, status model.TaskStatus) {
+		insertImageAsyncControllerTask(t, &model.Task{
+			TaskID:     taskID,
+			UserId:     userID,
+			Platform:   platform,
+			Status:     status,
+			SubmitTime: now,
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		})
+	}
+	seedImageAsyncControllerTask("delete_success", 1, constant.TaskPlatformImage, model.TaskStatusSuccess)
+	seedImageAsyncControllerTask("delete_failure", 1, constant.TaskPlatformImage, model.TaskStatusFailure)
+	seedImageAsyncControllerTask("keep_running", 1, constant.TaskPlatformImage, model.TaskStatusInProgress)
+	seedImageAsyncControllerTask("keep_other_user", 2, constant.TaskPlatformImage, model.TaskStatusSuccess)
+	seedImageAsyncControllerTask("keep_other_platform", 1, constant.TaskPlatformSuno, model.TaskStatusSuccess)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(
+		http.MethodDelete,
+		"/api/image-workshop/tasks",
+		bytes.NewBufferString(`{"task_ids":["delete_success","delete_failure","keep_running","keep_other_user","keep_other_platform"]}`),
+	)
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Set("id", 1)
+
+	DeleteImageWorkshopTasks(c)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), `"deleted":2`)
+	assert.Contains(t, recorder.Body.String(), `"delete_success"`)
+	assert.Contains(t, recorder.Body.String(), `"delete_failure"`)
+
+	var remaining int64
+	require.NoError(t, db.Model(&model.Task{}).Count(&remaining).Error)
+	assert.EqualValues(t, 3, remaining)
+}
+
+func TestDeleteImageWorkshopTasksSupportsDateScopes(t *testing.T) {
+	db := setupImageAsyncControllerTestDB(t)
+	now := time.Now().Unix()
+	insertImageAsyncControllerTask(t, &model.Task{
+		TaskID: "delete_old", UserId: 1, Platform: constant.TaskPlatformImage,
+		Status: model.TaskStatusSuccess, FinishTime: now - 8*86400,
+		SubmitTime: now - 8*86400, CreatedAt: now - 8*86400, UpdatedAt: now - 8*86400,
+	})
+	insertImageAsyncControllerTask(t, &model.Task{
+		TaskID: "delete_recent", UserId: 1, Platform: constant.TaskPlatformImage,
+		Status: model.TaskStatusFailure, FinishTime: now - 86400,
+		SubmitTime: now - 86400, CreatedAt: now - 86400, UpdatedAt: now - 86400,
+	})
+	insertImageAsyncControllerTask(t, &model.Task{
+		TaskID: "keep_active", UserId: 1, Platform: constant.TaskPlatformImage,
+		Status: model.TaskStatusInProgress, SubmitTime: now - 8*86400,
+		CreatedAt: now - 8*86400, UpdatedAt: now - 8*86400,
+	})
+
+	deleteByScope := func(scope string) *httptest.ResponseRecorder {
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Request = httptest.NewRequest(http.MethodDelete, "/api/image-workshop/tasks?scope="+scope, nil)
+		c.Set("id", 1)
+		DeleteImageWorkshopTasks(c)
+		return recorder
+	}
+
+	recorder := deleteByScope("before_7d")
+	require.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), `"deleted":1`)
+	assert.Contains(t, recorder.Body.String(), `"delete_old"`)
+
+	recorder = deleteByScope("all")
+	require.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), `"deleted":1`)
+	assert.Contains(t, recorder.Body.String(), `"delete_recent"`)
+
+	var remaining int64
+	require.NoError(t, db.Model(&model.Task{}).Count(&remaining).Error)
+	assert.EqualValues(t, 1, remaining)
+}
+
 func TestImageWorkshopTaskReturnsSignedResultURL(t *testing.T) {
 	setupImageAsyncControllerTestDB(t)
 	seedImageAsyncControllerUserAndToken(t, 1, 11)

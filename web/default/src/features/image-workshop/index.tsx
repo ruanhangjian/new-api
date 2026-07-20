@@ -24,12 +24,17 @@ import { toast } from 'sonner'
 import { useAuthStore } from '@/stores/auth-store'
 import {
   createImageWorkshopGeneration,
+  deleteImageWorkshopTasks,
+  deleteImageWorkshopTasksByScope,
   getImageWorkshopOptions,
   getImageWorkshopTasks,
   getImageWorkshopTokens,
 } from './api'
 import { InspirationStrip } from './components/inspiration-strip'
-import { WorksGallery } from './components/works-gallery'
+import {
+  WorksGallery,
+  type ImageWorkshopDeletionRequest,
+} from './components/works-gallery'
 import {
   WorkshopComposer,
   type WorkshopFormState,
@@ -41,7 +46,14 @@ import {
   pickHomepageTemplates,
   takeWorkshopDraft,
 } from './lib/inspiration-library'
-import { listLocalWorks, saveTaskImagesLocally } from './lib/local-gallery'
+import {
+  deleteAllLocalWorks,
+  deleteLocalWorks,
+  deleteLocalWorksBefore,
+  deleteLocalWorksForTasks,
+  listLocalWorks,
+  saveTaskImagesLocally,
+} from './lib/local-gallery'
 
 const INITIAL_FORM: WorkshopFormState = {
   prompt: '',
@@ -289,6 +301,44 @@ export function ImageWorkshop() {
     },
   })
 
+  const deleteWorksMutation = useMutation({
+    mutationFn: async (request: ImageWorkshopDeletionRequest) => {
+      if ('scope' in request) {
+        const response = await deleteImageWorkshopTasksByScope(request.scope)
+        if (request.scope === 'all') {
+          await deleteAllLocalWorks(userId)
+        } else {
+          const days = request.scope === 'before_3d' ? 3 : 7
+          const cutoff = new Date()
+          cutoff.setDate(cutoff.getDate() - days)
+          await deleteLocalWorksBefore(
+            userId,
+            Math.floor(cutoff.getTime() / 1000)
+          )
+        }
+        await deleteLocalWorksForTasks(userId, response.task_ids)
+        return response
+      }
+
+      const response = await deleteImageWorkshopTasks(request.taskIds)
+      await deleteLocalWorks(request.localKeys)
+      await deleteLocalWorksForTasks(userId, response.task_ids)
+      return response
+    },
+    onSuccess: async (response) => {
+      setLocalWorks(await listLocalWorks(userId))
+      await queryClient.invalidateQueries({
+        queryKey: ['image-workshop', 'tasks'],
+      })
+      toast.success(`已删除 ${response.deleted} 条服务器作品记录`)
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : '删除作品失败，请稍后重试'
+      )
+    },
+  })
+
   function submit() {
     if (!capability || !form.prompt.trim()) return
     createMutation.mutate({
@@ -368,15 +418,13 @@ export function ImageWorkshop() {
           </div>
         )}
 
-        {!tokensQuery.isLoading &&
-          !showTokensError &&
-          !usableTokens.length && (
-            <div className='image-workshop-token-notice'>
-              <KeyRound aria-hidden='true' />
-              <span>创建图片前，需要先准备一个可用的 API 令牌。</span>
-              <Link to='/keys'>前往令牌管理</Link>
-            </div>
-          )}
+        {!tokensQuery.isLoading && !showTokensError && !usableTokens.length && (
+          <div className='image-workshop-token-notice'>
+            <KeyRound aria-hidden='true' />
+            <span>创建图片前，需要先准备一个可用的 API 令牌。</span>
+            <Link to='/keys'>前往令牌管理</Link>
+          </div>
+        )}
 
         {showOptionsError && form.tokenId > 0 && (
           <div
@@ -432,6 +480,8 @@ export function ImageWorkshop() {
           limit={workLimit}
           onLimitChange={setWorkLimit}
           onRegenerate={applyPrompt}
+          onDelete={deleteWorksMutation.mutateAsync}
+          isDeleting={deleteWorksMutation.isPending}
         />
       </div>
       <WorkshopScrollToTop containerRef={scrollContainerRef} />

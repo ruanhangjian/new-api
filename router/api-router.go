@@ -282,6 +282,7 @@ func SetApiRouter(router *gin.Engine) {
 				controller.CreateImageWorkshopGeneration,
 			)
 			imageWorkshopRoute.GET("/tasks", controller.ListImageWorkshopTasks)
+			imageWorkshopRoute.DELETE("/tasks", controller.DeleteImageWorkshopTasks)
 			imageWorkshopRoute.GET("/tasks/:task_id", controller.GetImageWorkshopTask)
 		}
 		tokenRoute := apiRouter.Group("/token")

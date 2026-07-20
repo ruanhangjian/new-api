@@ -68,3 +68,57 @@ func TestCleanupImageTasksRemovesExpiredAndOverflowTerminalTasks(t *testing.T) {
 	require.NoError(t, DB.Model(&Task{}).Where("platform = ?", constant.TaskPlatformSuno).Count(&nonImageCount).Error)
 	assert.EqualValues(t, 1, nonImageCount)
 }
+
+func TestDeleteUserImageTasksByIDsOnlyDeletesOwnedTerminalImages(t *testing.T) {
+	truncateTables(t)
+	now := time.Now().Unix()
+	for _, task := range []*Task{
+		{TaskID: "own_success", UserId: 1, Platform: constant.TaskPlatformImage, Status: TaskStatusSuccess},
+		{TaskID: "own_failure", UserId: 1, Platform: constant.TaskPlatformImage, Status: TaskStatusFailure},
+		{TaskID: "own_running", UserId: 1, Platform: constant.TaskPlatformImage, Status: TaskStatusInProgress},
+		{TaskID: "other_user", UserId: 2, Platform: constant.TaskPlatformImage, Status: TaskStatusSuccess},
+		{TaskID: "non_image", UserId: 1, Platform: constant.TaskPlatformSuno, Status: TaskStatusSuccess},
+	} {
+		task.CreatedAt = now
+		task.UpdatedAt = now
+		task.SubmitTime = now
+		require.NoError(t, DB.Create(task).Error)
+	}
+
+	deleted, err := DeleteUserImageTasksByIDs(1, []string{
+		"own_success", "own_failure", "own_running", "other_user", "non_image",
+	})
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"own_success", "own_failure"}, deleted)
+
+	var remaining []string
+	require.NoError(t, DB.Model(&Task{}).Order("id ASC").Pluck("task_id", &remaining).Error)
+	assert.ElementsMatch(t, []string{"own_running", "other_user", "non_image"}, remaining)
+}
+
+func TestDeleteUserImageTasksBeforeAndAllKeepActiveTasks(t *testing.T) {
+	truncateTables(t)
+	now := time.Now().Unix()
+	for _, task := range []*Task{
+		{TaskID: "old_success", UserId: 1, Platform: constant.TaskPlatformImage, Status: TaskStatusSuccess, FinishTime: now - 8*86400},
+		{TaskID: "recent_failure", UserId: 1, Platform: constant.TaskPlatformImage, Status: TaskStatusFailure, FinishTime: now - 86400},
+		{TaskID: "old_running", UserId: 1, Platform: constant.TaskPlatformImage, Status: TaskStatusInProgress, SubmitTime: now - 8*86400},
+		{TaskID: "other_old", UserId: 2, Platform: constant.TaskPlatformImage, Status: TaskStatusSuccess, FinishTime: now - 8*86400},
+	} {
+		task.CreatedAt = now - 9*86400
+		task.UpdatedAt = task.CreatedAt
+		require.NoError(t, DB.Create(task).Error)
+	}
+
+	deleted, err := DeleteUserImageTasksBefore(1, now-7*86400)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"old_success"}, deleted)
+
+	deleted, err = DeleteAllUserImageTasks(1)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"recent_failure"}, deleted)
+
+	var remaining []string
+	require.NoError(t, DB.Model(&Task{}).Order("id ASC").Pluck("task_id", &remaining).Error)
+	assert.ElementsMatch(t, []string{"old_running", "other_old"}, remaining)
+}

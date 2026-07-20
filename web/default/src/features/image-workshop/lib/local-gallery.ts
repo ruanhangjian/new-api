@@ -60,10 +60,16 @@ export async function listLocalWorks(
 }
 
 export async function deleteLocalWork(key: string): Promise<void> {
+  return deleteLocalWorks([key])
+}
+
+export async function deleteLocalWorks(keys: string[]): Promise<void> {
+  if (!keys.length) return
   const database = await openDatabase()
   try {
     const transaction = database.transaction(WORKS_STORE, 'readwrite')
-    transaction.objectStore(WORKS_STORE).delete(key)
+    const store = transaction.objectStore(WORKS_STORE)
+    keys.forEach((key) => store.delete(key))
     await new Promise<void>((resolve, reject) => {
       transaction.oncomplete = () => resolve()
       transaction.onerror = () => reject(transaction.error)
@@ -72,6 +78,33 @@ export async function deleteLocalWork(key: string): Promise<void> {
   } finally {
     database.close()
   }
+}
+
+export async function deleteLocalWorksForTasks(
+  userId: number,
+  taskIds: string[]
+): Promise<void> {
+  if (!taskIds.length) return
+  const taskIDSet = new Set(taskIds)
+  const works = (await listLocalWorks(userId)).filter((work) =>
+    taskIDSet.has(work.taskId)
+  )
+  await deleteLocalWorks(works.map((work) => work.key))
+}
+
+export async function deleteLocalWorksBefore(
+  userId: number,
+  beforeUnix: number
+): Promise<void> {
+  const works = (await listLocalWorks(userId)).filter(
+    (work) => work.createdAt < beforeUnix
+  )
+  await deleteLocalWorks(works.map((work) => work.key))
+}
+
+export async function deleteAllLocalWorks(userId: number): Promise<void> {
+  const works = await listLocalWorks(userId)
+  await deleteLocalWorks(works.map((work) => work.key))
 }
 
 export async function saveTaskImagesLocally(
