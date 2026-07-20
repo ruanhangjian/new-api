@@ -194,197 +194,201 @@ function SizePickerPanel({
           </button>
         </div>
 
-        {mode === 'auto' && (
-          <div className='image-workshop-size-auto'>
-            <span className='image-workshop-size-auto-icon'>
-              <Sparkles aria-hidden='true' />
-            </span>
-            <strong>自动尺寸</strong>
-            <p>不向模型传递具体分辨率参数，由模型根据内容决定输出尺寸。</p>
-          </div>
-        )}
+        <div className='image-workshop-size-panel-body'>
+          {mode === 'auto' && (
+            <div className='image-workshop-size-auto'>
+              <span className='image-workshop-size-auto-icon'>
+                <Sparkles aria-hidden='true' />
+              </span>
+              <strong>自动尺寸</strong>
+              <p>不向模型传递具体分辨率参数，由模型根据内容决定输出尺寸。</p>
+            </div>
+          )}
 
-        {mode === 'ratio' && (
-          <div className='image-workshop-size-options'>
-            <section>
-              <div className='image-workshop-size-label'>基准分辨率</div>
-              <div className='image-workshop-tier-list'>
-                {SIZE_TIERS.map((item) => {
-                  const supported = Boolean(
-                    capability.size_tiers?.includes(item) &&
-                    tierHasSupportedRatio(capability, item)
-                  )
-                  return (
-                    <button
-                      key={item}
-                      type='button'
-                      disabled={!supported}
-                      aria-pressed={tier === item}
-                      className={[
-                        supported ? 'is-supported' : 'is-disabled',
-                        tier === item ? 'is-selected' : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                      title={
-                        supported ? `${item} 基准分辨率` : '当前模型不支持'
-                      }
-                      onClick={() => {
-                        setTier(item)
-                        const activeRatio =
-                          ratio === 'custom' ? customRatio : ratio
-                        const nextSize = calculateImageSize(item, activeRatio)
-                        if (
-                          nextSize &&
-                          isImageWorkshopSizeSupported(capability, nextSize)
-                        ) {
-                          setPendingValue(nextSize)
+          {mode === 'ratio' && (
+            <div className='image-workshop-size-options'>
+              <section>
+                <div className='image-workshop-size-label'>基准分辨率</div>
+                <div className='image-workshop-tier-list'>
+                  {SIZE_TIERS.map((item) => {
+                    const supported = Boolean(
+                      capability.size_tiers?.includes(item) &&
+                      tierHasSupportedRatio(capability, item)
+                    )
+                    return (
+                      <button
+                        key={item}
+                        type='button'
+                        disabled={!supported}
+                        aria-pressed={tier === item}
+                        className={[
+                          supported ? 'is-supported' : 'is-disabled',
+                          tier === item ? 'is-selected' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        title={
+                          supported ? `${item} 基准分辨率` : '当前模型不支持'
                         }
-                      }}
-                    >
-                      <span>{item}</span>
-                      {!supported && <small>暂不支持</small>}
-                    </button>
-                  )
-                })}
-              </div>
-            </section>
+                        onClick={() => {
+                          setTier(item)
+                          const activeRatio =
+                            ratio === 'custom' ? customRatio : ratio
+                          const nextSize = calculateImageSize(item, activeRatio)
+                          if (
+                            nextSize &&
+                            isImageWorkshopSizeSupported(capability, nextSize)
+                          ) {
+                            setPendingValue(nextSize)
+                          }
+                        }}
+                      >
+                        <span>{item}</span>
+                        {!supported && <small>暂不支持</small>}
+                      </button>
+                    )
+                  })}
+                </div>
+              </section>
 
-            <section>
-              <div className='image-workshop-size-label'>图像比例</div>
-              <div className='image-workshop-ratio-grid'>
-                {ratios.map((item) => {
-                  const size = calculateImageSize(tier, item)
-                  const supported = Boolean(
-                    size && isImageWorkshopSizeSupported(capability, size)
-                  )
-                  const selected = pendingValue === size
-                  const Icon =
-                    RATIO_ICONS[item as keyof typeof RATIO_ICONS] || Square
-                  return (
-                    <button
-                      key={item}
-                      type='button'
-                      disabled={!supported}
-                      aria-pressed={selected}
-                      className={[
-                        supported ? 'is-supported' : 'is-disabled',
-                        selected ? 'is-selected' : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                      title={supported ? `${item} · ${size}` : '当前模型不支持'}
-                      onClick={() => {
-                        if (size) {
-                          setRatio(item)
-                          setPendingValue(size)
+              <section>
+                <div className='image-workshop-size-label'>图像比例</div>
+                <div className='image-workshop-ratio-grid'>
+                  {ratios.map((item) => {
+                    const size = calculateImageSize(tier, item)
+                    const supported = Boolean(
+                      size && isImageWorkshopSizeSupported(capability, size)
+                    )
+                    const selected = pendingValue === size
+                    const Icon =
+                      RATIO_ICONS[item as keyof typeof RATIO_ICONS] || Square
+                    return (
+                      <button
+                        key={item}
+                        type='button'
+                        disabled={!supported}
+                        aria-pressed={selected}
+                        className={[
+                          supported ? 'is-supported' : 'is-disabled',
+                          selected ? 'is-selected' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        title={
+                          supported ? `${item} · ${size}` : '当前模型不支持'
                         }
-                      }}
-                    >
-                      <Icon
-                        className='image-workshop-ratio-icon'
-                        aria-hidden='true'
-                      />
-                      <span>{item}</span>
-                      {selected && (
-                        <Check
-                          className='image-workshop-size-check'
+                        onClick={() => {
+                          if (size) {
+                            setRatio(item)
+                            setPendingValue(size)
+                          }
+                        }}
+                      >
+                        <Icon
+                          className='image-workshop-ratio-icon'
                           aria-hidden='true'
                         />
-                      )}
+                        <span>{item}</span>
+                        {selected && (
+                          <Check
+                            className='image-workshop-size-check'
+                            aria-hidden='true'
+                          />
+                        )}
+                      </button>
+                    )
+                  })}
+                  {supportsCustomSize && (
+                    <button
+                      type='button'
+                      aria-pressed={ratio === 'custom'}
+                      className={[
+                        'image-workshop-ratio-custom is-supported',
+                        ratio === 'custom' ? 'is-selected' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      onClick={() => {
+                        setRatio('custom')
+                        const nextSize = calculateImageSize(tier, customRatio)
+                        setPendingValue(nextSize || '')
+                      }}
+                    >
+                      自定义比例
                     </button>
-                  )
-                })}
-                {supportsCustomSize && (
-                  <button
-                    type='button'
-                    aria-pressed={ratio === 'custom'}
-                    className={[
-                      'image-workshop-ratio-custom is-supported',
-                      ratio === 'custom' ? 'is-selected' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                    onClick={() => {
-                      setRatio('custom')
-                      const nextSize = calculateImageSize(tier, customRatio)
-                      setPendingValue(nextSize || '')
-                    }}
-                  >
-                    自定义比例
-                  </button>
+                  )}
+                </div>
+                {ratio === 'custom' && supportsCustomSize && (
+                  <label className='image-workshop-custom-ratio'>
+                    <span>输入自定义比例</span>
+                    <input
+                      value={customRatio}
+                      aria-invalid={!parseImageRatio(customRatio)}
+                      placeholder='例如 5:4 / 2.39:1'
+                      onChange={(event) => {
+                        setCustomRatio(event.target.value)
+                        const nextSize = calculateImageSize(
+                          tier,
+                          event.target.value
+                        )
+                        setPendingValue(nextSize || '')
+                      }}
+                    />
+                  </label>
                 )}
-              </div>
-              {ratio === 'custom' && supportsCustomSize && (
-                <label className='image-workshop-custom-ratio'>
-                  <span>输入自定义比例</span>
+              </section>
+            </div>
+          )}
+
+          {mode === 'resolution' && supportsCustomSize && (
+            <div className='image-workshop-custom-size'>
+              <div className='image-workshop-size-label'>输入具体像素值</div>
+              <div className='image-workshop-custom-size-inputs'>
+                <label>
+                  <span>宽度</span>
                   <input
-                    value={customRatio}
-                    aria-invalid={!parseImageRatio(customRatio)}
-                    placeholder='例如 5:4 / 2.39:1'
+                    type='number'
+                    min={16}
+                    value={customWidth}
                     onChange={(event) => {
-                      setCustomRatio(event.target.value)
-                      const nextSize = calculateImageSize(
-                        tier,
-                        event.target.value
-                      )
-                      setPendingValue(nextSize || '')
+                      setCustomWidth(event.target.value)
+                      setPendingValue('')
                     }}
+                    placeholder='例如 2048'
                   />
                 </label>
-              )}
-            </section>
-          </div>
-        )}
-
-        {mode === 'resolution' && supportsCustomSize && (
-          <div className='image-workshop-custom-size'>
-            <div className='image-workshop-size-label'>输入具体像素值</div>
-            <div className='image-workshop-custom-size-inputs'>
-              <label>
-                <span>宽度</span>
-                <input
-                  type='number'
-                  min={16}
-                  value={customWidth}
-                  onChange={(event) => {
-                    setCustomWidth(event.target.value)
-                    setPendingValue('')
-                  }}
-                  placeholder='例如 2048'
-                />
-              </label>
-              <span className='image-workshop-custom-size-times'>×</span>
-              <label>
-                <span>高度</span>
-                <input
-                  type='number'
-                  min={16}
-                  value={customHeight}
-                  onChange={(event) => {
-                    setCustomHeight(event.target.value)
-                    setPendingValue('')
-                  }}
-                  placeholder='例如 2048'
-                />
-              </label>
+                <span className='image-workshop-custom-size-times'>×</span>
+                <label>
+                  <span>高度</span>
+                  <input
+                    type='number'
+                    min={16}
+                    value={customHeight}
+                    onChange={(event) => {
+                      setCustomHeight(event.target.value)
+                      setPendingValue('')
+                    }}
+                    placeholder='例如 2048'
+                  />
+                </label>
+              </div>
+              <p className='image-workshop-size-hint'>
+                最终尺寸会自动规整为 16 的倍数，最大边 3840px，宽高比不超过
+                3:1，总像素范围为 655,360 - 8,294,400。
+              </p>
             </div>
-            <p className='image-workshop-size-hint'>
-              最终尺寸会自动规整为 16 的倍数，最大边 3840px，宽高比不超过
-              3:1，总像素范围为 655,360 - 8,294,400。
-            </p>
-          </div>
-        )}
+          )}
 
-        {mode === 'resolution' && !supportsCustomSize && (
-          <div className='image-workshop-size-auto'>
-            <span className='image-workshop-size-auto-icon'>
-              <Info aria-hidden='true' />
-            </span>
-            <strong>当前模型不支持自定义宽高</strong>
-            <p>请在模型 capability 声明支持后使用该功能。</p>
-          </div>
-        )}
+          {mode === 'resolution' && !supportsCustomSize && (
+            <div className='image-workshop-size-auto'>
+              <span className='image-workshop-size-auto-icon'>
+                <Info aria-hidden='true' />
+              </span>
+              <strong>当前模型不支持自定义宽高</strong>
+              <p>请在模型 capability 声明支持后使用该功能。</p>
+            </div>
+          )}
+        </div>
 
         <div className='image-workshop-size-current'>
           <Info aria-hidden='true' />
