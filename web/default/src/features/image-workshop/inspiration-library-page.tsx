@@ -21,6 +21,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, ExternalLink, Search } from 'lucide-react'
 import { ImagePreviewDialog } from './components/image-preview-dialog'
+import { InspirationImage } from './components/inspiration-image'
 import { WorkshopScrollToTop } from './components/workshop-scroll-to-top'
 import { WorkshopSelect } from './components/workshop-select'
 import './image-workshop.css'
@@ -213,10 +214,19 @@ function CaseCard({
     <article className='image-workshop-library-card'>
       <div className='image-workshop-library-card-media'>
         {item.thumbnailUrl ? (
-          <img src={item.thumbnailUrl} alt={item.title} loading='lazy' />
+          <InspirationImage
+            src={item.thumbnailUrl}
+            fallbackSrc={item.thumbnailFallbackUrl}
+            alt={item.title}
+            loading='lazy'
+          />
         ) : null}
         <span>{item.category}</span>
-        <ImagePreviewDialog src={item.thumbnailUrl} alt={item.title} />
+        <ImagePreviewDialog
+          src={item.thumbnailUrl}
+          fallbackSrc={item.thumbnailFallbackUrl}
+          alt={item.title}
+        />
       </div>
       <div className='image-workshop-library-card-body'>
         <h2>{item.title}</h2>

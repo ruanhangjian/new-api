@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import type { InspirationCase } from '../types'
 import { ImagePreviewDialog } from './image-preview-dialog'
+import { InspirationImage } from './inspiration-image'
 
 type InspirationStripProps = {
   items: InspirationCase[]
@@ -97,8 +98,9 @@ export function InspirationStrip({
                   onClick={() => onUse(item)}
                 >
                   {item.thumbnailUrl ? (
-                    <img
+                    <InspirationImage
                       src={item.thumbnailUrl}
+                      fallbackSrc={item.thumbnailFallbackUrl}
                       alt={item.title}
                       loading='eager'
                     />
@@ -107,7 +109,11 @@ export function InspirationStrip({
                   )}
                   <span>{item.title}</span>
                 </button>
-                <ImagePreviewDialog src={item.thumbnailUrl} alt={item.title} />
+                <ImagePreviewDialog
+                  src={item.thumbnailUrl}
+                  fallbackSrc={item.thumbnailFallbackUrl}
+                  alt={item.title}
+                />
               </article>
             ))}
       </div>

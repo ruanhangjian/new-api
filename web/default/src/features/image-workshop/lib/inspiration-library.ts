@@ -114,6 +114,20 @@ function resolveAsset(source?: string) {
   return `${LIBRARY_BASE_PATH}${source.replace(/^\/+/, '')}`
 }
 
+function resolveRemoteImage(source?: string) {
+  if (!source) return {}
+  const rawGitHubMatch = source.match(
+    /^https:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/]+)\/(.+)$/i
+  )
+  if (!rawGitHubMatch) return { thumbnailUrl: resolveAsset(source) }
+
+  const [, owner, repository, revision, path] = rawGitHubMatch
+  return {
+    thumbnailUrl: `https://cdn.jsdelivr.net/gh/${owner}/${repository}@${revision}/${path}`,
+    thumbnailFallbackUrl: source,
+  }
+}
+
 function categoryLabel(value?: string) {
   if (!value) return '其他场景'
   return CATEGORY_LABELS[value] || value
@@ -124,13 +138,16 @@ function normalizeCase(record: CaseRecord): InspirationCase | null {
   const title = record.title?.trim() || ''
   const prompt = record.prompt?.trim() || ''
   if (!id || !title || !prompt) return null
+  const imageSource = resolveRemoteImage(
+    record.remoteImageUrl || record.thumbnailSrc
+  )
   return {
     id,
     title,
     category: categoryLabel(record.category),
     tags: [...(record.styles || []), ...(record.scenes || [])].slice(0, 4),
     prompt,
-    thumbnailUrl: record.remoteImageUrl || resolveAsset(record.thumbnailSrc),
+    ...imageSource,
     sourceLabel: record.sourceLabel,
     sourceUrl: record.sourceUrl,
     featured: Boolean(record.featured),
@@ -144,13 +161,14 @@ function normalizeTrending(record: TrendingRecord): InspirationCase | null {
   if (!id || !prompt) return null
   const summary = prompt.replace(/\s+/g, ' ').slice(0, 36)
   const author = record.author_name || record.author
+  const imageSource = resolveRemoteImage(record.image || record.images?.[0])
   return {
     id: `trending-${id}`,
     title: `${summary}${prompt.length > 36 ? '...' : ''}`,
     category: categoryLabel(record.categories?.[0]),
     tags: (record.categories || []).map(categoryLabel).slice(0, 3),
     prompt,
-    thumbnailUrl: record.image || record.images?.[0],
+    ...imageSource,
     sourceLabel: author ? `@${author}` : 'MeiGen.ai',
     sourceUrl: record.source_url,
     featured: typeof record.rank === 'number' && record.rank <= 24,

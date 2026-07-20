@@ -19,9 +19,11 @@ For commercial licensing, please contact support@quantumnous.com
 import { useState } from 'react'
 import { Eye, Maximize2, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { InspirationImage } from './inspiration-image'
 
 type ImagePreviewDialogProps = {
   src?: string
+  fallbackSrc?: string
   alt: string
   className?: string
 }
@@ -32,6 +34,7 @@ const SCALE_STEP = 0.25
 
 export function ImagePreviewDialog({
   src,
+  fallbackSrc,
   alt,
   className,
 }: ImagePreviewDialogProps) {
@@ -82,8 +85,9 @@ export function ImagePreviewDialog({
                 if (event.target === event.currentTarget) changeOpen(false)
               }}
             >
-              <img
+              <InspirationImage
                 src={src}
+                fallbackSrc={fallbackSrc}
                 alt={alt}
                 style={{
                   maxWidth: `${100 / Math.max(1, scale)}%`,

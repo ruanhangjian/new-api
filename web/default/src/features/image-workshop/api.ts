@@ -35,14 +35,19 @@ function unwrap<T>(response: ApiResponse<T>): T {
 }
 
 export async function getImageWorkshopTokens() {
-  const response = await api.get('/api/image-workshop/tokens')
+  const response = await api.get('/api/image-workshop/tokens', {
+    skipBusinessError: true,
+    skipErrorHandler: true,
+  } as Record<string, unknown>)
   return unwrap(response.data as ApiResponse<ImageWorkshopToken[]>)
 }
 
 export async function getImageWorkshopOptions(tokenId: number) {
   const response = await api.get('/api/image-workshop/options', {
     params: { token_id: tokenId },
-  })
+    skipBusinessError: true,
+    skipErrorHandler: true,
+  } as Record<string, unknown>)
   return unwrap(response.data as ApiResponse<ImageWorkshopOptions>)
 }
 
@@ -96,6 +101,8 @@ export async function getImageWorkshopTasks(pageSize = 50) {
   const response = await api.get('/api/image-workshop/tasks', {
     params: { page: 1, page_size: pageSize },
     disableDuplicate: true,
+    skipBusinessError: true,
+    skipErrorHandler: true,
   } as Record<string, unknown>)
   return unwrap(response.data as ApiResponse<ImageWorkshopTaskPage>)
 }
@@ -103,7 +110,11 @@ export async function getImageWorkshopTasks(pageSize = 50) {
 export async function getImageWorkshopTask(taskId: string) {
   const response = await api.get(
     `/api/image-workshop/tasks/${encodeURIComponent(taskId)}`,
-    { disableDuplicate: true } as Record<string, unknown>
+    {
+      disableDuplicate: true,
+      skipBusinessError: true,
+      skipErrorHandler: true,
+    } as Record<string, unknown>
   )
   return unwrap(response.data as ApiResponse<ImageWorkshopTask>)
 }

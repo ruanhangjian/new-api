@@ -128,6 +128,7 @@ export type InspirationCase = {
   tags: string[]
   prompt: string
   thumbnailUrl?: string
+  thumbnailFallbackUrl?: string
   sourceLabel?: string
   sourceUrl?: string
   featured: boolean

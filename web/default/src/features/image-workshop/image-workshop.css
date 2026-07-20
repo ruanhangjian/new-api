@@ -326,6 +326,28 @@ For commercial licensing, please contact support@quantumnous.com
   white-space: nowrap;
 }
 
+.image-workshop-token-notice button {
+  min-height: 30px;
+  margin-left: auto;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--foreground);
+  background: var(--background);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.image-workshop-token-notice button:hover {
+  border-color: var(--ring);
+  background: var(--accent);
+}
+
+.image-workshop-token-notice.is-error {
+  border-color: color-mix(in oklch, var(--destructive) 28%, var(--border));
+}
+
 .image-workshop-inspiration {
   margin-top: 54px;
 }

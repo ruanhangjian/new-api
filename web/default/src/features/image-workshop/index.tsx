@@ -88,7 +88,8 @@ function preloadTemplateImages(
 
 export function ImageWorkshop() {
   const queryClient = useQueryClient()
-  const userId = useAuthStore((state) => state.auth.user?.id || 0)
+  const authUser = useAuthStore((state) => state.auth.user)
+  const userId = authUser?.id || 0
   const [tokenCheckTime] = useState(() => Math.floor(Date.now() / 1000))
   const [form, setForm] = useState(INITIAL_FORM)
   const [workLimit, setWorkLimit] = useState(20)
@@ -318,13 +319,57 @@ export function ImageWorkshop() {
           onSubmit={submit}
         />
 
-        {!tokensQuery.isLoading && !usableTokens.length && (
-          <div className='image-workshop-token-notice'>
+        {tokensQuery.isError && (
+          <div className='image-workshop-token-notice is-error'>
             <KeyRound aria-hidden='true' />
-            <span>创建图片前，需要先准备一个可用的 API 令牌。</span>
-            <Link to='/keys'>前往令牌管理</Link>
+            <span>图工坊服务接口暂不可用，请确认后端已更新并重新加载。</span>
+            <button
+              type='button'
+              onClick={() => {
+                tokensQuery.refetch()
+                tasksQuery.refetch()
+              }}
+            >
+              重新加载
+            </button>
           </div>
         )}
+
+        {!tokensQuery.isLoading &&
+          !tokensQuery.isError &&
+          !usableTokens.length && (
+            <div className='image-workshop-token-notice'>
+              <KeyRound aria-hidden='true' />
+              <span>创建图片前，需要先准备一个可用的 API 令牌。</span>
+              <Link to='/keys'>前往令牌管理</Link>
+            </div>
+          )}
+
+        {optionsQuery.isError && form.tokenId > 0 && (
+          <div className='image-workshop-token-notice is-error'>
+            <KeyRound aria-hidden='true' />
+            <span>无法读取当前 Key 的生图模型能力。</span>
+            <button type='button' onClick={() => optionsQuery.refetch()}>
+              重试
+            </button>
+          </div>
+        )}
+
+        {!optionsQuery.isLoading &&
+          !optionsQuery.isError &&
+          form.tokenId > 0 &&
+          !capabilities.length && (
+            <div className='image-workshop-token-notice'>
+              <KeyRound aria-hidden='true' />
+              <span>
+                当前 Key
+                所在分组没有已启用的生图模型，请检查渠道模型与分组配置。
+              </span>
+              {authUser?.role === 100 && (
+                <Link to='/channels'>前往渠道管理</Link>
+              )}
+            </div>
+          )}
 
         <InspirationStrip
           items={homepageTemplates}
