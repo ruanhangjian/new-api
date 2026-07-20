@@ -717,6 +717,50 @@ For commercial licensing, please contact support@quantumnous.com
   height: 15px;
 }
 
+.image-workshop-work-media > .image-workshop-work-select {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 1px solid color-mix(in oklch, var(--foreground) 22%, transparent);
+  border-radius: 50%;
+  color: transparent;
+  background: color-mix(in oklch, var(--background) 90%, transparent);
+  box-shadow: 0 1px 5px color-mix(in oklch, var(--foreground) 12%, transparent);
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.image-workshop-work-media > .image-workshop-work-select:hover {
+  border-color: color-mix(in oklch, var(--foreground) 48%, transparent);
+  background: color-mix(in oklch, var(--background) 96%, transparent);
+  transform: scale(1.04);
+}
+
+.image-workshop-work-media > .image-workshop-work-select:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 24%, transparent);
+}
+
+.image-workshop-work-media > .image-workshop-work-select[data-selected='true'] {
+  color: var(--primary-foreground);
+  border-color: var(--primary);
+  background: var(--primary);
+  box-shadow:
+    0 0 0 2px color-mix(in oklch, var(--background) 84%, transparent),
+    0 2px 7px color-mix(in oklch, var(--foreground) 18%, transparent);
+}
+
+.image-workshop-work-media > .image-workshop-work-select > svg {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  stroke-width: 2.6;
+}
+
 .image-workshop-work-media:hover .image-workshop-work-actions,
 .image-workshop-work-actions:focus-within {
   opacity: 1;
