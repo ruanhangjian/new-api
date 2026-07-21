@@ -30,6 +30,7 @@ import {
   X,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
 import {
@@ -137,6 +138,23 @@ function formatTime(timestamp?: number) {
     month: 'numeric',
     day: 'numeric',
   }).format(new Date(timestamp * 1000))
+}
+
+async function downloadWorkImage(url: string, filename: string) {
+  const target = new URL(url, window.location.href)
+  const response = await fetch(target, {
+    credentials: target.origin === window.location.origin ? 'include' : 'omit',
+  })
+  if (!response.ok) throw new Error('图片下载失败')
+
+  const objectUrl = URL.createObjectURL(await response.blob())
+  const anchor = document.createElement('a')
+  anchor.href = objectUrl
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
 }
 
 function useWorksMasonry() {
@@ -295,6 +313,12 @@ function CompletedWorkCard({
 }) {
   const extension = (format || 'png').toLowerCase()
   const imageAlt = prompt || model || '生成图片'
+  const filename = `image-workshop-${timestamp || 'result'}.${extension}`
+  const download = () => {
+    void downloadWorkImage(image.url, filename).catch(() => {
+      toast.error('图片下载失败，请稍后重试')
+    })
+  }
   const imageElement = <img src={image.url} alt={imageAlt} loading='lazy' />
   return (
     <article
@@ -325,14 +349,14 @@ function CompletedWorkCard({
         )}
         {!controls.selectionMode && (
           <div className='image-workshop-work-actions'>
-            <a
-              href={image.url}
-              download={`image-workshop-${timestamp || 'result'}.${extension}`}
+            <button
+              type='button'
               title='下载图片'
               aria-label='下载图片'
+              onClick={download}
             >
               <Download aria-hidden='true' />
-            </a>
+            </button>
             <button
               type='button'
               title='删除作品'
@@ -344,16 +368,16 @@ function CompletedWorkCard({
           </div>
         )}
         {!local && localSaveFailed && !controls.selectionMode && (
-          <a
+          <button
+            type='button'
             className='image-workshop-local-save-warning'
-            href={image.url}
-            download={`image-workshop-${timestamp || 'result'}.${extension}`}
             title='图片尚未保存到当前浏览器，请及时下载'
+            onClick={download}
           >
             <TriangleAlert aria-hidden='true' />
             <span>未保存到本机，请及时下载</span>
             <Download aria-hidden='true' />
-          </a>
+          </button>
         )}
       </div>
       <div className='image-workshop-work-caption'>
