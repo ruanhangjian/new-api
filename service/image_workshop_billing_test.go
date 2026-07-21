@@ -3,8 +3,11 @@ package service
 import (
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestResolveImageWorkshopResolutionBilling(t *testing.T) {
@@ -30,15 +33,41 @@ func TestResolveImageWorkshopResolutionBilling(t *testing.T) {
 	}
 }
 
+func TestApplyImageWorkshopResolutionBillingUsesConfiguredTierPrice(t *testing.T) {
+	const modelName = "resolution-priced-test-model"
+	require.NoError(t, ratio_setting.UpdateImageResolutionPriceByJSONString(`{
+		"resolution-priced-test-model": {"1K": 0.06, "2K": 0.08, "4K": 0.10}
+	}`))
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateImageResolutionPriceByJSONString(`{}`))
+	})
+
+	priceData := &types.PriceData{
+		UsePrice:          true,
+		ModelPrice:        0.06,
+		QuotaToPreConsume: 1,
+		GroupRatioInfo:    types.GroupRatioInfo{GroupRatio: 2},
+	}
+	ApplyImageWorkshopResolutionBilling(
+		priceData,
+		ResolveImageWorkshopResolutionBilling("2K"),
+		modelName,
+	)
+
+	assert.Equal(t, 0.08, priceData.ModelPrice)
+	assert.Equal(t, common.QuotaFromFloat(0.08*common.QuotaPerUnit*2), priceData.QuotaToPreConsume)
+	assert.Empty(t, priceData.OtherRatios())
+}
+
 func TestApplyImageWorkshopResolutionBillingOnlyChangesFixedPrice(t *testing.T) {
 	billing := ResolveImageWorkshopResolutionBilling("2304x3456")
 	fixed := &types.PriceData{UsePrice: true, QuotaToPreConsume: 100}
-	ApplyImageWorkshopResolutionBilling(fixed, billing)
+	ApplyImageWorkshopResolutionBilling(fixed, billing, "unconfigured-test-model")
 	assert.Equal(t, 200, fixed.QuotaToPreConsume)
 	assert.Equal(t, 2.0, fixed.OtherRatios()[ImageWorkshopResolutionRatioKey])
 
 	ratio := &types.PriceData{UsePrice: false, QuotaToPreConsume: 100}
-	ApplyImageWorkshopResolutionBilling(ratio, billing)
+	ApplyImageWorkshopResolutionBilling(ratio, billing, "unconfigured-test-model")
 	assert.Equal(t, 100, ratio.QuotaToPreConsume)
 	assert.Empty(t, ratio.OtherRatios())
 }

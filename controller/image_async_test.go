@@ -82,6 +82,7 @@ func TestImageAsyncTaskMetadataCapturesWorkshopBillingTier(t *testing.T) {
 	assert.Equal(t, "2304x3456", metadata["request_size"])
 	assert.Equal(t, "4K", metadata["billing_tier"])
 	assert.Equal(t, 2.0, metadata["billing_multiplier"])
+	assert.Equal(t, "fixed_price_multiplier", metadata["billing_strategy"])
 }
 
 func TestSubmitAsyncImageGenerationQueuesTask(t *testing.T) {

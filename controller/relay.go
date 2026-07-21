@@ -158,7 +158,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	if c.GetBool(string(constant.ContextKeyImageWorkshopRequest)) {
 		if imageRequest, ok := request.(*dto.ImageRequest); ok {
 			billing := service.ResolveImageWorkshopResolutionBilling(imageRequest.Size)
-			service.ApplyImageWorkshopResolutionBilling(&priceData, billing)
+			service.ApplyImageWorkshopResolutionBilling(&priceData, billing, relayInfo.OriginModelName)
 			relayInfo.PriceData = priceData
 		}
 	}

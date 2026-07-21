@@ -5082,6 +5082,13 @@
     "Zero retention": "Zero retention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Image resolution pricing": "Image resolution pricing",
+    "JSON map of model to 1K, 2K and 4K image workshop prices.": "JSON map of model to 1K, 2K and 4K image workshop prices.",
+    "Price by image resolution": "Price by image resolution",
+    "Charge image workshop requests by the selected 1K, 2K or 4K tier.": "Charge image workshop requests by the selected 1K, 2K or 4K tier.",
+    "image price": "image price",
+    "Enter valid prices for 1K, 2K and 4K.": "Enter valid prices for 1K, 2K and 4K.",
+    "Fixed price is required.": "Fixed price is required."
   }
 }

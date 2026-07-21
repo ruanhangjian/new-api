@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { Code2, Eye, RotateCcw, Save } from 'lucide-react'
 import { memo, useCallback, useRef, useState } from 'react'
-import { type UseFormReturn } from 'react-hook-form'
+import type { UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
 import { JsonCodeEditor } from '@/components/json-code-editor'
@@ -34,9 +34,7 @@ import {
 } from '@/components/ui/form'
 import { Switch } from '@/components/ui/switch'
 
-import {
-  SettingsForm,
-} from '../components/settings-form-layout'
+import { SettingsForm } from '../components/settings-form-layout'
 import {
   ModelRatioVisualEditor,
   type ModelRatioVisualEditorHandle,
@@ -44,6 +42,7 @@ import {
 
 type ModelFormValues = {
   ModelPrice: string
+  ImageResolutionPrice: string
   ModelRatio: string
   CacheRatio: string
   CreateCacheRatio: string
@@ -67,6 +66,7 @@ type ModelRatioFormProps = {
 
 type ModelJsonFieldName =
   | 'ModelPrice'
+  | 'ImageResolutionPrice'
   | 'ModelRatio'
   | 'CacheRatio'
   | 'CreateCacheRatio'
@@ -85,6 +85,11 @@ const modelJsonFields: Array<{
     labelKey: 'Model fixed pricing',
     descriptionKey:
       'JSON map of model → USD cost per request. Takes precedence over ratio based billing.',
+  },
+  {
+    name: 'ImageResolutionPrice',
+    labelKey: 'Image resolution pricing',
+    descriptionKey: 'JSON map of model to 1K, 2K and 4K image workshop prices.',
   },
   {
     name: 'ModelRatio',
@@ -235,6 +240,7 @@ export const ModelRatioForm = memo(function ModelRatioForm({
             <ModelRatioVisualEditor
               ref={visualEditorRef}
               savedModelPrice={savedValues.ModelPrice}
+              savedImageResolutionPrice={savedValues.ImageResolutionPrice}
               savedModelRatio={savedValues.ModelRatio}
               savedCacheRatio={savedValues.CacheRatio}
               savedCreateCacheRatio={savedValues.CreateCacheRatio}
@@ -245,6 +251,7 @@ export const ModelRatioForm = memo(function ModelRatioForm({
               savedBillingMode={savedValues.BillingMode}
               savedBillingExpr={savedValues.BillingExpr}
               modelPrice={form.watch('ModelPrice')}
+              imageResolutionPrice={form.watch('ImageResolutionPrice')}
               modelRatio={form.watch('ModelRatio')}
               cacheRatio={form.watch('CacheRatio')}
               createCacheRatio={form.watch('CreateCacheRatio')}

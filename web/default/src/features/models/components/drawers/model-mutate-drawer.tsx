@@ -25,6 +25,8 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import * as z from 'zod'
 
+import { JsonEditor } from '@/components/json-editor'
+import { TagInput } from '@/components/tag-input'
 import { Button } from '@/components/ui/button'
 import {
   Collapsible,
@@ -63,8 +65,6 @@ import {
 } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { JsonEditor } from '@/components/json-editor'
-import { TagInput } from '@/components/tag-input'
 import {
   useSystemOptions,
   getOptionValue,
@@ -175,6 +175,7 @@ export function ModelMutateDrawer({
       'claude.thinking_adapter_enabled': true,
       'claude.thinking_adapter_budget_tokens_percentage': 0.8,
       ModelPrice: '',
+      ImageResolutionPrice: '{}',
       ModelRatio: '',
       CacheRatio: '',
       CompletionRatio: '',

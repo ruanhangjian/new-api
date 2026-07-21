@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 )
 
@@ -70,11 +71,22 @@ func ResolveImageWorkshopResolutionBilling(size string) ImageWorkshopResolutionB
 	}
 }
 
-// ApplyImageWorkshopResolutionBilling adds the tier multiplier only to fixed
-// price billing. Token-based image billing already receives upstream usage;
-// applying another multiplier there would count resolution twice.
-func ApplyImageWorkshopResolutionBilling(priceData *types.PriceData, billing ImageWorkshopResolutionBilling) {
-	if priceData == nil || !priceData.UsePrice || billing.Multiplier == 1 {
+// ApplyImageWorkshopResolutionBilling uses a configured tier price when one
+// exists, otherwise it applies the fallback multiplier to fixed-price billing.
+// Token-based image billing already receives upstream usage, so multiplying it
+// again would count resolution twice.
+func ApplyImageWorkshopResolutionBilling(priceData *types.PriceData, billing ImageWorkshopResolutionBilling, modelName string) {
+	if priceData == nil {
+		return
+	}
+	if price, ok := ratio_setting.GetImageResolutionPrice(modelName, billing.Tier); ok {
+		priceData.UsePrice = true
+		priceData.ModelPrice = price
+		priceData.QuotaToPreConsume = common.QuotaFromFloat(price * common.QuotaPerUnit * priceData.GroupRatioInfo.GroupRatio)
+		priceData.FreeModel = price == 0 || priceData.GroupRatioInfo.GroupRatio == 0
+		return
+	}
+	if !priceData.UsePrice || billing.Multiplier == 1 {
 		return
 	}
 	priceData.AddOtherRatio(ImageWorkshopResolutionRatioKey, billing.Multiplier)

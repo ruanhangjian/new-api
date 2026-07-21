@@ -135,6 +135,7 @@ func TestImageWorkshopGenerationQueuesGptImage2ThroughCompatibleChannel(t *testi
 	assert.Equal(t, "1040x1520", data.Metadata["request_size"])
 	assert.Equal(t, "2K", data.Metadata["billing_tier"])
 	assert.Equal(t, 1.5, data.Metadata["billing_multiplier"])
+	assert.Equal(t, "fixed_price_multiplier", data.Metadata["billing_strategy"])
 }
 
 func TestImageWorkshopOptionsRejectsDisabledToken(t *testing.T) {

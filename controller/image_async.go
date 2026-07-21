@@ -22,6 +22,7 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 )
@@ -432,8 +433,15 @@ func imageAsyncTaskMetadata(c *gin.Context, request *dto.ImageRequest) map[strin
 			billing := service.ResolveImageWorkshopResolutionBilling(request.Size)
 			metadata["request_size"] = request.Size
 			metadata["billing_tier"] = billing.Tier
-			metadata["billing_multiplier"] = billing.Multiplier
 			metadata["billing_source"] = billing.Source
+			if price, ok := ratio_setting.GetImageResolutionPrice(request.Model, billing.Tier); ok {
+				metadata["billing_strategy"] = "resolution_price"
+				metadata["billing_unit_price"] = price
+				metadata["billing_multiplier"] = 1.0
+			} else {
+				metadata["billing_strategy"] = "fixed_price_multiplier"
+				metadata["billing_multiplier"] = billing.Multiplier
+			}
 		}
 		return metadata
 	}

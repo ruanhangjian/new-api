@@ -5353,6 +5353,13 @@
     "{{count}} account(s) failed to refresh": "{{count}} 个账户刷新失败",
     "{{count}} model(s)": "{{count}} 个模型",
     "{{count}} monitored account(s) are below threshold": "{{count}} 个监控账户低于阈值",
-    "{{days}} days": "{{days}} 天"
+    "{{days}} days": "{{days}} 天",
+    "Image resolution pricing": "图片分辨率定价",
+    "JSON map of model to 1K, 2K and 4K image workshop prices.": "模型到图工坊 1K、2K、4K 单价的 JSON 映射。",
+    "Price by image resolution": "按分辨率计费",
+    "Charge image workshop requests by the selected 1K, 2K or 4K tier.": "图工坊根据用户选择的 1K、2K 或 4K 档位按次计费。",
+    "image price": "图片单价",
+    "Enter valid prices for 1K, 2K and 4K.": "请输入有效的 1K、2K 和 4K 价格。",
+    "Fixed price is required.": "请输入固定单次价格。"
   }
 }

@@ -19,10 +19,12 @@ For commercial licensing, please contact support@quantumnous.com
 import { splitBillingExprAndRequestRules } from '@/features/pricing/lib/billing-expr'
 
 import { safeJsonParse } from '../utils/json-parser'
+import type { ImageResolutionPriceDraft } from './model-pricing-core'
 import { formatPricingNumber } from './pricing-format'
 
 export type ModelPricingSnapshotInput = {
   modelPrice: string
+  imageResolutionPrice: string
   modelRatio: string
   cacheRatio: string
   createCacheRatio: string
@@ -37,6 +39,7 @@ export type ModelPricingSnapshotInput = {
 export type ModelPricingSnapshot = {
   name: string
   price?: string
+  resolutionPrices?: ImageResolutionPriceDraft
   ratio?: string
   cacheRatio?: string
   createCacheRatio?: string
@@ -107,6 +110,14 @@ export const getPriceSummary = (
     return getExpressionSummary(row, t)
   }
   if (row.billingMode === 'per-request') {
+    if (row.resolutionPrices) {
+      return ['1K', '2K', '4K']
+        .map(
+          (tier) =>
+            `${tier} $${row.resolutionPrices?.[tier as keyof ImageResolutionPriceDraft]}`
+        )
+        .join(' · ')
+    }
     return row.price ? `$${row.price} / ${t('request')}` : t('Unset price')
   }
 
@@ -137,7 +148,9 @@ export const getPriceDetail = (
       : t('Expression based')
   }
   if (row.billingMode === 'per-request') {
-    return t('Fixed request price')
+    return row.resolutionPrices
+      ? t('Image resolution pricing')
+      : t('Fixed request price')
   }
 
   const inputPrice = ratioToPrice(row.ratio)
@@ -159,6 +172,7 @@ export const getPriceDetail = (
 
 export const buildModelSnapshots = ({
   modelPrice,
+  imageResolutionPrice,
   modelRatio,
   cacheRatio,
   createCacheRatio,
@@ -172,6 +186,12 @@ export const buildModelSnapshots = ({
   const priceMap = safeJsonParse<Record<string, number>>(modelPrice, {
     fallback: {},
     context: 'model prices',
+  })
+  const resolutionPriceMap = safeJsonParse<
+    Record<string, Record<string, number>>
+  >(imageResolutionPrice, {
+    fallback: {},
+    context: 'image resolution prices',
   })
   const ratioMap = safeJsonParse<Record<string, number>>(modelRatio, {
     fallback: {},
@@ -212,6 +232,7 @@ export const buildModelSnapshots = ({
 
   const modelNames = new Set([
     ...Object.keys(priceMap),
+    ...Object.keys(resolutionPriceMap),
     ...Object.keys(ratioMap),
     ...Object.keys(cacheMap),
     ...Object.keys(createCacheMap),
@@ -223,8 +244,16 @@ export const buildModelSnapshots = ({
     ...Object.keys(billingExprMap),
   ])
 
-  return Array.from(modelNames).map((name) => {
-    const price = priceMap[name]?.toString() || ''
+  return [...modelNames].map((name) => {
+    const price = priceMap[name] === undefined ? '' : priceMap[name].toString()
+    const configuredResolutionPrices = resolutionPriceMap[name]
+    const resolutionPrices = configuredResolutionPrices
+      ? {
+          '1K': configuredResolutionPrices['1K']?.toString() ?? '',
+          '2K': configuredResolutionPrices['2K']?.toString() ?? '',
+          '4K': configuredResolutionPrices['4K']?.toString() ?? '',
+        }
+      : undefined
     const ratio = ratioMap[name]?.toString() || ''
     const cache = cacheMap[name]?.toString() || ''
     const createCache = createCacheMap[name]?.toString() || ''
@@ -244,6 +273,7 @@ export const buildModelSnapshots = ({
         billingExpr: pureExpr,
         requestRuleExpr,
         price,
+        resolutionPrices,
         ratio,
         cacheRatio: cache,
         createCacheRatio: createCache,
@@ -258,6 +288,7 @@ export const buildModelSnapshots = ({
     return {
       name,
       price,
+      resolutionPrices,
       ratio,
       cacheRatio: cache,
       createCacheRatio: createCache,
@@ -265,7 +296,8 @@ export const buildModelSnapshots = ({
       imageRatio: image,
       audioRatio: audio,
       audioCompletionRatio: audioCompletion,
-      billingMode: price !== '' ? 'per-request' : 'per-token',
+      billingMode:
+        price !== '' || resolutionPrices ? 'per-request' : 'per-token',
       hasConflict:
         price !== '' &&
         (ratio !== '' ||
@@ -283,6 +315,7 @@ export const getSnapshotSignature = (snapshot?: ModelPricingSnapshot) => {
   if (!snapshot) return ''
   return JSON.stringify({
     price: snapshot.price || '',
+    resolutionPrices: snapshot.resolutionPrices || null,
     ratio: snapshot.ratio || '',
     cacheRatio: snapshot.cacheRatio || '',
     createCacheRatio: snapshot.createCacheRatio || '',

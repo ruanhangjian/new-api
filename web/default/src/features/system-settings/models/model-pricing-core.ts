@@ -41,6 +41,16 @@ export type ModelPricingFormValues = z.infer<
 
 export type PricingMode = 'per-token' | 'per-request' | 'tiered_expr'
 
+export type ImageResolutionTier = '1K' | '2K' | '4K'
+export type ImageResolutionPriceDraft = Record<ImageResolutionTier, string>
+
+export const IMAGE_RESOLUTION_TIERS: ImageResolutionTier[] = ['1K', '2K', '4K']
+export const EMPTY_IMAGE_RESOLUTION_PRICES: ImageResolutionPriceDraft = {
+  '1K': '',
+  '2K': '',
+  '4K': '',
+}
+
 export type LaneKey =
   | 'completion'
   | 'cache'
@@ -62,6 +72,7 @@ export type ModelRatioData = {
   billingMode?: PricingMode
   billingExpr?: string
   requestRuleExpr?: string
+  resolutionPrices?: ImageResolutionPriceDraft
 }
 
 export type PreviewRow = {
@@ -215,6 +226,8 @@ export function buildPreviewRows(
   promptPrice: string,
   lanePrices: Record<LaneKey, string>,
   laneEnabled: Record<LaneKey, boolean>,
+  resolutionPricingEnabled: boolean,
+  resolutionPrices: ImageResolutionPriceDraft,
   t: (key: string) => string
 ): PreviewRow[] {
   if (mode === 'tiered_expr') {
@@ -231,6 +244,15 @@ export function buildPreviewRows(
   }
 
   if (mode === 'per-request') {
+    if (resolutionPricingEnabled) {
+      return IMAGE_RESOLUTION_TIERS.map((tier) => ({
+        key: `resolution-${tier}`,
+        label: `${tier} ${t('image price')}`,
+        value: resolutionPrices[tier]
+          ? `$${resolutionPrices[tier]} / ${t('image')}`
+          : t('Empty'),
+      }))
+    }
     return [
       {
         key: 'price',

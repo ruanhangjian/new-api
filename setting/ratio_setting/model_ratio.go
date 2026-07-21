@@ -1,6 +1,8 @@
 package ratio_setting
 
 import (
+	"fmt"
+	"math"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -322,6 +324,7 @@ var defaultAudioCompletionRatio = map[string]float64{
 }
 
 var modelPriceMap = types.NewRWMap[string, float64]()
+var imageResolutionPriceMap = types.NewRWMap[string, map[string]float64]()
 var modelRatioMap = types.NewRWMap[string, float64]()
 var completionRatioMap = types.NewRWMap[string, float64]()
 
@@ -354,6 +357,54 @@ func ModelPrice2JSONString() string {
 
 func UpdateModelPriceByJSONString(jsonStr string) error {
 	return types.LoadFromJsonStringWithCallback(modelPriceMap, jsonStr, InvalidateExposedDataCache)
+}
+
+func ImageResolutionPrice2JSONString() string {
+	return imageResolutionPriceMap.MarshalJSONString()
+}
+
+func UpdateImageResolutionPriceByJSONString(jsonStr string) error {
+	parsed := make(map[string]map[string]float64)
+	if err := common.Unmarshal([]byte(jsonStr), &parsed); err != nil {
+		return err
+	}
+
+	for modelName, prices := range parsed {
+		if strings.TrimSpace(modelName) == "" {
+			return fmt.Errorf("image resolution price contains an empty model name")
+		}
+		canonical := make(map[string]float64, 3)
+		for _, tier := range []string{"1K", "2K", "4K"} {
+			price, ok := prices[tier]
+			if !ok || price < 0 || math.IsNaN(price) || math.IsInf(price, 0) {
+				return fmt.Errorf("image resolution price for model %s requires a valid non-negative %s price", modelName, tier)
+			}
+			canonical[tier] = price
+		}
+		if len(prices) != len(canonical) {
+			return fmt.Errorf("image resolution price for model %s only supports 1K, 2K and 4K", modelName)
+		}
+		parsed[modelName] = canonical
+	}
+
+	normalizedJSON, err := common.Marshal(parsed)
+	if err != nil {
+		return err
+	}
+	return types.LoadFromJsonStringWithCallback(imageResolutionPriceMap, string(normalizedJSON), InvalidateExposedDataCache)
+}
+
+func GetImageResolutionPrice(name string, tier string) (float64, bool) {
+	name = FormatMatchingModelName(name)
+	prices, ok := imageResolutionPriceMap.Get(name)
+	if !ok && strings.HasSuffix(name, CompactModelSuffix) {
+		prices, ok = imageResolutionPriceMap.Get(CompactWildcardModelKey)
+	}
+	if !ok {
+		return 0, false
+	}
+	price, ok := prices[strings.ToUpper(strings.TrimSpace(tier))]
+	return price, ok
 }
 
 // GetModelPrice 返回模型的价格，如果模型不存在则返回-1，false
@@ -697,6 +748,10 @@ func GetModelRatioCopy() map[string]float64 {
 
 func GetModelPriceCopy() map[string]float64 {
 	return modelPriceMap.ReadAll()
+}
+
+func GetImageResolutionPriceCopy() map[string]map[string]float64 {
+	return imageResolutionPriceMap.ReadAll()
 }
 
 func GetCompletionRatioCopy() map[string]float64 {

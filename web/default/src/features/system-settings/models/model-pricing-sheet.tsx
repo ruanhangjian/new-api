@@ -60,12 +60,15 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 
 import {
   EMPTY_LANE_ENABLED,
   EMPTY_LANE_PRICES,
+  EMPTY_IMAGE_RESOLUTION_PRICES,
+  IMAGE_RESOLUTION_TIERS,
   buildPreviewRows,
   createInitialLaneState,
   createModelPricingSchema,
@@ -75,6 +78,7 @@ import {
   ratioFieldByLane,
   toNumberOrNull,
   type LaneKey,
+  type ImageResolutionPriceDraft,
   type ModelPricingFormValues,
   type ModelRatioData,
   type PricingMode,
@@ -84,6 +88,12 @@ import { formatPricingNumber } from './pricing-format'
 import { TieredPricingEditor } from './tiered-pricing-editor'
 
 export type { ModelRatioData } from './model-pricing-core'
+
+const IMAGE_RESOLUTION_PRICE_PLACEHOLDERS = {
+  '1K': '0.06',
+  '2K': '0.08',
+  '4K': '0.10',
+}
 
 type ModelPricingSheetProps = {
   open: boolean
@@ -155,6 +165,10 @@ export const ModelPricingEditorPanel = forwardRef<
   })
   const [billingExpr, setBillingExpr] = useState('')
   const [requestRuleExpr, setRequestRuleExpr] = useState('')
+  const [resolutionPricingEnabled, setResolutionPricingEnabled] =
+    useState(false)
+  const [resolutionPrices, setResolutionPrices] =
+    useState<ImageResolutionPriceDraft>({ ...EMPTY_IMAGE_RESOLUTION_PRICES })
   const [editorReloadToken, setEditorReloadToken] = useState(0)
   const isEditMode = !!editData
 
@@ -188,13 +202,17 @@ export const ModelPricingEditorPanel = forwardRef<
         audioRatio: editData.audioRatio || '',
         audioCompletionRatio: editData.audioCompletionRatio || '',
       })
-      setPricingMode(
-        editData.billingMode === 'tiered_expr'
-          ? 'tiered_expr'
-          : editData.price
-            ? 'per-request'
-            : 'per-token'
-      )
+      let nextPricingMode: PricingMode = 'per-token'
+      if (editData.billingMode === 'tiered_expr') {
+        nextPricingMode = 'tiered_expr'
+      } else if (
+        editData.billingMode === 'per-request' ||
+        editData.price ||
+        editData.resolutionPrices
+      ) {
+        nextPricingMode = 'per-request'
+      }
+      setPricingMode(nextPricingMode)
       setBillingExpr(editData.billingExpr || '')
       setRequestRuleExpr(editData.requestRuleExpr || '')
     } else {
@@ -217,6 +235,12 @@ export const ModelPricingEditorPanel = forwardRef<
     setPromptPrice(nextLaneState.promptPrice)
     setLanePrices(nextLaneState.prices)
     setLaneEnabled(nextLaneState.enabled)
+    setResolutionPricingEnabled(Boolean(editData?.resolutionPrices))
+    setResolutionPrices(
+      editData?.resolutionPrices
+        ? { ...editData.resolutionPrices }
+        : { ...EMPTY_IMAGE_RESOLUTION_PRICES }
+    )
     setEditorReloadToken((token) => token + 1)
   }, [editData, form])
 
@@ -340,6 +364,34 @@ export const ModelPricingEditorPanel = forwardRef<
     }
   }
 
+  const handleResolutionPricingToggle = (checked: boolean) => {
+    setResolutionPricingEnabled(checked)
+    if (
+      !checked ||
+      IMAGE_RESOLUTION_TIERS.some((tier) => resolutionPrices[tier])
+    ) {
+      return
+    }
+    const basePrice = toNumberOrNull(form.getValues('price'))
+    if (basePrice === null) return
+    setResolutionPrices({
+      '1K': formatPricingNumber(basePrice),
+      '2K': formatPricingNumber(basePrice * 1.5),
+      '4K': formatPricingNumber(basePrice * 2),
+    })
+  }
+
+  const handleResolutionPriceChange = (
+    tier: keyof ImageResolutionPriceDraft,
+    value: string
+  ) => {
+    if (!numericDraftRegex.test(value)) return
+    setResolutionPrices((current) => ({ ...current, [tier]: value }))
+    if (tier === '1K') {
+      setFormValue('price', value)
+    }
+  }
+
   const watchedValues = form.watch()
   const previewRows = useMemo(
     () =>
@@ -351,6 +403,8 @@ export const ModelPricingEditorPanel = forwardRef<
         promptPrice,
         lanePrices,
         laneEnabled,
+        resolutionPricingEnabled,
+        resolutionPrices,
         t
       ),
     [
@@ -360,6 +414,8 @@ export const ModelPricingEditorPanel = forwardRef<
       pricingMode,
       promptPrice,
       requestRuleExpr,
+      resolutionPricingEnabled,
+      resolutionPrices,
       t,
       watchedValues,
     ]
@@ -398,7 +454,6 @@ export const ModelPricingEditorPanel = forwardRef<
         t('Input price is required before saving dependent prices.')
       )
     }
-
     if (
       pricingMode === 'per-token' &&
       laneEnabled.audioOutput &&
@@ -411,6 +466,30 @@ export const ModelPricingEditorPanel = forwardRef<
   }, [editData, laneEnabled, lanePrices, pricingMode, promptPrice, t])
 
   const validatePricingValues = useCallback(() => {
+    if (
+      pricingMode === 'per-request' &&
+      !resolutionPricingEnabled &&
+      toNumberOrNull(form.getValues('price')) === null
+    ) {
+      form.setError('price', {
+        message: t('Fixed price is required.'),
+      })
+      return false
+    }
+
+    if (
+      pricingMode === 'per-request' &&
+      resolutionPricingEnabled &&
+      IMAGE_RESOLUTION_TIERS.some(
+        (tier) => toNumberOrNull(resolutionPrices[tier]) === null
+      )
+    ) {
+      form.setError('price', {
+        message: t('Enter valid prices for 1K, 2K and 4K.'),
+      })
+      return false
+    }
+
     if (
       pricingMode === 'per-token' &&
       toNumberOrNull(promptPrice) === null &&
@@ -436,14 +515,28 @@ export const ModelPricingEditorPanel = forwardRef<
     }
 
     return true
-  }, [form, laneEnabled, lanePrices, pricingMode, promptPrice, t])
+  }, [
+    form,
+    laneEnabled,
+    lanePrices,
+    pricingMode,
+    promptPrice,
+    resolutionPricingEnabled,
+    resolutionPrices,
+    t,
+  ])
 
   const buildSubmitData = useCallback(
     (values: ModelPricingFormValues) => {
       const data: ModelRatioData = {
         name: values.name.trim(),
         billingMode: pricingMode,
-        price: values.price || '',
+        price: resolutionPricingEnabled
+          ? resolutionPrices['1K']
+          : values.price || '',
+        resolutionPrices: resolutionPricingEnabled
+          ? { ...resolutionPrices }
+          : undefined,
         ratio: values.ratio || '',
         cacheRatio: values.cacheRatio || '',
         createCacheRatio: values.createCacheRatio || '',
@@ -460,7 +553,13 @@ export const ModelPricingEditorPanel = forwardRef<
 
       return data
     },
-    [billingExpr, pricingMode, requestRuleExpr]
+    [
+      billingExpr,
+      pricingMode,
+      requestRuleExpr,
+      resolutionPricingEnabled,
+      resolutionPrices,
+    ]
   )
 
   useImperativeHandle(
@@ -600,42 +699,95 @@ export const ModelPricingEditorPanel = forwardRef<
 
                   <TabsContent value='per-request' className='pt-0'>
                     <FieldGroup className='gap-5'>
-                      <FormField
-                        control={form.control}
-                        name='price'
-                        render={({ field }) => (
-                          <FormItem className='contents'>
-                            <Field>
-                              <FieldLabel>{t('Fixed price')}</FieldLabel>
-                              <FormControl>
-                                <InputGroup>
-                                  <InputGroupAddon>$</InputGroupAddon>
-                                  <InputGroupInput
-                                    inputMode='decimal'
-                                    placeholder='0.01'
-                                    {...field}
-                                    onChange={(event) => {
-                                      const value = event.target.value
-                                      if (numericDraftRegex.test(value)) {
-                                        field.onChange(value)
-                                      }
-                                    }}
-                                  />
-                                  <InputGroupAddon align='inline-end'>
-                                    {t('per request')}
-                                  </InputGroupAddon>
-                                </InputGroup>
-                              </FormControl>
-                              <FieldDescription>
-                                {t(
-                                  'Cost in USD per request, regardless of tokens used.'
-                                )}
-                              </FieldDescription>
-                              <FormMessage />
+                      <Field className='bg-muted/20 flex-row items-center justify-between rounded-md border p-3'>
+                        <div className='space-y-1'>
+                          <FieldLabel>
+                            {t('Price by image resolution')}
+                          </FieldLabel>
+                          <FieldDescription>
+                            {t(
+                              'Charge image workshop requests by the selected 1K, 2K or 4K tier.'
+                            )}
+                          </FieldDescription>
+                        </div>
+                        <Switch
+                          checked={resolutionPricingEnabled}
+                          onCheckedChange={handleResolutionPricingToggle}
+                          aria-label={t('Price by image resolution')}
+                        />
+                      </Field>
+
+                      {resolutionPricingEnabled ? (
+                        <div className='grid gap-3 sm:grid-cols-3'>
+                          {IMAGE_RESOLUTION_TIERS.map((tier) => (
+                            <Field key={tier}>
+                              <FieldLabel>{tier}</FieldLabel>
+                              <InputGroup>
+                                <InputGroupAddon>$</InputGroupAddon>
+                                <InputGroupInput
+                                  inputMode='decimal'
+                                  placeholder={
+                                    IMAGE_RESOLUTION_PRICE_PLACEHOLDERS[tier]
+                                  }
+                                  value={resolutionPrices[tier]}
+                                  onChange={(event) =>
+                                    handleResolutionPriceChange(
+                                      tier,
+                                      event.target.value
+                                    )
+                                  }
+                                />
+                              </InputGroup>
                             </Field>
-                          </FormItem>
-                        )}
-                      />
+                          ))}
+                          <FormField
+                            control={form.control}
+                            name='price'
+                            render={() => (
+                              <FormItem className='sm:col-span-3'>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      ) : (
+                        <FormField
+                          control={form.control}
+                          name='price'
+                          render={({ field }) => (
+                            <FormItem className='contents'>
+                              <Field>
+                                <FieldLabel>{t('Fixed price')}</FieldLabel>
+                                <FormControl>
+                                  <InputGroup>
+                                    <InputGroupAddon>$</InputGroupAddon>
+                                    <InputGroupInput
+                                      inputMode='decimal'
+                                      placeholder='0.01'
+                                      {...field}
+                                      onChange={(event) => {
+                                        const value = event.target.value
+                                        if (numericDraftRegex.test(value)) {
+                                          field.onChange(value)
+                                        }
+                                      }}
+                                    />
+                                    <InputGroupAddon align='inline-end'>
+                                      {t('per request')}
+                                    </InputGroupAddon>
+                                  </InputGroup>
+                                </FormControl>
+                                <FieldDescription>
+                                  {t(
+                                    'Cost in USD per request, regardless of tokens used.'
+                                  )}
+                                </FieldDescription>
+                                <FormMessage />
+                              </Field>
+                            </FormItem>
+                          )}
+                        />
+                      )}
                     </FieldGroup>
                   </TabsContent>
 

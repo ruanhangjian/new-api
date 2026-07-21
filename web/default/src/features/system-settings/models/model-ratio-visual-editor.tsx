@@ -16,13 +16,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import {
-  type ColumnFiltersState,
-  type OnChangeFn,
-  type PaginationState,
-  type RowSelectionState,
-  type VisibilityState,
-  type SortingState,
+import type {
+  ColumnFiltersState,
+  OnChangeFn,
+  PaginationState,
+  RowSelectionState,
+  SortingState,
+  VisibilityState,
 } from '@tanstack/react-table'
 import { Copy, Plus } from 'lucide-react'
 import {
@@ -51,6 +51,7 @@ import { combineBillingExpr } from '@/features/pricing/lib/billing-expr'
 import { useMediaQuery } from '@/hooks'
 
 import { safeJsonParse } from '../utils/json-parser'
+import type { ImageResolutionPriceDraft } from './model-pricing-core'
 import {
   ModelPricingEditorPanel,
   type ModelPricingEditorPanelHandle,
@@ -66,6 +67,7 @@ import { buildModelRatioColumns } from './model-ratio-table-columns'
 
 type ModelRatioVisualEditorProps = {
   savedModelPrice: string
+  savedImageResolutionPrice: string
   savedModelRatio: string
   savedCacheRatio: string
   savedCreateCacheRatio: string
@@ -76,6 +78,7 @@ type ModelRatioVisualEditorProps = {
   savedBillingMode: string
   savedBillingExpr: string
   modelPrice: string
+  imageResolutionPrice: string
   modelRatio: string
   cacheRatio: string
   createCacheRatio: string
@@ -102,6 +105,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
 >(function ModelRatioVisualEditor(
   {
     savedModelPrice,
+    savedImageResolutionPrice,
     savedModelRatio,
     savedCacheRatio,
     savedCreateCacheRatio,
@@ -112,6 +116,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
     savedBillingMode,
     savedBillingExpr,
     modelPrice,
+    imageResolutionPrice,
     modelRatio,
     cacheRatio,
     createCacheRatio,
@@ -183,6 +188,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
   const models = useMemo(() => {
     const savedRows = buildModelSnapshots({
       modelPrice: savedModelPrice,
+      imageResolutionPrice: savedImageResolutionPrice,
       modelRatio: savedModelRatio,
       cacheRatio: savedCacheRatio,
       createCacheRatio: savedCreateCacheRatio,
@@ -195,6 +201,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
     })
     const draftRows = buildModelSnapshots({
       modelPrice,
+      imageResolutionPrice,
       modelRatio,
       cacheRatio,
       createCacheRatio,
@@ -210,16 +217,19 @@ const ModelRatioVisualEditorComponent = forwardRef<
     const draftByName = new Map(draftRows.map((row) => [row.name, row]))
     const modelNames = new Set([...savedByName.keys(), ...draftByName.keys()])
 
-    return Array.from(modelNames)
+    return [...modelNames]
       .map((name) => {
         const saved = savedByName.get(name)
         const draft = draftByName.get(name)
         const displayed = saved ?? draft
+        if (!displayed) {
+          throw new Error(`Missing pricing snapshot for model ${name}`)
+        }
         const savedSignature = getSnapshotSignature(saved)
         const draftSignature = getSnapshotSignature(draft)
 
         return {
-          ...displayed!,
+          ...displayed,
           saved,
           draft,
           isDraftChanged: savedSignature !== draftSignature,
@@ -231,6 +241,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [
     savedModelPrice,
+    savedImageResolutionPrice,
     savedModelRatio,
     savedCacheRatio,
     savedCreateCacheRatio,
@@ -241,6 +252,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
     savedBillingMode,
     savedBillingExpr,
     modelPrice,
+    imageResolutionPrice,
     modelRatio,
     cacheRatio,
     createCacheRatio,
@@ -276,9 +288,20 @@ const ModelRatioVisualEditorComponent = forwardRef<
   const handleEdit = useCallback(
     (model: ModelRow) => {
       const editableModel = model.draft ?? model.saved ?? model
+      let editableBillingMode: ModelRatioData['billingMode'] = 'per-token'
+      if (editableModel.billingMode === 'tiered_expr') {
+        editableBillingMode = 'tiered_expr'
+      } else if (
+        editableModel.billingMode === 'per-request' ||
+        editableModel.resolutionPrices ||
+        (editableModel.price && editableModel.price !== '')
+      ) {
+        editableBillingMode = 'per-request'
+      }
       setEditData({
         name: editableModel.name,
         price: editableModel.price,
+        resolutionPrices: editableModel.resolutionPrices,
         ratio: editableModel.ratio,
         cacheRatio: editableModel.cacheRatio,
         createCacheRatio: editableModel.createCacheRatio,
@@ -286,12 +309,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
         imageRatio: editableModel.imageRatio,
         audioRatio: editableModel.audioRatio,
         audioCompletionRatio: editableModel.audioCompletionRatio,
-        billingMode:
-          editableModel.billingMode === 'tiered_expr'
-            ? 'tiered_expr'
-            : editableModel.price && editableModel.price !== ''
-              ? 'per-request'
-              : 'per-token',
+        billingMode: editableBillingMode,
         billingExpr: editableModel.billingExpr,
         requestRuleExpr: editableModel.requestRuleExpr,
       })
@@ -328,6 +346,9 @@ const ModelRatioVisualEditorComponent = forwardRef<
         fallback: {},
         silent: true,
       })
+      const resolutionPriceMap = safeJsonParse<
+        Record<string, Record<string, number>>
+      >(imageResolutionPrice, { fallback: {}, silent: true })
       const ratioMap = safeJsonParse<Record<string, number>>(modelRatio, {
         fallback: {},
         silent: true,
@@ -366,6 +387,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
       )
 
       delete priceMap[name]
+      delete resolutionPriceMap[name]
       delete ratioMap[name]
       delete cacheMap[name]
       delete createCacheMap[name]
@@ -377,6 +399,10 @@ const ModelRatioVisualEditorComponent = forwardRef<
       delete billingExprMap[name]
 
       onChange('ModelPrice', JSON.stringify(priceMap, null, 2))
+      onChange(
+        'ImageResolutionPrice',
+        JSON.stringify(resolutionPriceMap, null, 2)
+      )
       onChange('ModelRatio', JSON.stringify(ratioMap, null, 2))
       onChange('CacheRatio', JSON.stringify(cacheMap, null, 2))
       onChange('CreateCacheRatio', JSON.stringify(createCacheMap, null, 2))
@@ -404,6 +430,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
     },
     [
       modelPrice,
+      imageResolutionPrice,
       modelRatio,
       cacheRatio,
       createCacheRatio,
@@ -457,6 +484,9 @@ const ModelRatioVisualEditorComponent = forwardRef<
         fallback: {},
         silent: true,
       })
+      const resolutionPriceMap = safeJsonParse<
+        Record<string, Record<string, number>>
+      >(imageResolutionPrice, { fallback: {}, silent: true })
       const ratioMap = safeJsonParse<Record<string, number>>(modelRatio, {
         fallback: {},
         silent: true,
@@ -500,12 +530,13 @@ const ModelRatioVisualEditorComponent = forwardRef<
         value: string | undefined
       ) => {
         if (!value || value === '') return
-        const parsed = parseFloat(value)
+        const parsed = Number.parseFloat(value)
         if (Number.isFinite(parsed)) target[name] = parsed
       }
 
       targetNames.forEach((name) => {
         delete priceMap[name]
+        delete resolutionPriceMap[name]
         delete ratioMap[name]
         delete cacheMap[name]
         delete createCacheMap[name]
@@ -539,6 +570,15 @@ const ModelRatioVisualEditorComponent = forwardRef<
           setIfPresent(audioCompletionMap, name, data.audioCompletionRatio)
         } else if (data.price && data.price !== '') {
           setIfPresent(priceMap, name, data.price)
+          if (data.resolutionPrices) {
+            const parsedPrices = Object.fromEntries(
+              Object.entries(data.resolutionPrices).map(([tier, price]) => [
+                tier,
+                Number(price),
+              ])
+            ) as Record<keyof ImageResolutionPriceDraft, number>
+            resolutionPriceMap[name] = parsedPrices
+          }
         } else {
           setIfPresent(ratioMap, name, data.ratio)
           setIfPresent(cacheMap, name, data.cacheRatio)
@@ -551,6 +591,10 @@ const ModelRatioVisualEditorComponent = forwardRef<
       })
 
       onChange('ModelPrice', JSON.stringify(priceMap, null, 2))
+      onChange(
+        'ImageResolutionPrice',
+        JSON.stringify(resolutionPriceMap, null, 2)
+      )
       onChange('ModelRatio', JSON.stringify(ratioMap, null, 2))
       onChange('CacheRatio', JSON.stringify(cacheMap, null, 2))
       onChange('CreateCacheRatio', JSON.stringify(createCacheMap, null, 2))
@@ -572,6 +616,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
     },
     [
       modelPrice,
+      imageResolutionPrice,
       modelRatio,
       cacheRatio,
       createCacheRatio,

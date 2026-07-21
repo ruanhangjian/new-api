@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
@@ -71,6 +72,12 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 
 func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens int, meta *types.TokenCountMeta) (types.PriceData, error) {
 	modelPrice, usePrice := ratio_setting.GetModelPrice(info.OriginModelName, false)
+	if !usePrice && c.GetBool(string(constant.ContextKeyImageWorkshopRequest)) {
+		// Resolution pricing is only active for native image workshop requests.
+		// Use 1K as a temporary fixed-price base; the selected tier replaces it
+		// before pre-consumption and final settlement.
+		modelPrice, usePrice = ratio_setting.GetImageResolutionPrice(info.OriginModelName, "1K")
+	}
 
 	groupRatioInfo := HandleGroupRatio(c, info)
 
