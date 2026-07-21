@@ -71,6 +71,8 @@ const INITIAL_FORM: WorkshopFormState = {
 }
 
 const HOMEPAGE_TEMPLATE_COUNT = 5
+const LOCAL_SAVE_MAX_ATTEMPTS = 4
+const LOCAL_SAVE_RETRY_BASE_MS = 10_000
 
 type WorkshopSubmission = ImageWorkshopGenerationRequest & {
   replaceTaskId?: string
@@ -123,10 +125,15 @@ export function ImageWorkshop() {
   const [isSwitchingTemplates, setIsSwitchingTemplates] = useState(false)
   const [isRetryingService, setIsRetryingService] = useState(false)
   const [isRetryingOptions, setIsRetryingOptions] = useState(false)
+  const [localSaveFailedImageKeys, setLocalSaveFailedImageKeys] = useState<
+    Set<string>
+  >(new Set())
+  const [localSaveRetryTick, setLocalSaveRetryTick] = useState(0)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const templateSwitchId = useRef(0)
-  const attemptedSaves = useRef(new Set<string>())
-  const saveWarnings = useRef(new Set<string>())
+  const localSaveAttempts = useRef(new Map<string, number>())
+  const localSaveInProgress = useRef(new Set<string>())
+  const localSaveRetryTimers = useRef(new Map<string, number>())
 
   const tokensQuery = useQuery({
     queryKey: ['image-workshop', 'tokens'],
@@ -210,27 +217,91 @@ export function ImageWorkshop() {
 
   useEffect(() => {
     if (!userId) return
-    const completed = tasks.filter(
-      (task) =>
-        task.status === 'completed' &&
-        task.result_available &&
-        task.result?.data?.length &&
-        !attemptedSaves.current.has(task.task_id)
+    const localImageKeys = new Set(
+      localWorks.map((work) => `${work.taskId}:${work.imageIndex}`)
     )
-    if (!completed.length) return
+    const completed = tasks.filter((task) => {
+      if (
+        task.status !== 'completed' ||
+        !task.result_available ||
+        !task.result?.data?.length
+      ) {
+        return false
+      }
+      return task.result.data.some(
+        (_image, imageIndex) =>
+          !localImageKeys.has(`${task.task_id}:${imageIndex}`)
+      )
+    })
 
     completed.forEach((task) => {
-      attemptedSaves.current.add(task.task_id)
-      saveTaskImagesLocally(userId, task)
-        .then(() => listLocalWorks(userId))
-        .then(setLocalWorks)
+      if (
+        localSaveInProgress.current.has(task.task_id) ||
+        localSaveRetryTimers.current.has(task.task_id)
+      ) {
+        return
+      }
+      const attempt = (localSaveAttempts.current.get(task.task_id) || 0) + 1
+      if (attempt > LOCAL_SAVE_MAX_ATTEMPTS) return
+
+      const scheduleRetry = () => {
+        if (attempt >= LOCAL_SAVE_MAX_ATTEMPTS) return
+        const delay = LOCAL_SAVE_RETRY_BASE_MS * 3 ** (attempt - 1)
+        const timer = window.setTimeout(() => {
+          localSaveRetryTimers.current.delete(task.task_id)
+          setLocalSaveRetryTick((current) => current + 1)
+        }, delay)
+        localSaveRetryTimers.current.set(task.task_id, timer)
+      }
+
+      localSaveAttempts.current.set(task.task_id, attempt)
+      localSaveInProgress.current.add(task.task_id)
+      void saveTaskImagesLocally(userId, task)
+        .then(async ({ failedImageIndexes }) => {
+          const nextLocalWorks = await listLocalWorks(userId)
+          setLocalWorks(nextLocalWorks)
+          setLocalSaveFailedImageKeys((current) => {
+            const next = new Set(current)
+            task.result?.data.forEach((_image, imageIndex) => {
+              next.delete(`${task.task_id}:${imageIndex}`)
+            })
+            failedImageIndexes.forEach((imageIndex) => {
+              next.add(`${task.task_id}:${imageIndex}`)
+            })
+            return next
+          })
+
+          if (!failedImageIndexes.length) {
+            localSaveAttempts.current.delete(task.task_id)
+            return
+          }
+          scheduleRetry()
+        })
         .catch(() => {
-          if (saveWarnings.current.has(task.task_id)) return
-          saveWarnings.current.add(task.task_id)
-          toast.warning('图片已生成，但未能自动保存到当前浏览器，请先下载')
+          setLocalSaveFailedImageKeys((current) => {
+            const next = new Set(current)
+            task.result?.data.forEach((_image, imageIndex) => {
+              if (!localImageKeys.has(`${task.task_id}:${imageIndex}`)) {
+                next.add(`${task.task_id}:${imageIndex}`)
+              }
+            })
+            return next
+          })
+          scheduleRetry()
+        })
+        .finally(() => {
+          localSaveInProgress.current.delete(task.task_id)
         })
     })
-  }, [tasks, userId])
+  }, [localSaveRetryTick, localWorks, tasks, userId])
+
+  useEffect(() => {
+    const timers = localSaveRetryTimers.current
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer))
+      timers.clear()
+    }
+  }, [])
 
   const inspirationQuery = useQuery({
     queryKey: ['image-workshop', 'inspiration-cases'],
@@ -513,6 +584,7 @@ export function ImageWorkshop() {
         <WorksGallery
           tasks={tasks}
           localWorks={localWorks}
+          localSaveFailedImageKeys={localSaveFailedImageKeys}
           isLoading={tasksQuery.isLoading && !isRetryingService}
           limit={workLimit}
           onLimitChange={setWorkLimit}

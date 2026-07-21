@@ -25,6 +25,7 @@ import {
   LoaderCircle,
   MoreHorizontal,
   RefreshCw,
+  TriangleAlert,
   Trash2,
   X,
 } from 'lucide-react'
@@ -116,6 +117,7 @@ type WorkControlsProps = {
 type WorksGalleryProps = {
   tasks: ImageWorkshopTask[]
   localWorks: LocalImageWorkshopWork[]
+  localSaveFailedImageKeys: Set<string>
   isLoading: boolean
   isDeleting: boolean
   limit: number
@@ -280,6 +282,7 @@ function CompletedWorkCard({
   timestamp,
   controls,
   local = false,
+  localSaveFailed = false,
 }: {
   image: ImageWorkshopResultImage
   prompt: string
@@ -288,6 +291,7 @@ function CompletedWorkCard({
   timestamp?: number
   controls: WorkControlsProps
   local?: boolean
+  localSaveFailed?: boolean
 }) {
   const extension = (format || 'png').toLowerCase()
   const imageAlt = prompt || model || '生成图片'
@@ -338,6 +342,18 @@ function CompletedWorkCard({
               <Trash2 aria-hidden='true' />
             </button>
           </div>
+        )}
+        {!local && localSaveFailed && !controls.selectionMode && (
+          <a
+            className='image-workshop-local-save-warning'
+            href={image.url}
+            download={`image-workshop-${timestamp || 'result'}.${extension}`}
+            title='图片尚未保存到当前浏览器，请及时下载'
+          >
+            <TriangleAlert aria-hidden='true' />
+            <span>未保存到本机，请及时下载</span>
+            <Download aria-hidden='true' />
+          </a>
         )}
       </div>
       <div className='image-workshop-work-caption'>
@@ -410,6 +426,7 @@ function unique(values: string[]) {
 export function WorksGallery({
   tasks,
   localWorks,
+  localSaveFailedImageKeys,
   isLoading,
   isDeleting,
   limit,
@@ -756,6 +773,7 @@ export function WorksGallery({
                   model={item.task.model || ''}
                   format={item.task.output_format}
                   timestamp={item.task.finish_time || item.task.submit_time}
+                  localSaveFailed={localSaveFailedImageKeys.has(item.id)}
                   controls={controlsFor(work)}
                 />
               )

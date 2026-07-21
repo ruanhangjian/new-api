@@ -122,62 +122,78 @@ export async function deleteAllLocalWorks(userId: number): Promise<void> {
 export async function saveTaskImagesLocally(
   userId: number,
   task: ImageWorkshopTask
-): Promise<LocalImageWorkshopWork[]> {
-  if (!task.result_available || !task.result?.data?.length) return []
+): Promise<{
+  saved: LocalImageWorkshopWork[]
+  failedImageIndexes: number[]
+}> {
+  if (!task.result_available || !task.result?.data?.length) {
+    return { saved: [], failedImageIndexes: [] }
+  }
 
   const database = await openDatabase()
   const saved: LocalImageWorkshopWork[] = []
+  const failedImageIndexes: number[] = []
   try {
     for (const [imageIndex, image] of task.result.data.entries()) {
-      const key = `${userId}:${task.task_id}:${imageIndex}`
-      const existing = await requestResult(
-        database
-          .transaction(WORKS_STORE, 'readonly')
-          .objectStore(WORKS_STORE)
-          .get(key)
-      )
-      if (existing) {
-        saved.push(existing as LocalImageWorkshopWork)
-        continue
-      }
+      try {
+        const key = `${userId}:${task.task_id}:${imageIndex}`
+        const existing = await requestResult(
+          database
+            .transaction(WORKS_STORE, 'readonly')
+            .objectStore(WORKS_STORE)
+            .get(key)
+        )
+        if (existing) {
+          saved.push(existing as LocalImageWorkshopWork)
+          continue
+        }
 
-      const response = await fetch(image.url, { credentials: 'include' })
-      if (!response.ok) {
-        throw new Error('生成结果暂时无法保存到当前浏览器')
+        const response = await fetch(image.url, { credentials: 'include' })
+        if (!response.ok) {
+          throw new Error('生成结果暂时无法保存到当前浏览器')
+        }
+        const blob = await response.blob()
+        const work: LocalImageWorkshopWork = {
+          key,
+          userId,
+          taskId: task.task_id,
+          imageIndex,
+          blob,
+          prompt: task.prompt || '',
+          model: task.model || '',
+          size: task.size || '',
+          quality: task.quality || '',
+          outputFormat: task.output_format || blob.type.split('/')[1] || 'png',
+          createdAt:
+            task.finish_time ||
+            task.submit_time ||
+            Math.floor(Date.now() / 1000),
+          submittedAt: task.submit_time,
+          revisedPrompt: image.revised_prompt,
+        }
+        const transaction = database.transaction(WORKS_STORE, 'readwrite')
+        transaction.objectStore(WORKS_STORE).put(work)
+        await new Promise<void>((resolve, reject) => {
+          transaction.addEventListener('complete', () => resolve(), {
+            once: true,
+          })
+          transaction.addEventListener(
+            'error',
+            () => reject(transaction.error),
+            { once: true }
+          )
+          transaction.addEventListener(
+            'abort',
+            () => reject(transaction.error),
+            { once: true }
+          )
+        })
+        saved.push(work)
+      } catch {
+        failedImageIndexes.push(imageIndex)
       }
-      const blob = await response.blob()
-      const work: LocalImageWorkshopWork = {
-        key,
-        userId,
-        taskId: task.task_id,
-        imageIndex,
-        blob,
-        prompt: task.prompt || '',
-        model: task.model || '',
-        size: task.size || '',
-        quality: task.quality || '',
-        outputFormat: task.output_format || blob.type.split('/')[1] || 'png',
-        createdAt:
-          task.finish_time || task.submit_time || Math.floor(Date.now() / 1000),
-        submittedAt: task.submit_time,
-        revisedPrompt: image.revised_prompt,
-      }
-      const transaction = database.transaction(WORKS_STORE, 'readwrite')
-      transaction.objectStore(WORKS_STORE).put(work)
-      await new Promise<void>((resolve, reject) => {
-        transaction.addEventListener('complete', () => resolve(), {
-          once: true,
-        })
-        transaction.addEventListener('error', () => reject(transaction.error), {
-          once: true,
-        })
-        transaction.addEventListener('abort', () => reject(transaction.error), {
-          once: true,
-        })
-      })
-      saved.push(work)
     }
-    return saved
+    return { saved, failedImageIndexes }
   } finally {
     database.close()
   }

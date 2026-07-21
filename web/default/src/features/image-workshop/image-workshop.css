@@ -1198,6 +1198,50 @@ For commercial licensing, please contact support@quantumnous.com
   height: 15px;
 }
 
+.image-workshop-local-save-warning {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 2;
+  max-width: calc(100% - 96px);
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  overflow: hidden;
+  border: 1px solid color-mix(in oklch, oklch(0.72 0.14 75) 38%, transparent);
+  border-radius: 6px;
+  color: color-mix(in oklch, var(--foreground) 68%, oklch(0.72 0.14 75));
+  background: color-mix(in oklch, var(--background) 91%, oklch(0.8 0.12 78));
+  box-shadow: 0 2px 10px color-mix(in oklch, var(--foreground) 12%, transparent);
+  backdrop-filter: blur(10px);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.image-workshop-local-save-warning:hover {
+  color: color-mix(in oklch, var(--foreground) 82%, oklch(0.72 0.14 75));
+  border-color: color-mix(in oklch, oklch(0.67 0.15 72) 58%, transparent);
+}
+
+.image-workshop-local-save-warning span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-workshop-local-save-warning svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+
+.image-workshop-local-save-warning svg:last-child {
+  margin-left: 1px;
+}
+
 .image-workshop-work-caption {
   min-width: 0;
   display: grid;
