@@ -52,6 +52,8 @@ export type ImageWorkshopModelCapability = {
   default_quality: string
   default_output_format?: string
   max_images: number
+  supports_reference_images: boolean
+  max_reference_images?: number
   supports_transparent_background: boolean
 }
 
@@ -68,6 +70,7 @@ export type ImageWorkshopGenerationRequest = {
   size: string
   quality: string
   output_format?: string
+  reference_images?: File[]
 }
 
 export type ImageWorkshopGenerationResponse = {
@@ -105,6 +108,7 @@ export type ImageWorkshopTask = {
   billing_unit_price?: number
   billing_strategy?: string
   billing_channel_id?: number
+  reference_image_count?: number
   output_sizes?: string[]
   submit_time: number
   start_time?: number

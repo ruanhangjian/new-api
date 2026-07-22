@@ -11,7 +11,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const ImageAsyncActionGeneration = "images.generations"
+const (
+	ImageAsyncActionGeneration = "images.generations"
+	ImageAsyncActionEdit       = "images.edits"
+)
 
 type ImageTaskPollResponse struct {
 	Data ImageTaskPollData `json:"data"`

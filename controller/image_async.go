@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -21,6 +22,7 @@ import (
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -30,6 +32,7 @@ import (
 
 var (
 	imageResultStore            = service.NewImageResultStoreFromEnv()
+	imageRequestStore           = service.NewImageRequestStoreFromEnv()
 	imageAsyncMaintenanceMu     sync.Mutex
 	imageAsyncResultLifecycleMu sync.RWMutex
 	imageAsyncMaintenanceRunner = func() {
@@ -70,6 +73,9 @@ func runImageAsyncMaintenance(now time.Time) {
 	}
 	if err := imageResultStore.CleanExpired(now); err != nil {
 		logger.LogError(nil, fmt.Sprintf("cleanup image workshop result files failed: %v", err))
+	}
+	if err := imageRequestStore.CleanExpired(now); err != nil {
+		logger.LogError(nil, fmt.Sprintf("cleanup image workshop reference files failed: %v", err))
 	}
 }
 
@@ -120,13 +126,12 @@ func enqueueAsyncImageGeneration(c *gin.Context) (*model.Task, *imageAsyncSubmit
 	if err != nil {
 		return nil, newImageAsyncSubmitError(http.StatusBadRequest, err.Error(), "invalid_request_error")
 	}
-	body, err := bodyStorage.Bytes()
-	if err != nil {
-		return nil, newImageAsyncSubmitError(http.StatusBadRequest, err.Error(), "invalid_request_error")
-	}
 	request, err := helper.GetAndValidateRequest(c, types.RelayFormatOpenAIImage)
 	if err != nil {
 		return nil, newImageAsyncSubmitError(http.StatusBadRequest, err.Error(), "invalid_request_error")
+	}
+	if c.Request.MultipartForm != nil {
+		defer c.Request.MultipartForm.RemoveAll()
 	}
 	imageReq, _ := request.(*dto.ImageRequest)
 	relayInfo, err := relaycommon.GenRelayInfo(c, types.RelayFormatOpenAIImage, request, nil)
@@ -135,10 +140,37 @@ func enqueueAsyncImageGeneration(c *gin.Context) (*model.Task, *imageAsyncSubmit
 	}
 
 	now := time.Now().Unix()
+	taskID := model.GenerateTaskID()
+	relayMode := relayconstant.Path2RelayMode(c.Request.URL.Path)
+	requestPath := "/v1/images/generations"
+	action := service.ImageAsyncActionGeneration
+	requestData := service.ImageAsyncRequest{
+		Method:      http.MethodPost,
+		Path:        requestPath,
+		Query:       removeAsyncQuery(c.Request.URL.RawQuery),
+		ContentType: c.GetHeader("Content-Type"),
+		Headers:     sanitizeImageAsyncHeaders(relayInfo.RequestHeaders),
+	}
+	if relayMode == relayconstant.RelayModeImagesEdits && strings.HasPrefix(strings.ToLower(c.GetHeader("Content-Type")), "multipart/form-data") {
+		requestData.Path = "/v1/images/edits"
+		action = service.ImageAsyncActionEdit
+		requestData.ImageCount = uint(max(1, c.GetInt(imageWorkshopOutputCountContextKey)))
+		bodyPath, _, stageErr := imageRequestStore.Stage(taskID, bodyStorage)
+		if stageErr != nil {
+			return nil, newImageAsyncSubmitError(http.StatusBadRequest, stageErr.Error(), "invalid_request_error")
+		}
+		requestData.BodyPath = bodyPath
+	} else {
+		body, bodyErr := bodyStorage.Bytes()
+		if bodyErr != nil {
+			return nil, newImageAsyncSubmitError(http.StatusBadRequest, bodyErr.Error(), "invalid_request_error")
+		}
+		requestData.Body = json.RawMessage(body)
+	}
 	task := &model.Task{
 		CreatedAt:  now,
 		UpdatedAt:  now,
-		TaskID:     model.GenerateTaskID(),
+		TaskID:     taskID,
 		Platform:   constant.TaskPlatformImage,
 		UserId:     relayInfo.UserId,
 		Group:      relayInfo.UsingGroup,
@@ -146,7 +178,7 @@ func enqueueAsyncImageGeneration(c *gin.Context) (*model.Task, *imageAsyncSubmit
 		Status:     model.TaskStatusQueued,
 		Progress:   "0%",
 		SubmitTime: now,
-		Action:     service.ImageAsyncActionGeneration,
+		Action:     action,
 		Properties: model.Properties{
 			OriginModelName: imageReq.Model,
 		},
@@ -155,17 +187,11 @@ func enqueueAsyncImageGeneration(c *gin.Context) (*model.Task, *imageAsyncSubmit
 		},
 	}
 	task.SetData(service.ImageAsyncTaskData{
-		Request: service.ImageAsyncRequest{
-			Method:      http.MethodPost,
-			Path:        "/v1/images/generations",
-			Query:       removeAsyncQuery(c.Request.URL.RawQuery),
-			ContentType: c.GetHeader("Content-Type"),
-			Body:        json.RawMessage(body),
-			Headers:     sanitizeImageAsyncHeaders(relayInfo.RequestHeaders),
-		},
+		Request:  requestData,
 		Metadata: imageAsyncTaskMetadata(c, imageReq),
 	})
 	if err = task.Insert(); err != nil {
+		_ = imageRequestStore.Remove(requestData.BodyPath)
 		return nil, newImageAsyncSubmitError(http.StatusInternalServerError, err.Error(), "server_error")
 	}
 
@@ -245,7 +271,7 @@ func executeAsyncImageTaskOnce(taskID string) error {
 	}
 	var resultBody []byte
 	if isImageWorkshopTask(data) {
-		imageCount, err := imageWorkshopRequestCount(data.Request.Body)
+		imageCount, err := imageWorkshopTaskImageCount(data.Request)
 		if err != nil {
 			return err
 		}
@@ -274,6 +300,8 @@ func executeAsyncImageTaskOnce(taskID string) error {
 	data.Files = files
 	data.ExpiresAt = expiresAt
 	data.Error = nil
+	stagedRequestPath := data.Request.BodyPath
+	data.Request.BodyPath = ""
 	if isImageWorkshopTask(data) {
 		requestSize := ""
 		billingTier := ""
@@ -295,6 +323,9 @@ func executeAsyncImageTaskOnce(taskID string) error {
 	task.FinishTime = time.Now().Unix()
 	task.UpdatedAt = task.FinishTime
 	_, err = task.UpdateWithStatus(model.TaskStatusInProgress)
+	if err == nil && stagedRequestPath != "" {
+		_ = imageRequestStore.Remove(stagedRequestPath)
+	}
 	return err
 }
 
@@ -313,6 +344,13 @@ func imageWorkshopRequestCount(body []byte) (uint, error) {
 		return 1, nil
 	}
 	return *request.N, nil
+}
+
+func imageWorkshopTaskImageCount(request service.ImageAsyncRequest) (uint, error) {
+	if request.ImageCount > 0 {
+		return request.ImageCount, nil
+	}
+	return imageWorkshopRequestCount(request.Body)
 }
 
 func rewriteImageWorkshopRequestCount(body []byte, count uint) ([]byte, error) {
@@ -445,6 +483,12 @@ func executeImageAsyncRelayAttempt(
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		common.CleanupBodyStorage(c)
+		if c.Request != nil && c.Request.Body != nil {
+			_ = c.Request.Body.Close()
+		}
+	}()
 	if c.IsAborted() {
 		return nil, newImageAsyncRelayError(c, recorder)
 	}
@@ -506,10 +550,14 @@ func executeImageWorkshopBatch(task *model.Task, data service.ImageAsyncTaskData
 		waitGroup.Add(1)
 		go func(index int) {
 			defer waitGroup.Done()
-			body, err := rewriteImageWorkshopRequestCount(data.Request.Body, 1)
-			if err != nil {
-				results <- batchResult{index: index, err: err}
-				return
+			body := data.Request.Body
+			var err error
+			if data.Request.BodyPath == "" {
+				body, err = rewriteImageWorkshopRequestCount(data.Request.Body, 1)
+				if err != nil {
+					results <- batchResult{index: index, err: err}
+					return
+				}
 			}
 			body, err = executeImageWorkshopRelay(task, data, body, index)
 			results <- batchResult{index: index, body: body, err: err}
@@ -574,6 +622,19 @@ func imageAsyncTaskMetadata(c *gin.Context, request *dto.ImageRequest) map[strin
 			billing := service.ResolveImageWorkshopResolutionBilling(request.Size)
 			channelID := common.GetContextKeyInt(c, constant.ContextKeyChannelId)
 			metadata["request_size"] = request.Size
+			metadata["prompt"] = request.Prompt
+			metadata["quality"] = request.Quality
+			if outputFormat := imageWorkshopRequestOutputFormat(c, request); outputFormat != "" {
+				metadata["output_format"] = outputFormat
+			}
+			outputCount := c.GetInt(imageWorkshopOutputCountContextKey)
+			if outputCount <= 0 && request.N != nil {
+				outputCount = int(*request.N)
+			}
+			metadata["output_count"] = max(1, outputCount)
+			if referenceCount := c.GetInt(imageWorkshopReferenceCountContextKey); referenceCount > 0 {
+				metadata["reference_image_count"] = referenceCount
+			}
 			metadata["billing_tier"] = billing.Tier
 			metadata["billing_source"] = billing.Source
 			metadata["billing_channel_id"] = channelID
@@ -593,6 +654,20 @@ func imageAsyncTaskMetadata(c *gin.Context, request *dto.ImageRequest) map[strin
 		return metadata
 	}
 	return nil
+}
+
+func imageWorkshopRequestOutputFormat(c *gin.Context, request *dto.ImageRequest) string {
+	if c != nil && c.Request != nil && c.Request.PostForm != nil {
+		if value := strings.TrimSpace(c.Request.PostForm.Get("output_format")); value != "" {
+			return value
+		}
+	}
+	if request == nil || len(request.OutputFormat) == 0 {
+		return ""
+	}
+	var value string
+	_ = common.Unmarshal(request.OutputFormat, &value)
+	return strings.TrimSpace(value)
 }
 
 func buildAsyncImageRelayContext(task *model.Task, data service.ImageAsyncTaskData) (*gin.Context, *httptest.ResponseRecorder, error) {
@@ -620,9 +695,17 @@ func buildAsyncImageRelayContextForChannel(
 	if err != nil {
 		return nil, nil, err
 	}
+	var requestBody io.Reader = bytes.NewReader(data.Request.Body)
+	if data.Request.BodyPath != "" {
+		file, openErr := imageRequestStore.Open(data.Request.BodyPath)
+		if openErr != nil {
+			return nil, nil, fmt.Errorf("reference images are no longer available: %w", openErr)
+		}
+		requestBody = file
+	}
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
-	req := httptest.NewRequest(data.Request.Method, parsedURL.String(), bytes.NewReader(data.Request.Body))
+	req := httptest.NewRequest(data.Request.Method, parsedURL.String(), requestBody)
 	req.Header.Set("Content-Type", data.Request.ContentType)
 	for key, value := range data.Request.Headers {
 		if strings.EqualFold(key, "Authorization") {

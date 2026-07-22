@@ -73,6 +73,7 @@ const INITIAL_FORM: WorkshopFormState = {
   quality: '',
   outputFormat: '',
   count: 1,
+  referenceImages: [],
 }
 
 const HOMEPAGE_TEMPLATE_COUNT = 5
@@ -506,6 +507,13 @@ export function ImageWorkshop() {
   function submit() {
     const prompt = form.prompt.trim()
     if (!capability || !prompt) return
+    if (
+      form.referenceImages.length > 0 &&
+      !capability.supports_reference_images
+    ) {
+      toast.warning('当前模型不支持参考图，请切换模型或移除参考图')
+      return
+    }
     createMutation.mutate({
       token_id: form.tokenId,
       model: form.model,
@@ -514,6 +522,9 @@ export function ImageWorkshop() {
       size: form.size,
       quality: form.quality,
       ...(form.outputFormat ? { output_format: form.outputFormat } : {}),
+      ...(form.referenceImages.length
+        ? { reference_images: form.referenceImages }
+        : {}),
     })
   }
 
@@ -526,6 +537,10 @@ export function ImageWorkshop() {
   function regenerate(task: ImageWorkshopTask) {
     if (task.status === 'failed') {
       retryMutation.mutate(task)
+      return
+    }
+    if ((task.reference_image_count || 0) > 0) {
+      toast.info('原参考图已在任务完成后清理，请重新上传参考图后生成')
       return
     }
     if (!form.tokenId || !task.prompt?.trim() || !task.model) return

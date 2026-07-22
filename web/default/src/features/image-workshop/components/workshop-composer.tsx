@@ -1,4 +1,12 @@
-import { ArrowUp, Image, LoaderCircle, Video } from 'lucide-react'
+import {
+  ArrowUp,
+  Image,
+  Images,
+  LoaderCircle,
+  Plus,
+  Video,
+  X,
+} from 'lucide-react'
 /*
 Copyright (C) 2023-2026 QuantumNous
 
@@ -17,7 +25,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import type { ImageWorkshopModelCapability, ImageWorkshopToken } from '../types'
@@ -32,6 +40,7 @@ export type WorkshopFormState = {
   quality: string
   outputFormat: string
   count: number
+  referenceImages: File[]
 }
 
 type WorkshopComposerProps = {
@@ -63,6 +72,10 @@ function groupLabel(group: string) {
   return group
 }
 
+function referenceFileKey(file: File) {
+  return `${file.name}-${file.type}-${file.size}-${file.lastModified}`
+}
+
 export function WorkshopComposer({
   value,
   tokens,
@@ -90,6 +103,100 @@ export function WorkshopComposer({
     !value.tokenId ||
     !value.model ||
     !capability
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isDraggingReferences, setIsDraggingReferences] = useState(false)
+  const supportsReferences = Boolean(capability?.supports_reference_images)
+  const maxReferenceImages = Math.min(capability?.max_reference_images || 9, 9)
+
+  const referencePreviews = useMemo(
+    () =>
+      value.referenceImages.map((file) => ({
+        file,
+        url: URL.createObjectURL(file),
+      })),
+    [value.referenceImages]
+  )
+
+  useEffect(() => {
+    return () => {
+      referencePreviews.forEach((preview) => URL.revokeObjectURL(preview.url))
+    }
+  }, [referencePreviews])
+
+  function addReferenceImages(files: File[]) {
+    if (!files.length) return
+    if (!supportsReferences) {
+      toast.warning('当前模型不支持上传参考图')
+      return
+    }
+
+    const supportedTypes = new Set(['image/png', 'image/jpeg', 'image/webp'])
+    const validFiles = files.filter((file) => supportedTypes.has(file.type))
+    const unsupportedCount = files.length - validFiles.length
+    if (unsupportedCount > 0) {
+      toast.warning(
+        `有 ${unsupportedCount} 张图片格式不支持，仅支持 PNG、JPEG 和 WEBP`
+      )
+    }
+
+    const sizeValidFiles = validFiles.filter((file) => file.size <= 20 << 20)
+    const oversizedCount = validFiles.length - sizeValidFiles.length
+    if (oversizedCount > 0) {
+      toast.warning(`有 ${oversizedCount} 张图片超过 20 MB，未添加`)
+    }
+
+    const knownFiles = new Set(value.referenceImages.map(referenceFileKey))
+    const uniqueFiles = sizeValidFiles.filter((file) => {
+      const key = referenceFileKey(file)
+      if (knownFiles.has(key)) {
+        return false
+      }
+      knownFiles.add(key)
+      return true
+    })
+    const duplicateCount = sizeValidFiles.length - uniqueFiles.length
+    if (duplicateCount > 0) {
+      toast.info(`有 ${duplicateCount} 张重复图片未再次添加`)
+    }
+
+    const available = Math.max(
+      0,
+      maxReferenceImages - value.referenceImages.length
+    )
+    const withinCountLimit = uniqueFiles.slice(0, available)
+    const countOverflow = uniqueFiles.length - withinCountLimit.length
+    const currentBytes = value.referenceImages.reduce(
+      (total, file) => total + file.size,
+      0
+    )
+    let nextBytes = currentBytes
+    const added = withinCountLimit.filter((file) => {
+      if (nextBytes + file.size > 100 << 20) return false
+      nextBytes += file.size
+      return true
+    })
+    const totalSizeOverflow = withinCountLimit.length - added.length
+
+    if (added.length) {
+      onChange({ referenceImages: [...value.referenceImages, ...added] })
+    }
+    if (countOverflow > 0) {
+      toast.warning(
+        `最多上传 ${maxReferenceImages} 张参考图，已添加 ${added.length} 张，其余 ${countOverflow + totalSizeOverflow} 张未添加`
+      )
+    } else if (totalSizeOverflow > 0) {
+      toast.warning('参考图总大小不能超过 100 MB，超出部分未添加')
+    }
+  }
+
+  function removeReferenceImage(index: number) {
+    onChange({
+      referenceImages: value.referenceImages.filter(
+        (_file, fileIndex) => fileIndex !== index
+      ),
+    })
+  }
 
   return (
     <section
@@ -129,7 +236,36 @@ export function WorkshopComposer({
         </div>
       </div>
 
-      <div className='image-workshop-composer'>
+      <div
+        className={`image-workshop-composer${isDraggingReferences ? ' is-dragging-references' : ''}`}
+        onDragEnter={(event) => {
+          if (!event.dataTransfer.types.includes('Files')) {
+            return
+          }
+          event.preventDefault()
+          setIsDraggingReferences(true)
+        }}
+        onDragOver={(event) => {
+          if (!event.dataTransfer.types.includes('Files')) {
+            return
+          }
+          event.preventDefault()
+          event.dataTransfer.dropEffect = 'copy'
+        }}
+        onDragLeave={(event) => {
+          if (
+            event.currentTarget.contains(event.relatedTarget as Node | null)
+          ) {
+            return
+          }
+          setIsDraggingReferences(false)
+        }}
+        onDrop={(event) => {
+          event.preventDefault()
+          setIsDraggingReferences(false)
+          addReferenceImages([...event.dataTransfer.files])
+        }}
+      >
         <textarea
           ref={textareaRef}
           className='image-workshop-prompt'
@@ -139,13 +275,62 @@ export function WorkshopComposer({
           placeholder='描述你想创作的画面...'
           aria-label='图片提示词'
           onChange={(event) => onChange({ prompt: event.target.value })}
+          onPaste={(event) => {
+            const images = [...event.clipboardData.files].filter((file) =>
+              file.type.startsWith('image/')
+            )
+            if (!images.length) {
+              return
+            }
+            event.preventDefault()
+            addReferenceImages(images)
+          }}
           onKeyDown={(event) => {
             if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
               event.preventDefault()
-              if (!disabled) onSubmit()
+              if (!disabled) {
+                onSubmit()
+              }
             }
           }}
         />
+
+        {value.referenceImages.length > 0 && (
+          <div className='image-workshop-reference-strip'>
+            <div className='image-workshop-reference-list'>
+              {referencePreviews.map(({ file, url }, index) => (
+                <div
+                  className='image-workshop-reference-preview'
+                  key={referenceFileKey(file)}
+                >
+                  <img src={url} alt={`参考图 ${index + 1}`} />
+                  <button
+                    type='button'
+                    aria-label={`删除参考图 ${index + 1}`}
+                    title='删除参考图'
+                    onClick={() => removeReferenceImage(index)}
+                  >
+                    <X aria-hidden='true' />
+                  </button>
+                </div>
+              ))}
+              {value.referenceImages.length < maxReferenceImages && (
+                <button
+                  className='image-workshop-reference-add-tile'
+                  type='button'
+                  aria-label='继续添加参考图'
+                  title='继续添加参考图'
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Plus aria-hidden='true' />
+                </button>
+              )}
+            </div>
+            <span>
+              {value.referenceImages.length}/{maxReferenceImages}
+            </span>
+          </div>
+        )}
 
         <div className='image-workshop-parameter-grid'>
           <div className='image-workshop-parameter-field'>
@@ -237,18 +422,47 @@ export function WorkshopComposer({
         </div>
 
         <div className='image-workshop-composer-bottom'>
-          <WorkshopSelect
-            value={value.model}
-            options={capabilities.map((item) => ({
-              value: item.model,
-              label: item.model,
-            }))}
-            placeholder='暂无可用生图模型'
-            ariaLabel='模型'
-            disabled={!capabilities.length}
-            className='image-workshop-model-select'
-            onChange={(model) => onChange({ model })}
-          />
+          <div className='image-workshop-composer-tools'>
+            <input
+              ref={fileInputRef}
+              className='image-workshop-reference-input'
+              type='file'
+              accept='.png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp'
+              multiple
+              onChange={(event) => {
+                addReferenceImages([...(event.target.files || [])])
+                event.target.value = ''
+              }}
+            />
+            <button
+              className='image-workshop-reference-trigger'
+              type='button'
+              disabled={
+                !supportsReferences ||
+                value.referenceImages.length >= maxReferenceImages
+              }
+              title={supportsReferences ? '上传参考图' : '当前模型不支持参考图'}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Images aria-hidden='true' />
+              <span>参考图</span>
+              {value.referenceImages.length > 0 && (
+                <small>{value.referenceImages.length}</small>
+              )}
+            </button>
+            <WorkshopSelect
+              value={value.model}
+              options={capabilities.map((item) => ({
+                value: item.model,
+                label: item.model,
+              }))}
+              placeholder='暂无可用生图模型'
+              ariaLabel='模型'
+              disabled={!capabilities.length}
+              className='image-workshop-model-select'
+              onChange={(model) => onChange({ model })}
+            />
+          </div>
 
           <button
             className='image-workshop-generate'

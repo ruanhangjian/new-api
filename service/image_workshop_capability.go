@@ -38,6 +38,8 @@ type ImageWorkshopModelCapability struct {
 	DefaultQuality                string                        `json:"default_quality"`
 	DefaultOutputFormat           string                        `json:"default_output_format,omitempty"`
 	MaxImages                     int                           `json:"max_images"`
+	SupportsReferenceImages       bool                          `json:"supports_reference_images"`
+	MaxReferenceImages            int                           `json:"max_reference_images,omitempty"`
 	SupportsTransparentBackground bool                          `json:"supports_transparent_background"`
 }
 
@@ -265,6 +267,8 @@ func imageWorkshopCapabilityForModel(modelName string, fullCapability bool) (Ima
 func gptImage2WorkshopCapability(capability ImageWorkshopModelCapability) ImageWorkshopModelCapability {
 	capability = fullGPTImageWorkshopCapability(capability)
 	capability.MaxImages = 6
+	capability.SupportsReferenceImages = true
+	capability.MaxReferenceImages = 9
 	capability.Sizes = append([]string{"auto"}, gptImage2PresetSizes...)
 	capability.SizeTiers = []string{"1K", "2K", "4K"}
 	capability.AspectRatios = []string{"1:1", "3:2", "2:3", "16:9", "9:16", "4:3", "3:4", "21:9"}

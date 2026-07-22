@@ -140,6 +140,16 @@ For commercial licensing, please contact support@quantumnous.com
   border-radius: 24px;
   background: var(--card);
   box-shadow: 0 16px 44px color-mix(in oklch, var(--foreground) 9%, transparent);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.image-workshop-composer.is-dragging-references {
+  border-color: var(--ring);
+  box-shadow:
+    0 0 0 3px color-mix(in oklch, var(--ring) 16%, transparent),
+    0 16px 44px color-mix(in oklch, var(--foreground) 9%, transparent);
 }
 
 .image-workshop-prompt {
@@ -160,6 +170,88 @@ For commercial licensing, please contact support@quantumnous.com
 
 .image-workshop-prompt::placeholder {
   color: var(--muted-foreground);
+}
+
+.image-workshop-reference-strip {
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 0 8px 10px;
+}
+
+.image-workshop-reference-list {
+  min-width: 0;
+  display: flex;
+  flex: 1 1 auto;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.image-workshop-reference-preview,
+.image-workshop-reference-add-tile {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  flex: 0 0 58px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--muted);
+}
+
+.image-workshop-reference-preview img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.image-workshop-reference-preview > button {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in oklch, var(--background) 70%, transparent);
+  border-radius: 50%;
+  color: var(--foreground);
+  background: color-mix(in oklch, var(--background) 88%, transparent);
+  box-shadow: 0 2px 7px color-mix(in oklch, var(--foreground) 16%, transparent);
+}
+
+.image-workshop-reference-preview > button:hover {
+  background: var(--background);
+}
+
+.image-workshop-reference-preview > button svg,
+.image-workshop-reference-add-tile svg {
+  width: 14px;
+  height: 14px;
+}
+
+.image-workshop-reference-add-tile {
+  display: grid;
+  place-items: center;
+  color: var(--muted-foreground);
+  border-style: dashed;
+}
+
+.image-workshop-reference-add-tile:hover {
+  color: var(--foreground);
+  border-color: var(--ring);
+  background: var(--accent);
+}
+
+.image-workshop-reference-strip > span {
+  flex: 0 0 auto;
+  padding-bottom: 3px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 .image-workshop-parameter-grid {
@@ -632,6 +724,61 @@ For commercial licensing, please contact support@quantumnous.com
   justify-content: space-between;
   gap: 12px;
   padding: 7px 2px 0;
+}
+
+.image-workshop-composer-tools {
+  min-width: 0;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.image-workshop-reference-input {
+  display: none;
+}
+
+.image-workshop-reference-trigger {
+  min-height: 34px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--muted-foreground);
+  background: transparent;
+  font-size: 12px;
+}
+
+.image-workshop-reference-trigger:hover:not(:disabled) {
+  color: var(--foreground);
+  border-color: var(--border);
+  background: var(--accent);
+}
+
+.image-workshop-reference-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.image-workshop-reference-trigger svg {
+  width: 16px;
+  height: 16px;
+}
+
+.image-workshop-reference-trigger small {
+  min-width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 9px;
+  color: var(--foreground);
+  background: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
 }
 
 .image-workshop-model-select {
@@ -1896,6 +2043,18 @@ For commercial licensing, please contact support@quantumnous.com
 
   .image-workshop-parameter-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .image-workshop-composer-tools {
+    gap: 2px;
+  }
+
+  .image-workshop-reference-trigger span {
+    display: none;
+  }
+
+  .image-workshop-model-select {
+    max-width: min(260px, 58vw);
   }
 
   .image-workshop-inspiration {

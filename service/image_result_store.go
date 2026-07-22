@@ -44,6 +44,8 @@ type ImageAsyncRequest struct {
 	Query       string            `json:"query,omitempty"`
 	ContentType string            `json:"content_type,omitempty"`
 	Body        json.RawMessage   `json:"body,omitempty"`
+	BodyPath    string            `json:"body_path,omitempty"`
+	ImageCount  uint              `json:"image_count,omitempty"`
 	Headers     map[string]string `json:"headers,omitempty"`
 }
 

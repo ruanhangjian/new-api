@@ -23,12 +23,15 @@ func TestImageWorkshopCapabilityForModel(t *testing.T) {
 	assert.Equal(t, []string{"auto", "low", "medium", "high"}, capability.Qualities)
 	assert.Equal(t, []string{"png", "jpeg", "webp"}, capability.OutputFormats)
 	assert.Equal(t, 6, capability.MaxImages)
+	assert.True(t, capability.SupportsReferenceImages)
+	assert.Equal(t, 9, capability.MaxReferenceImages)
 
 	capability, ok = imageWorkshopCapabilityForModel("gpt-image-1.5", true)
 	require.True(t, ok)
 	assert.Equal(t, "auto", capability.DefaultQuality)
 	assert.Equal(t, []string{"png", "jpeg", "webp"}, capability.OutputFormats)
 	assert.Equal(t, 4, capability.MaxImages)
+	assert.False(t, capability.SupportsReferenceImages)
 	assert.False(t, capability.SupportsTransparentBackground)
 
 	capability, ok = imageWorkshopCapabilityForModel("dall-e-3", true)

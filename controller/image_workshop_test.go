@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -16,12 +19,18 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type imageWorkshopTestUpload struct {
+	name string
+	body []byte
+}
 
 func TestImageWorkshopTokensReturnsOnlyCurrentUserMaskedTokens(t *testing.T) {
 	setupImageAsyncControllerTestDB(t)
@@ -136,6 +145,132 @@ func TestImageWorkshopGenerationQueuesGptImage2ThroughCompatibleChannel(t *testi
 	assert.Equal(t, "2K", data.Metadata["billing_tier"])
 	assert.Equal(t, 1.5, data.Metadata["billing_multiplier"])
 	assert.Equal(t, "fixed_price_multiplier", data.Metadata["billing_strategy"])
+}
+
+func TestImageWorkshopReferenceGenerationForwardsUploadedImages(t *testing.T) {
+	db := setupImageAsyncControllerTestDB(t)
+	service.InitHttpClient()
+	seedImageAsyncControllerUserAndToken(t, 1, 11)
+	seedImageAsyncControllerChannel(t, "gpt-image-2")
+	disableImageAsyncControllerBackgroundWork(t)
+	originalModelPrices := ratio_setting.ModelPrice2JSONString()
+	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"gpt-image-2":0.08}`))
+	t.Cleanup(func() {
+		_ = ratio_setting.UpdateModelPriceByJSONString(originalModelPrices)
+	})
+
+	requestStore := &service.ImageRequestStore{
+		RootDir:      t.TempDir(),
+		TTL:          time.Hour,
+		MaxBodyBytes: imageWorkshopMaxReferenceRequestBytes,
+	}
+	imageRequestStore = requestStore
+	t.Cleanup(func() { imageRequestStore = service.NewImageRequestStoreFromEnv() })
+	imageResultStore = &service.ImageResultStore{RootDir: t.TempDir(), TTL: time.Hour}
+	t.Cleanup(func() { imageResultStore = service.NewImageResultStoreFromEnv() })
+
+	received := make(chan struct {
+		path   string
+		prompt string
+		images []imageWorkshopTestUpload
+	}, 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		require.NoError(t, request.ParseMultipartForm(32<<20))
+		files := request.MultipartForm.File["image[]"]
+		if len(files) == 0 {
+			files = request.MultipartForm.File["image"]
+		}
+		images := make([]imageWorkshopTestUpload, 0, len(files))
+		for _, header := range files {
+			file, err := header.Open()
+			require.NoError(t, err)
+			body, err := io.ReadAll(file)
+			require.NoError(t, err)
+			require.NoError(t, file.Close())
+			images = append(images, imageWorkshopTestUpload{name: header.Filename, body: body})
+		}
+		received <- struct {
+			path   string
+			prompt string
+			images []imageWorkshopTestUpload
+		}{
+			path:   request.URL.Path,
+			prompt: request.FormValue("prompt"),
+			images: images,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"created":1,"data":[{"b64_json":"` + testTinyPNGBase64 + `"}]}`))
+	}))
+	defer upstream.Close()
+	require.NoError(t, db.Model(&model.Channel{}).Where("id = ?", 101).Update("base_url", upstream.URL).Error)
+
+	referenceOne := []byte("\x89PNG\r\n\x1a\nreference-one")
+	referenceTwo := []byte("\x89PNG\r\n\x1a\nreference-two")
+	body, contentType := buildImageWorkshopMultipartTestBody(t, 11, 1, []imageWorkshopTestUpload{
+		{name: "one.png", body: referenceOne},
+		{name: "two.png", body: referenceTwo},
+	})
+	recorder := performImageWorkshopGenerationRouteRequestWithContentType(t, 1, body, contentType)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), `"success":true`)
+
+	var task model.Task
+	require.NoError(t, db.Where("user_id = ?", 1).First(&task).Error)
+	assert.Equal(t, service.ImageAsyncActionEdit, task.Action)
+	var data service.ImageAsyncTaskData
+	require.NoError(t, task.GetData(&data))
+	assert.Empty(t, data.Request.Body)
+	assert.NotEmpty(t, data.Request.BodyPath)
+	assert.Equal(t, "/v1/images/edits", data.Request.Path)
+	assert.Equal(t, uint(1), data.Request.ImageCount)
+	assert.EqualValues(t, 2, data.Metadata["reference_image_count"])
+	assert.NotContains(t, string(task.Data), string(referenceOne))
+
+	require.NoError(t, db.Model(&model.Task{}).Where("task_id = ?", task.TaskID).Update("status", model.TaskStatusInProgress).Error)
+	require.NoError(t, executeAsyncImageTaskOnce(task.TaskID))
+	forwarded := <-received
+	assert.Equal(t, "/v1/images/edits", forwarded.path)
+	assert.Contains(t, forwarded.prompt, "draw with references")
+	assert.Contains(t, forwarded.prompt, "将宽高比设为 3:2")
+	assert.Contains(t, forwarded.prompt, imageWorkshopPromptSuffix)
+	require.Len(t, forwarded.images, 2)
+	assert.Equal(t, "one.png", forwarded.images[0].name)
+	assert.Equal(t, referenceOne, forwarded.images[0].body)
+	assert.Equal(t, "two.png", forwarded.images[1].name)
+	assert.Equal(t, referenceTwo, forwarded.images[1].body)
+
+	var completed model.Task
+	require.NoError(t, db.Where("task_id = ?", task.TaskID).First(&completed).Error)
+	assert.EqualValues(t, model.TaskStatusSuccess, completed.Status)
+	var completedData service.ImageAsyncTaskData
+	require.NoError(t, completed.GetData(&completedData))
+	assert.Empty(t, completedData.Request.BodyPath)
+	assert.NotEmpty(t, completedData.Files)
+	_, err := requestStore.Open(data.Request.BodyPath)
+	assert.ErrorIs(t, err, os.ErrNotExist)
+}
+
+func TestImageWorkshopReferenceGenerationRejectsTenthImage(t *testing.T) {
+	db := setupImageAsyncControllerTestDB(t)
+	seedImageAsyncControllerUserAndToken(t, 1, 11)
+	seedImageAsyncControllerChannel(t, "gpt-image-2")
+	disableImageAsyncControllerBackgroundWork(t)
+
+	images := make([]imageWorkshopTestUpload, 10)
+	for index := range images {
+		images[index] = imageWorkshopTestUpload{
+			name: fmt.Sprintf("reference-%d.png", index),
+			body: []byte("\x89PNG\r\n\x1a\nreference"),
+		}
+	}
+	body, contentType := buildImageWorkshopMultipartTestBody(t, 11, 1, images)
+	recorder := performImageWorkshopGenerationRouteRequestWithContentType(t, 1, body, contentType)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "参考图最多上传 9 张")
+	var count int64
+	require.NoError(t, db.Model(&model.Task{}).Count(&count).Error)
+	assert.Zero(t, count)
 }
 
 func TestImageWorkshopOptionsRejectsDisabledToken(t *testing.T) {
@@ -275,6 +410,53 @@ func TestImageWorkshopTaskRetryReusesFailedTaskAndForcesSingleImage(t *testing.T
 	assert.Nil(t, data.Error)
 	assert.Empty(t, data.Files)
 	assert.Zero(t, data.ExpiresAt)
+}
+
+func TestImageWorkshopReferenceTaskRetryReusesStagedImagesAndExpiresClearly(t *testing.T) {
+	db := setupImageAsyncControllerTestDB(t)
+	seedImageAsyncControllerUserAndToken(t, 1, 11)
+	seedImageAsyncControllerChannel(t, "gpt-image-2")
+	disableImageAsyncControllerBackgroundWork(t)
+	requestStore := &service.ImageRequestStore{
+		RootDir:      t.TempDir(),
+		TTL:          time.Hour,
+		MaxBodyBytes: imageWorkshopMaxReferenceRequestBytes,
+	}
+	imageRequestStore = requestStore
+	t.Cleanup(func() { imageRequestStore = service.NewImageRequestStoreFromEnv() })
+
+	body, contentType := buildImageWorkshopMultipartTestBody(t, 11, 3, []imageWorkshopTestUpload{
+		{name: "retry.png", body: []byte("\x89PNG\r\n\x1a\nretry-reference")},
+	})
+	recorder := performImageWorkshopGenerationRouteRequestWithContentType(t, 1, body, contentType)
+	require.Equal(t, http.StatusOK, recorder.Code)
+
+	var task model.Task
+	require.NoError(t, db.Where("user_id = ?", 1).First(&task).Error)
+	var original service.ImageAsyncTaskData
+	require.NoError(t, task.GetData(&original))
+	require.NotEmpty(t, original.Request.BodyPath)
+	require.NoError(t, db.Model(&model.Task{}).Where("task_id = ?", task.TaskID).Update("status", model.TaskStatusFailure).Error)
+
+	recorder = performImageWorkshopRetryRouteRequest(t, 1, task.TaskID)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), `"success":true`)
+	var retried model.Task
+	require.NoError(t, db.Where("task_id = ?", task.TaskID).First(&retried).Error)
+	var retriedData service.ImageAsyncTaskData
+	require.NoError(t, retried.GetData(&retriedData))
+	assert.Equal(t, original.Request.BodyPath, retriedData.Request.BodyPath)
+	assert.Equal(t, uint(1), retriedData.Request.ImageCount)
+	assert.Empty(t, retriedData.Request.Body)
+	assert.EqualValues(t, 1, retriedData.Metadata["output_count"])
+	file, err := requestStore.Open(retriedData.Request.BodyPath)
+	require.NoError(t, err)
+	require.NoError(t, file.Close())
+
+	require.NoError(t, requestStore.Remove(retriedData.Request.BodyPath))
+	require.NoError(t, db.Model(&model.Task{}).Where("task_id = ?", task.TaskID).Update("status", model.TaskStatusFailure).Error)
+	recorder = performImageWorkshopRetryRouteRequest(t, 1, task.TaskID)
+	assert.Contains(t, recorder.Body.String(), "参考图已过期，请重新上传后生成")
 }
 
 func TestImageWorkshopTaskRetryRejectsOtherUserAndNonFailedTask(t *testing.T) {
@@ -518,6 +700,9 @@ func TestImageWorkshopTaskRequiresCurrentUserAndImagePlatform(t *testing.T) {
 
 func TestDeleteImageWorkshopTasksOnlyDeletesOwnedTerminalTasks(t *testing.T) {
 	db := setupImageAsyncControllerTestDB(t)
+	requestStore := &service.ImageRequestStore{RootDir: t.TempDir(), TTL: time.Hour, MaxBodyBytes: 1024}
+	imageRequestStore = requestStore
+	t.Cleanup(func() { imageRequestStore = service.NewImageRequestStoreFromEnv() })
 	now := time.Now().Unix()
 	seedImageAsyncControllerTask := func(taskID string, userID int, platform constant.TaskPlatform, status model.TaskStatus) {
 		insertImageAsyncControllerTask(t, &model.Task{
@@ -535,6 +720,10 @@ func TestDeleteImageWorkshopTasksOnlyDeletesOwnedTerminalTasks(t *testing.T) {
 	seedImageAsyncControllerTask("keep_running", 1, constant.TaskPlatformImage, model.TaskStatusInProgress)
 	seedImageAsyncControllerTask("keep_other_user", 2, constant.TaskPlatformImage, model.TaskStatusSuccess)
 	seedImageAsyncControllerTask("keep_other_platform", 1, constant.TaskPlatformSuno, model.TaskStatusSuccess)
+	deletedPath, _, err := requestStore.Stage("delete_success", bytes.NewReader([]byte("request")))
+	require.NoError(t, err)
+	keptPath, _, err := requestStore.Stage("keep_running", bytes.NewReader([]byte("request")))
+	require.NoError(t, err)
 
 	recorder := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(recorder)
@@ -556,6 +745,11 @@ func TestDeleteImageWorkshopTasksOnlyDeletesOwnedTerminalTasks(t *testing.T) {
 	var remaining int64
 	require.NoError(t, db.Model(&model.Task{}).Count(&remaining).Error)
 	assert.EqualValues(t, 3, remaining)
+	_, err = requestStore.Open(deletedPath)
+	assert.ErrorIs(t, err, os.ErrNotExist)
+	file, err := requestStore.Open(keptPath)
+	require.NoError(t, err)
+	require.NoError(t, file.Close())
 }
 
 func TestDeleteImageWorkshopTasksSupportsDateScopes(t *testing.T) {
@@ -743,6 +937,15 @@ func TestImageWorkshopTaskMarksExpiredLocalResultUnavailable(t *testing.T) {
 }
 
 func performImageWorkshopGenerationRouteRequest(t *testing.T, userID int, body []byte) *httptest.ResponseRecorder {
+	return performImageWorkshopGenerationRouteRequestWithContentType(t, userID, body, "application/json")
+}
+
+func performImageWorkshopGenerationRouteRequestWithContentType(
+	t *testing.T,
+	userID int,
+	body []byte,
+	contentType string,
+) *httptest.ResponseRecorder {
 	t.Helper()
 	accessToken := fmt.Sprintf("image-workshop-access-%d", userID)
 	require.NoError(t, model.DB.Model(&model.User{}).Where("id = ?", userID).Update("access_token", accessToken).Error)
@@ -763,11 +966,41 @@ func performImageWorkshopGenerationRouteRequest(t *testing.T, userID int, body [
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/image-workshop/generations", bytes.NewReader(body))
-	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Content-Type", contentType)
 	request.Header.Set("Authorization", "Bearer "+accessToken)
 	request.Header.Set("New-Api-User", fmt.Sprintf("public_%d", userID))
 	router.ServeHTTP(recorder, request)
 	return recorder
+}
+
+func buildImageWorkshopMultipartTestBody(
+	t *testing.T,
+	tokenID int,
+	outputCount int,
+	images []imageWorkshopTestUpload,
+) ([]byte, string) {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	require.NoError(t, writer.WriteField("token_id", strconv.Itoa(tokenID)))
+	require.NoError(t, writer.WriteField("model", "gpt-image-2"))
+	require.NoError(t, writer.WriteField("prompt", "draw with references"))
+	require.NoError(t, writer.WriteField("n", strconv.Itoa(outputCount)))
+	require.NoError(t, writer.WriteField("size", "1536x1024"))
+	require.NoError(t, writer.WriteField("quality", "high"))
+	require.NoError(t, writer.WriteField("output_format", "png"))
+	field := "image"
+	if len(images) > 1 {
+		field = "image[]"
+	}
+	for _, image := range images {
+		part, err := writer.CreateFormFile(field, image.name)
+		require.NoError(t, err)
+		_, err = part.Write(image.body)
+		require.NoError(t, err)
+	}
+	require.NoError(t, writer.Close())
+	return body.Bytes(), writer.FormDataContentType()
 }
 
 func performImageWorkshopRetryRouteRequest(t *testing.T, userID int, taskID string) *httptest.ResponseRecorder {
