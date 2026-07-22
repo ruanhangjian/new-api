@@ -744,11 +744,11 @@ For commercial licensing, please contact support@quantumnous.com
   flex: 0 0 auto;
   align-items: center;
   gap: 6px;
-  padding: 0 9px;
-  border: 1px solid transparent;
+  padding: 0 10px;
+  border: 1px solid var(--border);
   border-radius: 7px;
   color: var(--muted-foreground);
-  background: transparent;
+  background: var(--background);
   font-size: 12px;
 }
 
@@ -779,6 +779,13 @@ For commercial licensing, please contact support@quantumnous.com
   background: var(--muted);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
+}
+
+.image-workshop-submit-tools {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
 }
 
 .image-workshop-model-select {
@@ -2049,12 +2056,8 @@ For commercial licensing, please contact support@quantumnous.com
     gap: 2px;
   }
 
-  .image-workshop-reference-trigger span {
-    display: none;
-  }
-
   .image-workshop-model-select {
-    max-width: min(260px, 58vw);
+    max-width: min(220px, 42vw);
   }
 
   .image-workshop-inspiration {

@@ -1,8 +1,8 @@
 import {
   ArrowUp,
   Image,
-  Images,
   LoaderCircle,
+  Paperclip,
   Plus,
   Video,
   X,
@@ -157,7 +157,7 @@ export function WorkshopComposer({
     })
     const duplicateCount = sizeValidFiles.length - uniqueFiles.length
     if (duplicateCount > 0) {
-      toast.info(`有 ${duplicateCount} 张重复图片未再次添加`)
+      toast.info(`有 ${duplicateCount} 张重复图片，请勿重复添加~`)
     }
 
     const available = Math.max(
@@ -434,22 +434,6 @@ export function WorkshopComposer({
                 event.target.value = ''
               }}
             />
-            <button
-              className='image-workshop-reference-trigger'
-              type='button'
-              disabled={
-                !supportsReferences ||
-                value.referenceImages.length >= maxReferenceImages
-              }
-              title={supportsReferences ? '上传参考图' : '当前模型不支持参考图'}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Images aria-hidden='true' />
-              <span>参考图</span>
-              {value.referenceImages.length > 0 && (
-                <small>{value.referenceImages.length}</small>
-              )}
-            </button>
             <WorkshopSelect
               value={value.model}
               options={capabilities.map((item) => ({
@@ -464,20 +448,39 @@ export function WorkshopComposer({
             />
           </div>
 
-          <button
-            className='image-workshop-generate'
-            type='button'
-            disabled={disabled}
-            aria-label={isSubmitting ? '正在提交' : '生成图片'}
-            title={isSubmitting ? '正在提交' : '生成图片'}
-            onClick={onSubmit}
-          >
-            {isSubmitting ? (
-              <LoaderCircle className='animate-spin' aria-hidden='true' />
-            ) : (
-              <ArrowUp aria-hidden='true' />
-            )}
-          </button>
+          <div className='image-workshop-submit-tools'>
+            <button
+              className='image-workshop-reference-trigger'
+              type='button'
+              disabled={
+                !supportsReferences ||
+                value.referenceImages.length >= maxReferenceImages
+              }
+              title={supportsReferences ? '上传参考图' : '当前模型不支持参考图'}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Paperclip aria-hidden='true' />
+              <span>参考图</span>
+              {value.referenceImages.length > 0 && (
+                <small>{value.referenceImages.length}</small>
+              )}
+            </button>
+
+            <button
+              className='image-workshop-generate'
+              type='button'
+              disabled={disabled}
+              aria-label={isSubmitting ? '正在提交' : '生成图片'}
+              title={isSubmitting ? '正在提交' : '生成图片'}
+              onClick={onSubmit}
+            >
+              {isSubmitting ? (
+                <LoaderCircle className='animate-spin' aria-hidden='true' />
+              ) : (
+                <ArrowUp aria-hidden='true' />
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </section>
