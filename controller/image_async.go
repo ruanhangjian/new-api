@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -251,7 +252,7 @@ func executeAsyncImageTaskOnce(taskID string) error {
 		if imageCount > 1 {
 			resultBody, err = executeImageWorkshopBatch(task, data, imageCount)
 		} else {
-			resultBody, err = executeImageAsyncRelay(task, data, data.Request.Body)
+			resultBody, err = executeImageWorkshopRelay(task, data, data.Request.Body, 0)
 		}
 	} else {
 		resultBody, err = executeImageAsyncRelay(task, data, data.Request.Body)
@@ -328,14 +329,124 @@ func rewriteImageWorkshopRequestCount(body []byte, count uint) ([]byte, error) {
 }
 
 func executeImageAsyncRelay(task *model.Task, data service.ImageAsyncTaskData, body []byte) ([]byte, error) {
+	return executeImageAsyncRelayAttempt(task, data, body, "", 0)
+}
+
+type imageAsyncRelayError struct {
+	StatusCode int
+	ChannelID  int
+	Code       string
+	Message    string
+}
+
+func (e *imageAsyncRelayError) Error() string {
+	if e == nil {
+		return ""
+	}
+	if strings.TrimSpace(e.Message) != "" {
+		return strings.TrimSpace(e.Message)
+	}
+	if e.StatusCode > 0 {
+		return fmt.Sprintf("upstream request failed (status %d)", e.StatusCode)
+	}
+	return "upstream request failed"
+}
+
+type imageAsyncRelayAttemptFunc func(
+	task *model.Task,
+	data service.ImageAsyncTaskData,
+	body []byte,
+	idempotencyKey string,
+	preferredChannelID int,
+) ([]byte, error)
+
+func executeImageWorkshopRelay(task *model.Task, data service.ImageAsyncTaskData, body []byte, imageIndex int) ([]byte, error) {
+	maxRetries := 1
+	if common.RetryTimes > 0 {
+		// The normal relay already retries eligible status codes when global retry is enabled.
+		maxRetries = 0
+	}
+	return executeImageWorkshopRelayWithRetry(
+		task,
+		data,
+		body,
+		imageIndex,
+		maxRetries,
+		executeImageAsyncRelayAttempt,
+		time.Sleep,
+		imageWorkshopAutoRetryDelay,
+	)
+}
+
+func executeImageWorkshopRelayWithRetry(
+	task *model.Task,
+	data service.ImageAsyncTaskData,
+	body []byte,
+	imageIndex int,
+	maxRetries int,
+	attempt imageAsyncRelayAttemptFunc,
+	sleep func(time.Duration),
+	delay func() time.Duration,
+) ([]byte, error) {
+	idempotencyKey := fmt.Sprintf("image-workshop:%s:%d", task.TaskID, imageIndex)
+	preferredChannelID := 0
+	for retry := 0; ; retry++ {
+		result, err := attempt(task, data, body, idempotencyKey, preferredChannelID)
+		if err == nil {
+			return result, nil
+		}
+		var relayErr *imageAsyncRelayError
+		if retry >= maxRetries || !errors.As(err, &relayErr) || !relayErr.Retryable() {
+			return nil, err
+		}
+		if relayErr.ChannelID > 0 {
+			preferredChannelID = relayErr.ChannelID
+		}
+		retryDelay := delay()
+		logger.LogWarn(nil, fmt.Sprintf(
+			"image workshop task %s retrying: image_index=%d retry=%d/%d channel=%d status=%d code=%s delay=%s",
+			task.TaskID,
+			imageIndex,
+			retry+1,
+			maxRetries,
+			preferredChannelID,
+			relayErr.StatusCode,
+			relayErr.Code,
+			retryDelay,
+		))
+		sleep(retryDelay)
+	}
+}
+
+func (e *imageAsyncRelayError) Retryable() bool {
+	if e == nil {
+		return false
+	}
+	if e.StatusCode == http.StatusBadGateway || e.StatusCode == http.StatusServiceUnavailable {
+		return true
+	}
+	return e.StatusCode == http.StatusInternalServerError && e.Code == string(types.ErrorCodeDoRequestFailed)
+}
+
+func imageWorkshopAutoRetryDelay() time.Duration {
+	return time.Second + time.Duration(time.Now().UnixNano()%1000)*time.Millisecond
+}
+
+func executeImageAsyncRelayAttempt(
+	task *model.Task,
+	data service.ImageAsyncTaskData,
+	body []byte,
+	idempotencyKey string,
+	preferredChannelID int,
+) ([]byte, error) {
 	relayData := data
 	relayData.Request.Body = json.RawMessage(body)
-	c, recorder, err := buildAsyncImageRelayContext(task, relayData)
+	c, recorder, err := buildAsyncImageRelayContextForChannel(task, relayData, idempotencyKey, preferredChannelID)
 	if err != nil {
 		return nil, err
 	}
 	if c.IsAborted() {
-		return nil, fmt.Errorf("%s", strings.TrimSpace(recorder.Body.String()))
+		return nil, newImageAsyncRelayError(c, recorder)
 	}
 	if isImageWorkshopTask(data) {
 		if err := finalizeImageWorkshopRequestForSelectedChannel(c); err != nil {
@@ -348,9 +459,39 @@ func executeImageAsyncRelay(task *model.Task, data service.ImageAsyncTaskData, b
 		statusCode = http.StatusOK
 	}
 	if statusCode >= http.StatusBadRequest {
-		return nil, fmt.Errorf("%s", strings.TrimSpace(recorder.Body.String()))
+		return nil, newImageAsyncRelayError(c, recorder)
 	}
 	return append([]byte(nil), recorder.Body.Bytes()...), nil
+}
+
+func newImageAsyncRelayError(c *gin.Context, recorder *httptest.ResponseRecorder) error {
+	statusCode := recorder.Code
+	if statusCode < http.StatusBadRequest {
+		statusCode = http.StatusInternalServerError
+	}
+	body := strings.TrimSpace(recorder.Body.String())
+	var envelope struct {
+		Error types.OpenAIError `json:"error"`
+	}
+	message := ""
+	code := ""
+	if common.Unmarshal([]byte(body), &envelope) == nil {
+		message = strings.TrimSpace(envelope.Error.Message)
+		if envelope.Error.Code != nil {
+			code = strings.TrimSpace(fmt.Sprint(envelope.Error.Code))
+		}
+	}
+	if message == "" && statusCode >= http.StatusInternalServerError {
+		message = fmt.Sprintf("upstream request failed (status %d)", statusCode)
+	} else if message == "" {
+		message = body
+	}
+	return &imageAsyncRelayError{
+		StatusCode: statusCode,
+		ChannelID:  common.GetContextKeyInt(c, constant.ContextKeyChannelId),
+		Code:       code,
+		Message:    message,
+	}
 }
 
 func executeImageWorkshopBatch(task *model.Task, data service.ImageAsyncTaskData, count uint) ([]byte, error) {
@@ -370,7 +511,7 @@ func executeImageWorkshopBatch(task *model.Task, data service.ImageAsyncTaskData
 				results <- batchResult{index: index, err: err}
 				return
 			}
-			body, err = executeImageAsyncRelay(task, data, body)
+			body, err = executeImageWorkshopRelay(task, data, body, index)
 			results <- batchResult{index: index, body: body, err: err}
 		}(index)
 	}
@@ -449,6 +590,15 @@ func imageAsyncTaskMetadata(c *gin.Context, request *dto.ImageRequest) map[strin
 }
 
 func buildAsyncImageRelayContext(task *model.Task, data service.ImageAsyncTaskData) (*gin.Context, *httptest.ResponseRecorder, error) {
+	return buildAsyncImageRelayContextForChannel(task, data, "", 0)
+}
+
+func buildAsyncImageRelayContextForChannel(
+	task *model.Task,
+	data service.ImageAsyncTaskData,
+	idempotencyKey string,
+	preferredChannelID int,
+) (*gin.Context, *httptest.ResponseRecorder, error) {
 	token, err := model.GetTokenByIds(task.PrivateData.TokenId, task.UserId)
 	if err != nil {
 		return nil, nil, err
@@ -472,6 +622,9 @@ func buildAsyncImageRelayContext(task *model.Task, data service.ImageAsyncTaskDa
 		req.Header.Set(key, value)
 	}
 	req.Header.Set("Authorization", "Bearer sk-"+token.Key)
+	if idempotencyKey != "" {
+		req.Header.Set("Idempotency-Key", idempotencyKey)
+	}
 	c.Request = req
 	if isImageWorkshopTask(data) {
 		c.Set(string(constant.ContextKeyImageWorkshopRequest), true)
@@ -480,6 +633,9 @@ func buildAsyncImageRelayContext(task *model.Task, data service.ImageAsyncTaskDa
 	middleware.TokenAuth()(c)
 	if c.IsAborted() {
 		return nil, recorder, fmt.Errorf("%s", strings.TrimSpace(recorder.Body.String()))
+	}
+	if preferredChannelID > 0 {
+		common.SetContextKey(c, constant.ContextKeyTokenSpecificChannelId, strconv.Itoa(preferredChannelID))
 	}
 	middleware.Distribute()(c)
 	return c, recorder, nil

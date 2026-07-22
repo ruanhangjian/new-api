@@ -6,9 +6,25 @@ import (
 	"testing"
 
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestSetupApiRequestHeaderForwardsIdempotencyKey(t *testing.T) {
+	t.Parallel()
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", nil)
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Request.Header.Set("Idempotency-Key", "image-workshop:task_x:0")
+	header := http.Header{}
+
+	SetupApiRequestHeader(&relaycommon.RelayInfo{RelayMode: relayconstant.RelayModeImagesGenerations}, c, &header)
+
+	require.Equal(t, "image-workshop:task_x:0", header.Get("Idempotency-Key"))
+}
 
 func TestProcessHeaderOverride_ChannelTestSkipsPassthroughRules(t *testing.T) {
 	t.Parallel()

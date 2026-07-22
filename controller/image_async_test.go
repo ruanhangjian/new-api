@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,6 +19,8 @@ import (
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
+	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -69,6 +72,162 @@ func TestImageWorkshopRequestCountAndSingleImageRewrite(t *testing.T) {
 	rewritten, err := rewriteImageWorkshopRequestCount([]byte(`{"model":"gpt-image-2","prompt":"draw","n":6}`), 1)
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"model":"gpt-image-2","prompt":"draw","n":1}`, string(rewritten))
+}
+
+func TestImageWorkshopRelayRetriesOnceOn502WithStableIdempotencyKeyAndChannel(t *testing.T) {
+	task := &model.Task{TaskID: "task_auto_retry"}
+	data := service.ImageAsyncTaskData{}
+	body := []byte(`{"model":"gpt-image-2","prompt":"draw","n":1}`)
+	var keys []string
+	var preferredChannels []int
+	var slept []time.Duration
+	attempts := 0
+
+	result, err := executeImageWorkshopRelayWithRetry(
+		task,
+		data,
+		body,
+		2,
+		1,
+		func(_ *model.Task, _ service.ImageAsyncTaskData, _ []byte, idempotencyKey string, preferredChannelID int) ([]byte, error) {
+			attempts++
+			keys = append(keys, idempotencyKey)
+			preferredChannels = append(preferredChannels, preferredChannelID)
+			if attempts == 1 {
+				return nil, &imageAsyncRelayError{StatusCode: http.StatusBadGateway, ChannelID: 101, Code: string(types.ErrorCodeBadResponseStatusCode)}
+			}
+			return []byte(`{"data":[{"b64_json":"ok"}]}`), nil
+		},
+		func(delay time.Duration) { slept = append(slept, delay) },
+		func() time.Duration { return 1500 * time.Millisecond },
+	)
+
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"data":[{"b64_json":"ok"}]}`, string(result))
+	assert.Equal(t, 2, attempts)
+	assert.Equal(t, []string{"image-workshop:task_auto_retry:2", "image-workshop:task_auto_retry:2"}, keys)
+	assert.Equal(t, []int{0, 101}, preferredChannels)
+	assert.Equal(t, []time.Duration{1500 * time.Millisecond}, slept)
+}
+
+func TestImageWorkshopRelayDoesNotRetryAmbiguousOrNonRetryableFailures(t *testing.T) {
+	tests := []struct {
+		name       string
+		relayError *imageAsyncRelayError
+	}{
+		{name: "gateway timeout", relayError: &imageAsyncRelayError{StatusCode: http.StatusGatewayTimeout}},
+		{name: "cloudflare timeout", relayError: &imageAsyncRelayError{StatusCode: 524}},
+		{name: "bad request", relayError: &imageAsyncRelayError{StatusCode: http.StatusBadRequest}},
+		{name: "malformed success", relayError: &imageAsyncRelayError{StatusCode: http.StatusOK, Code: string(types.ErrorCodeBadResponseBody)}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			attempts := 0
+			_, err := executeImageWorkshopRelayWithRetry(
+				&model.Task{TaskID: "task_no_retry"},
+				service.ImageAsyncTaskData{},
+				nil,
+				0,
+				1,
+				func(_ *model.Task, _ service.ImageAsyncTaskData, _ []byte, _ string, _ int) ([]byte, error) {
+					attempts++
+					return nil, test.relayError
+				},
+				func(time.Duration) { t.Fatal("non-retryable failure must not sleep") },
+				func() time.Duration { return 0 },
+			)
+			require.Error(t, err)
+			assert.Equal(t, 1, attempts)
+		})
+	}
+}
+
+func TestImageWorkshopRelayRetriesExplicitConnectionFailure(t *testing.T) {
+	relayErr := &imageAsyncRelayError{StatusCode: http.StatusInternalServerError, Code: string(types.ErrorCodeDoRequestFailed)}
+	assert.True(t, relayErr.Retryable())
+	assert.True(t, (&imageAsyncRelayError{StatusCode: http.StatusBadGateway}).Retryable())
+	assert.True(t, (&imageAsyncRelayError{StatusCode: http.StatusServiceUnavailable}).Retryable())
+	assert.False(t, (&imageAsyncRelayError{StatusCode: http.StatusGatewayTimeout}).Retryable())
+}
+
+func TestImageWorkshopRelayRetriesEmpty502ThroughRealRelay(t *testing.T) {
+	db := setupImageAsyncControllerTestDB(t)
+	service.InitHttpClient()
+	seedImageAsyncControllerUserAndToken(t, 1, 11)
+	seedImageAsyncControllerChannel(t, "gpt-image-1")
+	originalModelPrices := ratio_setting.ModelPrice2JSONString()
+	require.NoError(t, ratio_setting.UpdateModelPriceByJSONString(`{"gpt-image-1":0.08}`))
+	t.Cleanup(func() {
+		_ = ratio_setting.UpdateModelPriceByJSONString(originalModelPrices)
+	})
+
+	var attempts atomic.Int32
+	idempotencyKeys := make(chan string, 2)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		idempotencyKeys <- request.Header.Get("Idempotency-Key")
+		if attempts.Add(1) == 1 {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"created":1,"data":[{"b64_json":"aW1hZ2U="}],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}`))
+	}))
+	defer upstream.Close()
+	require.NoError(t, db.Model(&model.Channel{}).Where("id = ?", 101).Update("base_url", upstream.URL).Error)
+
+	task := &model.Task{
+		TaskID:   "task_real_502_retry",
+		UserId:   1,
+		Group:    "default",
+		Platform: constant.TaskPlatformImage,
+		PrivateData: model.TaskPrivateData{
+			TokenId: 11,
+		},
+	}
+	data := service.ImageAsyncTaskData{
+		Request: service.ImageAsyncRequest{
+			Method:      http.MethodPost,
+			Path:        "/v1/images/generations",
+			ContentType: "application/json",
+			Body:        json.RawMessage(`{"model":"gpt-image-1","prompt":"draw","n":1,"size":"1024x1024","quality":"auto","response_format":"b64_json"}`),
+		},
+		Metadata: map[string]interface{}{"source": "image_workshop"},
+	}
+
+	result, err := executeImageWorkshopRelayWithRetry(
+		task,
+		data,
+		data.Request.Body,
+		0,
+		1,
+		executeImageAsyncRelayAttempt,
+		func(time.Duration) {},
+		func() time.Duration { return 0 },
+	)
+
+	require.NoError(t, err)
+	assert.Contains(t, string(result), `"b64_json":"aW1hZ2U="`)
+	assert.EqualValues(t, 2, attempts.Load())
+	close(idempotencyKeys)
+	for key := range idempotencyKeys {
+		assert.Equal(t, "image-workshop:task_real_502_retry:0", key)
+	}
+}
+
+func TestNewImageAsyncRelayErrorPreservesStatusCodeAndChannel(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	recorder.Code = http.StatusBadGateway
+	recorder.Body.WriteString(`{"error":{"message":"Upstream request failed","type":"upstream_error","code":"bad_response_status_code"}}`)
+	c, _ := gin.CreateTestContext(recorder)
+	c.Set(string(constant.ContextKeyChannelId), 101)
+
+	err := newImageAsyncRelayError(c, recorder)
+	var relayErr *imageAsyncRelayError
+	require.ErrorAs(t, err, &relayErr)
+	assert.Equal(t, http.StatusBadGateway, relayErr.StatusCode)
+	assert.Equal(t, 101, relayErr.ChannelID)
+	assert.Equal(t, "bad_response_status_code", relayErr.Code)
+	assert.Equal(t, "Upstream request failed", relayErr.Message)
 }
 
 func TestImageAsyncTaskMetadataCapturesWorkshopBillingTier(t *testing.T) {
@@ -359,6 +518,37 @@ func TestBuildAsyncImageRelayContextRejectsInvalidTokenStateAndModelLimit(t *tes
 	assert.Contains(t, recorder.Body.String(), "gpt-image-1")
 }
 
+func TestBuildAsyncImageRelayContextUsesIdempotencyKeyAndPreferredChannel(t *testing.T) {
+	setupImageAsyncControllerTestDB(t)
+	seedImageAsyncControllerUserAndToken(t, 1, 11)
+	seedImageAsyncControllerChannel(t, "gpt-image-1")
+	task := &model.Task{
+		TaskID:   "task_preferred_channel",
+		UserId:   1,
+		Group:    "default",
+		Platform: constant.TaskPlatformImage,
+		PrivateData: model.TaskPrivateData{
+			TokenId: 11,
+		},
+	}
+	data := service.ImageAsyncTaskData{
+		Request: service.ImageAsyncRequest{
+			Method:      http.MethodPost,
+			Path:        "/v1/images/generations",
+			ContentType: "application/json",
+			Body:        json.RawMessage(`{"model":"gpt-image-1","prompt":"draw"}`),
+		},
+		Metadata: map[string]interface{}{"source": "image_workshop"},
+	}
+
+	c, recorder, err := buildAsyncImageRelayContextForChannel(task, data, "image-workshop:task_preferred_channel:0", 101)
+	require.NoError(t, err)
+	require.NotNil(t, c)
+	assert.False(t, c.IsAborted(), recorder.Body.String())
+	assert.Equal(t, "image-workshop:task_preferred_channel:0", c.Request.Header.Get("Idempotency-Key"))
+	assert.Equal(t, 101, common.GetContextKeyInt(c, constant.ContextKeyChannelId))
+}
+
 func TestImageTaskDataDoesNotPersistLargeBase64(t *testing.T) {
 	db := setupImageAsyncControllerTestDB(t)
 	raw := append([]byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}, bytes.Repeat([]byte{1, 2, 3, 4}, 1024)...)
@@ -400,7 +590,14 @@ func setupImageAsyncControllerTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	model.DB = db
 	model.LOG_DB = db
-	require.NoError(t, db.AutoMigrate(&model.Task{}, &model.User{}, &model.Token{}, &model.Channel{}, &model.Ability{}))
+	require.NoError(t, db.AutoMigrate(
+		&model.Task{},
+		&model.User{},
+		&model.Token{},
+		&model.Channel{},
+		&model.Ability{},
+		&model.UserSubscription{},
+	))
 	t.Cleanup(func() {
 		common.SetDatabaseTypes(originalMainDatabaseType, originalLogDatabaseType)
 		common.MemoryCacheEnabled = originalMemoryCacheEnabled
