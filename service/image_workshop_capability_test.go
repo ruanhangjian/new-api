@@ -25,6 +25,7 @@ func TestImageWorkshopCapabilityForModel(t *testing.T) {
 	assert.Equal(t, 6, capability.MaxImages)
 	assert.True(t, capability.SupportsReferenceImages)
 	assert.Equal(t, 9, capability.MaxReferenceImages)
+	assert.True(t, capability.SupportsTransparentBackground)
 
 	capability, ok = imageWorkshopCapabilityForModel("gpt-image-1.5", true)
 	require.True(t, ok)

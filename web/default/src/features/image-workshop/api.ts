@@ -71,6 +71,9 @@ export async function createImageWorkshopGeneration(
       if (request.output_format) {
         form.append('output_format', request.output_format)
       }
+      if (request.transparent_output) {
+        form.append('transparent_output', 'true')
+      }
       referenceImages.forEach((file) => form.append('image[]', file, file.name))
       payload = form
     }

@@ -70,6 +70,7 @@ export type ImageWorkshopGenerationRequest = {
   size: string
   quality: string
   output_format?: string
+  transparent_output?: boolean
   reference_images?: File[]
 }
 
@@ -103,6 +104,7 @@ export type ImageWorkshopTask = {
   size?: string
   quality?: string
   output_format?: string
+  transparent_output?: boolean
   billing_tier?: '1K' | '2K' | '4K'
   billing_multiplier?: number
   billing_unit_price?: number
@@ -144,6 +146,9 @@ export type LocalImageWorkshopWork = {
   size: string
   quality: string
   outputFormat: string
+  transparentOutput?: boolean
+  transparentProcessingFailed?: boolean
+  originalBlob?: Blob
   createdAt: number
   submittedAt?: number
   revisedPrompt?: string

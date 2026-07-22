@@ -39,6 +39,7 @@ export type WorkshopFormState = {
   size: string
   quality: string
   outputFormat: string
+  transparentOutput: boolean
   count: number
   referenceImages: File[]
 }
@@ -383,14 +384,22 @@ export function WorkshopComposer({
               }
               ariaLabel='格式'
               disabled={!capability?.output_formats.length}
-              onChange={(outputFormat) => onChange({ outputFormat })}
+              onChange={(outputFormat) =>
+                onChange({
+                  outputFormat,
+                  transparentOutput:
+                    outputFormat.toLowerCase() === 'png'
+                      ? value.transparentOutput
+                      : false,
+                })
+              }
             />
           </div>
 
           <div className='image-workshop-parameter-field'>
-            <span>透明背景</span>
+            <span>透明背景（本地处理）</span>
             <WorkshopSelect
-              value='false'
+              value={value.transparentOutput ? 'true' : 'false'}
               options={[
                 { value: 'false', label: '关闭' },
                 ...(capability?.supports_transparent_background
@@ -398,8 +407,13 @@ export function WorkshopComposer({
                   : []),
               ]}
               ariaLabel='透明背景'
-              disabled={!capability?.supports_transparent_background}
-              onChange={() => {}}
+              disabled={
+                !capability?.supports_transparent_background ||
+                value.outputFormat.toLowerCase() !== 'png'
+              }
+              onChange={(transparentOutput) =>
+                onChange({ transparentOutput: transparentOutput === 'true' })
+              }
             />
           </div>
 

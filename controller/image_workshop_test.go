@@ -147,6 +147,24 @@ func TestImageWorkshopGenerationQueuesGptImage2ThroughCompatibleChannel(t *testi
 	assert.Equal(t, "fixed_price_multiplier", data.Metadata["billing_strategy"])
 }
 
+func TestImageWorkshopTransparentOutputIsStoredAsLocalMetadataOnly(t *testing.T) {
+	db := setupImageAsyncControllerTestDB(t)
+	seedImageAsyncControllerUserAndToken(t, 1, 11)
+	seedImageAsyncControllerChannel(t, "gpt-image-2")
+	disableImageAsyncControllerBackgroundWork(t)
+
+	body := []byte(`{"token_id":11,"model":"gpt-image-2","prompt":"draw","n":1,"size":"1024x1024","quality":"high","output_format":"png","transparent_output":true}`)
+	recorder := performImageWorkshopGenerationRouteRequest(t, 1, body)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var task model.Task
+	require.NoError(t, db.Where("user_id = ?", 1).First(&task).Error)
+	var data service.ImageAsyncTaskData
+	require.NoError(t, task.GetData(&data))
+	assert.NotContains(t, string(data.Request.Body), "transparent_output")
+	assert.Equal(t, true, data.Metadata["transparent_output"])
+}
+
 func TestImageWorkshopReferenceGenerationForwardsUploadedImages(t *testing.T) {
 	db := setupImageAsyncControllerTestDB(t)
 	service.InitHttpClient()

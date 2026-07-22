@@ -158,6 +158,17 @@ async function downloadWorkImage(url: string, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
 }
 
+function downloadBlob(blob: Blob, filename: string) {
+  const objectUrl = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = objectUrl
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+}
+
 function useWorksMasonry() {
   const gridRef = useRef<HTMLDivElement>(null)
 
@@ -287,6 +298,9 @@ function LocalWorkCard({
       model={work.model}
       format={work.outputFormat}
       timestamp={work.createdAt}
+      transparentOutput={work.transparentOutput}
+      transparentProcessingFailed={work.transparentProcessingFailed}
+      originalBlob={work.originalBlob}
       local
       controls={controls}
     />
@@ -302,6 +316,9 @@ function CompletedWorkCard({
   controls,
   local = false,
   localSaveFailed = false,
+  transparentOutput = false,
+  transparentProcessingFailed = false,
+  originalBlob,
 }: {
   image: ImageWorkshopResultImage
   prompt: string
@@ -311,6 +328,9 @@ function CompletedWorkCard({
   controls: WorkControlsProps
   local?: boolean
   localSaveFailed?: boolean
+  transparentOutput?: boolean
+  transparentProcessingFailed?: boolean
+  originalBlob?: Blob
 }) {
   const extension = (format || 'png').toLowerCase()
   const imageAlt = prompt || model || '生成图片'
@@ -320,6 +340,22 @@ function CompletedWorkCard({
       toast.error('图片下载失败，请稍后重试')
     })
   }
+  const downloadOriginal = () => {
+    if (!originalBlob) return
+    downloadBlob(
+      originalBlob,
+      `image-workshop-${timestamp || 'original'}-original.png`
+    )
+  }
+  const typeLabel = transparentProcessingFailed
+    ? '透明失败 · 原图'
+    : transparentOutput
+      ? local
+        ? '透明 · 本机'
+        : '透明处理中'
+      : local
+        ? '本机'
+        : '临时'
   const imageElement = <img src={image.url} alt={imageAlt} loading='lazy' />
   return (
     <article
@@ -327,9 +363,7 @@ function CompletedWorkCard({
       data-selected={controls.selected}
     >
       <div className='image-workshop-work-media image-workshop-work-media-completed'>
-        <span className='image-workshop-work-type'>
-          {local ? '本机' : '临时'}
-        </span>
+        <span className='image-workshop-work-type'>{typeLabel}</span>
         <WorkSelectionControl {...controls} />
         {controls.selectionMode ? (
           <button
@@ -358,6 +392,16 @@ function CompletedWorkCard({
             >
               <Download aria-hidden='true' />
             </button>
+            {originalBlob && (
+              <button
+                type='button'
+                title='下载原始图片'
+                aria-label='下载原始图片'
+                onClick={downloadOriginal}
+              >
+                <FileImage aria-hidden='true' />
+              </button>
+            )}
             <button
               type='button'
               title='删除作品'
@@ -810,6 +854,7 @@ export function WorksGallery({
                   prompt={item.task.prompt || ''}
                   model={item.task.model || ''}
                   format={item.task.output_format}
+                  transparentOutput={item.task.transparent_output}
                   timestamp={item.task.finish_time || item.task.submit_time}
                   localSaveFailed={localSaveFailedImageKeys.has(item.id)}
                   controls={controlsFor(work)}

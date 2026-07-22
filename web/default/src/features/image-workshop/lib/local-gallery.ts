@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type { ImageWorkshopTask, LocalImageWorkshopWork } from '../types'
+import { removeKeyedBackgroundFromBlob } from './transparent-image'
 
 const DATABASE_NAME = 'newapi-image-workshop'
 const DATABASE_VERSION = 1
@@ -152,7 +153,16 @@ export async function saveTaskImagesLocally(
         if (!response.ok) {
           throw new Error('生成结果暂时无法保存到当前浏览器')
         }
-        const blob = await response.blob()
+        const originalBlob = await response.blob()
+        let blob = originalBlob
+        let transparentProcessingFailed = false
+        if (task.transparent_output) {
+          try {
+            blob = await removeKeyedBackgroundFromBlob(originalBlob)
+          } catch {
+            transparentProcessingFailed = true
+          }
+        }
         const work: LocalImageWorkshopWork = {
           key,
           userId,
@@ -164,6 +174,9 @@ export async function saveTaskImagesLocally(
           size: task.size || '',
           quality: task.quality || '',
           outputFormat: task.output_format || blob.type.split('/')[1] || 'png',
+          transparentOutput: Boolean(task.transparent_output),
+          transparentProcessingFailed,
+          originalBlob: task.transparent_output ? originalBlob : undefined,
           createdAt:
             task.finish_time ||
             task.submit_time ||

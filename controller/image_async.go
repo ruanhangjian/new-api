@@ -627,6 +627,9 @@ func imageAsyncTaskMetadata(c *gin.Context, request *dto.ImageRequest) map[strin
 			if outputFormat := imageWorkshopRequestOutputFormat(c, request); outputFormat != "" {
 				metadata["output_format"] = outputFormat
 			}
+			if c.GetBool(imageWorkshopTransparentOutputContextKey) {
+				metadata["transparent_output"] = true
+			}
 			outputCount := c.GetInt(imageWorkshopOutputCountContextKey)
 			if outputCount <= 0 && request.N != nil {
 				outputCount = int(*request.N)

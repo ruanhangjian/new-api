@@ -41,15 +41,16 @@ type imageWorkshopTokenResponse struct {
 }
 
 type imageWorkshopGenerationRequest struct {
-	TokenID        int             `json:"token_id"`
-	Model          string          `json:"model"`
-	Prompt         string          `json:"prompt"`
-	N              *uint           `json:"n,omitempty"`
-	Size           string          `json:"size,omitempty"`
-	Quality        string          `json:"quality,omitempty"`
-	OutputFormat   string          `json:"output_format,omitempty"`
-	ResponseFormat string          `json:"response_format,omitempty"`
-	Moderation     json.RawMessage `json:"moderation,omitempty"`
+	TokenID           int             `json:"token_id"`
+	Model             string          `json:"model"`
+	Prompt            string          `json:"prompt"`
+	N                 *uint           `json:"n,omitempty"`
+	Size              string          `json:"size,omitempty"`
+	Quality           string          `json:"quality,omitempty"`
+	OutputFormat      string          `json:"output_format,omitempty"`
+	TransparentOutput bool            `json:"transparent_output,omitempty"`
+	ResponseFormat    string          `json:"response_format,omitempty"`
+	Moderation        json.RawMessage `json:"moderation,omitempty"`
 }
 
 type imageWorkshopTaskResponse struct {
@@ -62,6 +63,7 @@ type imageWorkshopTaskResponse struct {
 	Size                string                       `json:"size,omitempty"`
 	Quality             string                       `json:"quality,omitempty"`
 	OutputFormat        string                       `json:"output_format,omitempty"`
+	TransparentOutput   bool                         `json:"transparent_output,omitempty"`
 	BillingTier         string                       `json:"billing_tier,omitempty"`
 	BillingMultiplier   float64                      `json:"billing_multiplier,omitempty"`
 	BillingUnitPrice    float64                      `json:"billing_unit_price,omitempty"`
@@ -84,17 +86,18 @@ type imageWorkshopDeleteTasksRequest struct {
 
 var imageWorkshopGenerationFields = map[string]struct{}{
 	"token_id": {}, "model": {}, "prompt": {}, "n": {}, "size": {}, "quality": {},
-	"output_format": {}, "response_format": {}, "moderation": {},
+	"output_format": {}, "transparent_output": {}, "response_format": {}, "moderation": {},
 }
 
 const imageWorkshopPromptSuffix = "不需要反问我任何问题，直接按照我提示词的要求生成图片。"
 
 const (
-	imageWorkshopMaxReferenceImages       = 9
-	imageWorkshopMaxReferenceFileBytes    = 20 << 20
-	imageWorkshopMaxReferenceRequestBytes = 100 << 20
-	imageWorkshopReferenceCountContextKey = "image_workshop_reference_count"
-	imageWorkshopOutputCountContextKey    = "image_workshop_output_count"
+	imageWorkshopMaxReferenceImages          = 9
+	imageWorkshopMaxReferenceFileBytes       = 20 << 20
+	imageWorkshopMaxReferenceRequestBytes    = 100 << 20
+	imageWorkshopReferenceCountContextKey    = "image_workshop_reference_count"
+	imageWorkshopOutputCountContextKey       = "image_workshop_output_count"
+	imageWorkshopTransparentOutputContextKey = "image_workshop_transparent_output"
 )
 
 const imageWorkshopRetryTaskContextKey = "image_workshop_retry_task"
@@ -262,6 +265,10 @@ func buildImageWorkshopReferenceGenerationBody(c *gin.Context) (*model.Token, []
 		common.ApiErrorMsg(c, err.Error())
 		return nil, nil, "", 0, 0, false
 	}
+	if err := prepareImageWorkshopTransparentOutput(c, request, normalized); err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return nil, nil, "", 0, 0, false
+	}
 	outputCount := normalized["n"].(uint)
 	normalized["n"] = uint(1)
 
@@ -314,6 +321,13 @@ func imageWorkshopGenerationRequestFromMultipart(form *multipart.Form) (imageWor
 		Size:         firstImageWorkshopFormValue(form, "size"),
 		Quality:      firstImageWorkshopFormValue(form, "quality"),
 		OutputFormat: firstImageWorkshopFormValue(form, "output_format"),
+	}
+	if rawTransparent := strings.TrimSpace(firstImageWorkshopFormValue(form, "transparent_output")); rawTransparent != "" {
+		transparent, err := strconv.ParseBool(rawTransparent)
+		if err != nil {
+			return request, fmt.Errorf("transparent_output must be a boolean")
+		}
+		request.TransparentOutput = transparent
 	}
 	if rawCount := strings.TrimSpace(firstImageWorkshopFormValue(form, "n")); rawCount != "" {
 		count, err := strconv.ParseUint(rawCount, 10, 32)
@@ -715,6 +729,10 @@ func buildImageWorkshopGenerationBody(c *gin.Context) (*model.Token, []byte, boo
 		common.ApiErrorMsg(c, err.Error())
 		return nil, nil, false
 	}
+	if err := prepareImageWorkshopTransparentOutput(c, request, normalized); err != nil {
+		common.ApiErrorMsg(c, err.Error())
+		return nil, nil, false
+	}
 
 	rewritten, err := common.Marshal(normalized)
 	if err != nil {
@@ -722,6 +740,18 @@ func buildImageWorkshopGenerationBody(c *gin.Context) (*model.Token, []byte, boo
 		return nil, nil, false
 	}
 	return token, rewritten, true
+}
+
+func prepareImageWorkshopTransparentOutput(c *gin.Context, request imageWorkshopGenerationRequest, normalized map[string]any) error {
+	if !request.TransparentOutput {
+		return nil
+	}
+	outputFormat, _ := normalized["output_format"].(string)
+	if strings.ToLower(strings.TrimSpace(outputFormat)) != "png" {
+		return fmt.Errorf("透明背景仅支持 PNG 格式")
+	}
+	c.Set(imageWorkshopTransparentOutputContextKey, true)
+	return nil
 }
 
 func normalizeImageWorkshopGenerationRequest(request imageWorkshopGenerationRequest, capability service.ImageWorkshopModelCapability) (map[string]any, error) {
@@ -829,6 +859,9 @@ func buildImageWorkshopTaskResponse(task *model.Task, now time.Time) (imageWorks
 		}
 		if outputFormat, ok := data.Metadata["output_format"].(string); ok {
 			response.OutputFormat = outputFormat
+		}
+		if transparentOutput, ok := data.Metadata["transparent_output"].(bool); ok {
+			response.TransparentOutput = transparentOutput
 		}
 		switch outputCount := data.Metadata["output_count"].(type) {
 		case float64:

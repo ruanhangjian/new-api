@@ -269,6 +269,9 @@ func gptImage2WorkshopCapability(capability ImageWorkshopModelCapability) ImageW
 	capability.MaxImages = 6
 	capability.SupportsReferenceImages = true
 	capability.MaxReferenceImages = 9
+	// GPT-Image-2 does not provide a reliable native alpha channel. The workshop
+	// offers a browser-side PNG post-processing workflow instead.
+	capability.SupportsTransparentBackground = true
 	capability.Sizes = append([]string{"auto"}, gptImage2PresetSizes...)
 	capability.SizeTiers = []string{"1K", "2K", "4K"}
 	capability.AspectRatios = []string{"1:1", "3:2", "2:3", "16:9", "9:16", "4:3", "3:4", "21:9"}

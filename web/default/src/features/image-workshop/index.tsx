@@ -72,6 +72,7 @@ const INITIAL_FORM: WorkshopFormState = {
   size: '',
   quality: '',
   outputFormat: '',
+  transparentOutput: false,
   count: 1,
   referenceImages: [],
 }
@@ -193,6 +194,12 @@ export function ImageWorkshop() {
       outputFormat: nextCapability.output_formats.includes(current.outputFormat)
         ? current.outputFormat
         : nextCapability.default_output_format || '',
+      transparentOutput:
+        nextCapability.supports_transparent_background &&
+        (current.outputFormat || nextCapability.default_output_format || '') ===
+          'png'
+          ? current.transparentOutput
+          : false,
       count: Math.min(Math.max(1, current.count), nextCapability.max_images),
     }))
   }, [capabilities, form.model])
@@ -263,9 +270,17 @@ export function ImageWorkshop() {
       localSaveAttempts.current.set(task.task_id, attempt)
       localSaveInProgress.current.add(task.task_id)
       void saveTaskImagesLocally(userId, task)
-        .then(async ({ failedImageIndexes }) => {
+        .then(async ({ failedImageIndexes, saved }) => {
           const nextLocalWorks = await listLocalWorks(userId)
           setLocalWorks(nextLocalWorks)
+          const transparentProcessingFailures = saved.filter(
+            (work) => work.transparentProcessingFailed
+          ).length
+          if (transparentProcessingFailures > 0) {
+            toast.warning(
+              `${transparentProcessingFailures} 张图片透明处理失败，已保留原始 PNG`
+            )
+          }
           setLocalSaveFailedImageKeys((current) => {
             const next = new Set(current)
             task.result?.data.forEach((_image, imageIndex) => {
@@ -522,6 +537,7 @@ export function ImageWorkshop() {
       size: form.size,
       quality: form.quality,
       ...(form.outputFormat ? { output_format: form.outputFormat } : {}),
+      ...(form.transparentOutput ? { transparent_output: true } : {}),
       ...(form.referenceImages.length
         ? { reference_images: form.referenceImages }
         : {}),
@@ -552,6 +568,7 @@ export function ImageWorkshop() {
       size: task.size || 'auto',
       quality: task.quality || 'auto',
       ...(task.output_format ? { output_format: task.output_format } : {}),
+      ...(task.transparent_output ? { transparent_output: true } : {}),
       replaceTaskId: task.task_id,
     })
   }
