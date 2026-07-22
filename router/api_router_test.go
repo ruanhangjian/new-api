@@ -97,6 +97,7 @@ func TestImageWorkshopRoutesRequireUserAuth(t *testing.T) {
 		{method: http.MethodGet, path: "/api/image-workshop/tasks"},
 		{method: http.MethodDelete, path: "/api/image-workshop/tasks"},
 		{method: http.MethodGet, path: "/api/image-workshop/tasks/task_x"},
+		{method: http.MethodPost, path: "/api/image-workshop/tasks/task_x/retry"},
 	}
 
 	for _, tt := range tests {

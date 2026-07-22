@@ -284,6 +284,15 @@ func SetApiRouter(router *gin.Engine) {
 			imageWorkshopRoute.GET("/tasks", controller.ListImageWorkshopTasks)
 			imageWorkshopRoute.DELETE("/tasks", controller.DeleteImageWorkshopTasks)
 			imageWorkshopRoute.GET("/tasks/:task_id", controller.GetImageWorkshopTask)
+			imageWorkshopRoute.POST(
+				"/tasks/:task_id/retry",
+				controller.PrepareImageWorkshopTaskRetry,
+				middleware.SystemPerformanceCheck(),
+				middleware.TokenAuth(),
+				middleware.ModelRequestRateLimit(),
+				middleware.Distribute(),
+				controller.RetryImageWorkshopTask,
+			)
 		}
 		tokenRoute := apiRouter.Group("/token")
 		tokenRoute.Use(middleware.UserAuth())

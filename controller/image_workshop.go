@@ -82,6 +82,8 @@ var imageWorkshopGenerationFields = map[string]struct{}{
 
 const imageWorkshopPromptSuffix = "不需要反问我任何问题，直接按照我提示词的要求生成图片。"
 
+const imageWorkshopRetryTaskContextKey = "image_workshop_retry_task"
+
 func ListImageWorkshopTokens(c *gin.Context) {
 	limit := operation_setting.GetMaxUserTokens()
 	if limit <= 0 {
@@ -151,11 +153,7 @@ func PrepareImageWorkshopGeneration(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	c.Request.Header.Set("Authorization", "Bearer sk-"+token.Key)
-	if c.Request.Header.Get("Content-Type") == "" {
-		c.Request.Header.Set("Content-Type", "application/json")
-	}
-	c.Set(string(constant.ContextKeyImageWorkshopRequest), true)
+	prepareImageWorkshopRequestContext(c, token)
 }
 
 func CreateImageWorkshopGeneration(c *gin.Context) {
@@ -169,6 +167,120 @@ func CreateImageWorkshopGeneration(c *gin.Context) {
 		"task_id": task.TaskID,
 		"status":  "queued",
 	})
+}
+
+func PrepareImageWorkshopTaskRetry(c *gin.Context) {
+	task, exists, err := service.GetUserImageTask(c.GetInt("id"), c.Param("task_id"))
+	if err != nil {
+		common.ApiError(c, err)
+		c.Abort()
+		return
+	}
+	if !exists {
+		common.ApiErrorMsg(c, "image task not found")
+		c.Abort()
+		return
+	}
+	if task.Status != model.TaskStatusFailure {
+		common.ApiErrorMsg(c, "only failed image tasks can be retried")
+		c.Abort()
+		return
+	}
+
+	var data service.ImageAsyncTaskData
+	if err = task.GetData(&data); err != nil {
+		common.ApiError(c, err)
+		c.Abort()
+		return
+	}
+	if !isImageWorkshopTask(data) || len(data.Request.Body) == 0 {
+		common.ApiErrorMsg(c, "image workshop task request is unavailable")
+		c.Abort()
+		return
+	}
+	body, err := rewriteImageWorkshopRequestCount(data.Request.Body, 1)
+	if err != nil {
+		common.ApiError(c, err)
+		c.Abort()
+		return
+	}
+	if err = replaceImageWorkshopRequestBody(c, body); err != nil {
+		common.ApiError(c, err)
+		c.Abort()
+		return
+	}
+	token, err := model.GetTokenByIds(task.PrivateData.TokenId, task.UserId)
+	if err != nil {
+		common.ApiErrorMsg(c, "the API key used by this task is no longer available")
+		c.Abort()
+		return
+	}
+
+	c.Set(imageWorkshopRetryTaskContextKey, task)
+	prepareImageWorkshopRequestContext(c, token)
+}
+
+func RetryImageWorkshopTask(c *gin.Context) {
+	value, exists := c.Get(imageWorkshopRetryTaskContextKey)
+	task, ok := value.(*model.Task)
+	if !exists || !ok || task == nil {
+		common.ApiErrorMsg(c, "image task not found")
+		return
+	}
+
+	var data service.ImageAsyncTaskData
+	if err := task.GetData(&data); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	bodyStorage, err := common.GetBodyStorage(c)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	body, err := bodyStorage.Bytes()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	data.Request.Body = json.RawMessage(body)
+	data.Result = nil
+	data.Error = nil
+	data.Files = nil
+	data.ExpiresAt = 0
+
+	now := time.Now().Unix()
+	task.SetData(data)
+	task.Status = model.TaskStatusQueued
+	task.Progress = "0%"
+	task.FailReason = ""
+	task.SubmitTime = now
+	task.StartTime = 0
+	task.FinishTime = 0
+	task.UpdatedAt = now
+	task.ChannelId = common.GetContextKeyInt(c, constant.ContextKeyChannelId)
+	selectedGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+	if autoGroup := common.GetContextKeyString(c, constant.ContextKeyAutoGroup); autoGroup != "" {
+		selectedGroup = autoGroup
+	}
+	if selectedGroup != "" {
+		task.Group = selectedGroup
+	}
+	if won, err := task.UpdateWithStatus(model.TaskStatusFailure); err != nil {
+		common.ApiError(c, err)
+		return
+	} else if !won {
+		common.ApiErrorMsg(c, "image task status changed, please refresh and try again")
+		return
+	}
+
+	imageAsyncTaskRunner(task.TaskID)
+	response, err := buildImageWorkshopTaskResponse(task, time.Now())
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, response)
 }
 
 func GetImageWorkshopTask(c *gin.Context) {
@@ -570,4 +682,12 @@ func replaceImageWorkshopRequestBody(c *gin.Context, body []byte) error {
 	c.Request.Body = io.NopCloser(storage)
 	c.Request.ContentLength = int64(len(body))
 	return nil
+}
+
+func prepareImageWorkshopRequestContext(c *gin.Context, token *model.Token) {
+	c.Request.Header.Set("Authorization", "Bearer sk-"+token.Key)
+	if c.Request.Header.Get("Content-Type") == "" {
+		c.Request.Header.Set("Content-Type", "application/json")
+	}
+	c.Set(string(constant.ContextKeyImageWorkshopRequest), true)
 }

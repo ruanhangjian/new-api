@@ -376,6 +376,12 @@ func TestImageTaskDataDoesNotPersistLargeBase64(t *testing.T) {
 	assert.Less(t, len(reloaded.Data), len(payload))
 }
 
+func TestImageWorkshopFailureMessageHidesTruncatedUpstreamJSONError(t *testing.T) {
+	assert.Equal(t, "上游服务暂时不可用，请稍后重试", imageWorkshopFailureMessage("unexpected end of JSON input"))
+	assert.Equal(t, "上游服务暂时不可用，请稍后重试", imageWorkshopFailureMessage("Upstream request failed"))
+	assert.Equal(t, "quota exceeded", imageWorkshopFailureMessage(" quota exceeded "))
+}
+
 const testTinyPNGBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
 
 func setupImageAsyncControllerTestDB(t *testing.T) *gorm.DB {

@@ -210,6 +210,103 @@ func TestImageWorkshopGenerationQueuesOwnedTokenAndStripsTokenID(t *testing.T) {
 	assert.Equal(t, "image_workshop", data.Metadata["source"])
 }
 
+func TestImageWorkshopTaskRetryReusesFailedTaskAndForcesSingleImage(t *testing.T) {
+	db := setupImageAsyncControllerTestDB(t)
+	seedImageAsyncControllerUserAndToken(t, 1, 11)
+	seedImageAsyncControllerChannel(t, "gpt-image-1")
+	disableImageAsyncControllerBackgroundWork(t)
+
+	task := &model.Task{
+		TaskID:     "task_retry_in_place",
+		UserId:     1,
+		Platform:   constant.TaskPlatformImage,
+		Status:     model.TaskStatusFailure,
+		Progress:   "100%",
+		SubmitTime: time.Now().Add(-time.Minute).Unix(),
+		StartTime:  time.Now().Add(-50 * time.Second).Unix(),
+		FinishTime: time.Now().Add(-20 * time.Second).Unix(),
+		FailReason: "unexpected end of JSON input",
+		Action:     service.ImageAsyncActionGeneration,
+		Properties: model.Properties{OriginModelName: "gpt-image-1"},
+		PrivateData: model.TaskPrivateData{
+			TokenId: 11,
+		},
+	}
+	task.SetData(service.ImageAsyncTaskData{
+		Request: service.ImageAsyncRequest{
+			Method:      http.MethodPost,
+			Path:        "/v1/images/generations",
+			ContentType: "application/json",
+			Body:        json.RawMessage(`{"model":"gpt-image-1","prompt":"draw","n":4,"size":"1024x1024","quality":"auto","response_format":"b64_json"}`),
+		},
+		Result:    json.RawMessage(`{"data":[{"url":"https://example.com/stale.png"}]}`),
+		Error:     &service.ImageAsyncTaskError{Message: "unexpected end of JSON input"},
+		ExpiresAt: time.Now().Add(time.Hour).Unix(),
+		Metadata:  map[string]interface{}{"source": "image_workshop", "request_size": "1024x1024"},
+	})
+	insertImageAsyncControllerTask(t, task)
+
+	var queuedTaskID string
+	imageAsyncTaskRunner = func(taskID string) { queuedTaskID = taskID }
+	recorder := performImageWorkshopRetryRouteRequest(t, 1, task.TaskID)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), `"success":true`)
+	assert.Contains(t, recorder.Body.String(), `"task_id":"task_retry_in_place"`)
+	assert.Contains(t, recorder.Body.String(), `"status":"queued"`)
+	assert.Equal(t, task.TaskID, queuedTaskID)
+
+	var count int64
+	require.NoError(t, db.Model(&model.Task{}).Count(&count).Error)
+	assert.EqualValues(t, 1, count)
+
+	var updated model.Task
+	require.NoError(t, db.Where("task_id = ?", task.TaskID).First(&updated).Error)
+	assert.EqualValues(t, model.TaskStatusQueued, updated.Status)
+	assert.Equal(t, "0%", updated.Progress)
+	assert.Empty(t, updated.FailReason)
+	assert.Zero(t, updated.StartTime)
+	assert.Zero(t, updated.FinishTime)
+	assert.Equal(t, 11, updated.PrivateData.TokenId)
+	var data service.ImageAsyncTaskData
+	require.NoError(t, updated.GetData(&data))
+	assert.JSONEq(t, `{"model":"gpt-image-1","prompt":"draw","n":1,"size":"1024x1024","quality":"auto","response_format":"b64_json"}`, string(data.Request.Body))
+	assert.Empty(t, data.Result)
+	assert.Nil(t, data.Error)
+	assert.Empty(t, data.Files)
+	assert.Zero(t, data.ExpiresAt)
+}
+
+func TestImageWorkshopTaskRetryRejectsOtherUserAndNonFailedTask(t *testing.T) {
+	setupImageAsyncControllerTestDB(t)
+	seedImageAsyncControllerUserAndToken(t, 1, 11)
+	seedImageAsyncControllerUserAndToken(t, 2, 22)
+	seedImageAsyncControllerChannel(t, "gpt-image-1")
+	disableImageAsyncControllerBackgroundWork(t)
+
+	task := &model.Task{
+		TaskID:      "task_retry_guard",
+		UserId:      1,
+		Platform:    constant.TaskPlatformImage,
+		Status:      model.TaskStatusFailure,
+		PrivateData: model.TaskPrivateData{TokenId: 11},
+	}
+	task.SetData(service.ImageAsyncTaskData{
+		Request:  service.ImageAsyncRequest{Body: json.RawMessage(`{"model":"gpt-image-1","prompt":"draw","n":1}`)},
+		Metadata: map[string]interface{}{"source": "image_workshop"},
+	})
+	insertImageAsyncControllerTask(t, task)
+
+	recorder := performImageWorkshopRetryRouteRequest(t, 2, task.TaskID)
+	assert.Contains(t, recorder.Body.String(), `"success":false`)
+	assert.Contains(t, recorder.Body.String(), "image task not found")
+
+	require.NoError(t, model.DB.Model(&model.Task{}).Where("task_id = ?", task.TaskID).Update("status", model.TaskStatusSuccess).Error)
+	recorder = performImageWorkshopRetryRouteRequest(t, 1, task.TaskID)
+	assert.Contains(t, recorder.Body.String(), `"success":false`)
+	assert.Contains(t, recorder.Body.String(), "only failed image tasks can be retried")
+}
+
 func TestImageWorkshopGenerationRejectsUnsupportedFieldsAndParameters(t *testing.T) {
 	tests := []struct {
 		name string
@@ -666,6 +763,34 @@ func performImageWorkshopGenerationRouteRequest(t *testing.T, userID int, body [
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/image-workshop/generations", bytes.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+accessToken)
+	request.Header.Set("New-Api-User", fmt.Sprintf("public_%d", userID))
+	router.ServeHTTP(recorder, request)
+	return recorder
+}
+
+func performImageWorkshopRetryRouteRequest(t *testing.T, userID int, taskID string) *httptest.ResponseRecorder {
+	t.Helper()
+	accessToken := fmt.Sprintf("image-workshop-access-%d", userID)
+	require.NoError(t, model.DB.Model(&model.User{}).Where("id = ?", userID).Update("access_token", accessToken).Error)
+
+	router := gin.New()
+	router.Use(sessions.Sessions("session", cookie.NewStore([]byte("image-workshop-test"))))
+	router.Use(middleware.BodyStorageCleanup())
+	router.POST(
+		"/api/image-workshop/tasks/:task_id/retry",
+		middleware.UserAuth(),
+		PrepareImageWorkshopTaskRetry,
+		middleware.SystemPerformanceCheck(),
+		middleware.TokenAuth(),
+		middleware.ModelRequestRateLimit(),
+		middleware.Distribute(),
+		RetryImageWorkshopTask,
+	)
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/image-workshop/tasks/"+taskID+"/retry", nil)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "Bearer "+accessToken)
 	request.Header.Set("New-Api-User", fmt.Sprintf("public_%d", userID))

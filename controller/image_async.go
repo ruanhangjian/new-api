@@ -493,6 +493,9 @@ func failAsyncImageTask(taskID string, message string) {
 	logger.LogWarn(nil, fmt.Sprintf("image async task %s failed: %s", taskID, message))
 	var data service.ImageAsyncTaskData
 	_ = task.GetData(&data)
+	if isImageWorkshopTask(data) {
+		message = imageWorkshopFailureMessage(message)
+	}
 	data.Error = &service.ImageAsyncTaskError{Message: message}
 	task.SetData(data)
 	task.Status = model.TaskStatusFailure
@@ -501,6 +504,17 @@ func failAsyncImageTask(taskID string, message string) {
 	task.FinishTime = time.Now().Unix()
 	task.UpdatedAt = task.FinishTime
 	_, _ = task.UpdateWithStatus(model.TaskStatusInProgress)
+}
+
+func imageWorkshopFailureMessage(message string) string {
+	normalized := strings.ToLower(strings.TrimSpace(message))
+	if normalized == "" ||
+		strings.Contains(normalized, "unexpected end of json input") ||
+		strings.Contains(normalized, "unexpected eof") ||
+		strings.Contains(normalized, "upstream request failed") {
+		return "上游服务暂时不可用，请稍后重试"
+	}
+	return strings.TrimSpace(message)
 }
 
 func removeAsyncQuery(rawQuery string) string {

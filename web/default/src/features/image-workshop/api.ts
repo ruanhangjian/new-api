@@ -122,6 +122,28 @@ export async function getImageWorkshopTask(taskId: string) {
   return unwrap(response.data as ApiResponse<ImageWorkshopTask>)
 }
 
+export async function retryImageWorkshopTask(taskId: string) {
+  try {
+    const response = await api.post(
+      `/api/image-workshop/tasks/${encodeURIComponent(taskId)}/retry`,
+      undefined,
+      {
+        skipBusinessError: true,
+        skipErrorHandler: true,
+      } as Record<string, unknown>
+    )
+    return unwrap(response.data as ApiResponse<ImageWorkshopTask>)
+  } catch (error) {
+    const message = error instanceof Error ? error.message.trim() : ''
+    throw new Error(
+      message && !/^Request failed with status code \d+$/i.test(message)
+        ? `重新生成失败：${message}`
+        : '重新生成失败，请稍后重试',
+      { cause: error }
+    )
+  }
+}
+
 export async function deleteImageWorkshopTasks(taskIds: string[]) {
   const response = await api.delete('/api/image-workshop/tasks', {
     data: { task_ids: taskIds },

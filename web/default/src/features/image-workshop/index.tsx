@@ -31,6 +31,7 @@ import {
   getImageWorkshopOptions,
   getImageWorkshopTasks,
   getImageWorkshopTokens,
+  retryImageWorkshopTask,
 } from './api'
 import { InspirationStrip } from './components/inspiration-strip'
 import {
@@ -58,7 +59,11 @@ import {
   listLocalWorks,
   saveTaskImagesLocally,
 } from './lib/local-gallery'
-import type { ImageWorkshopGenerationRequest, ImageWorkshopTask } from './types'
+import type {
+  ImageWorkshopGenerationRequest,
+  ImageWorkshopTask,
+  ImageWorkshopTaskPage,
+} from './types'
 
 const INITIAL_FORM: WorkshopFormState = {
   prompt: '',
@@ -393,6 +398,73 @@ export function ImageWorkshop() {
     },
   })
 
+  const retryMutation = useMutation({
+    mutationFn: (task: ImageWorkshopTask) =>
+      retryImageWorkshopTask(task.task_id),
+    onMutate: async (task) => {
+      await queryClient.cancelQueries({
+        queryKey: ['image-workshop', 'tasks'],
+      })
+      const previousTasks = queryClient.getQueriesData<ImageWorkshopTaskPage>({
+        queryKey: ['image-workshop', 'tasks'],
+      })
+      const now = Math.floor(Date.now() / 1000)
+      queryClient.setQueriesData<ImageWorkshopTaskPage>(
+        { queryKey: ['image-workshop', 'tasks'] },
+        (current) =>
+          current
+            ? {
+                ...current,
+                items: current.items.map((item) =>
+                  item.task_id === task.task_id
+                    ? {
+                        ...item,
+                        status: 'queued',
+                        progress: '0%',
+                        n: 1,
+                        submit_time: now,
+                        start_time: undefined,
+                        finish_time: undefined,
+                        result_available: false,
+                        result: undefined,
+                        error: undefined,
+                        output_sizes: [],
+                      }
+                    : item
+                ),
+              }
+            : current
+      )
+      return { previousTasks }
+    },
+    onSuccess: async (response) => {
+      queryClient.setQueriesData<ImageWorkshopTaskPage>(
+        { queryKey: ['image-workshop', 'tasks'] },
+        (current) =>
+          current
+            ? {
+                ...current,
+                items: current.items.map((item) =>
+                  item.task_id === response.task_id ? response : item
+                ),
+              }
+            : current
+      )
+      toast.success('已在原作品上重新生成')
+      await queryClient.invalidateQueries({
+        queryKey: ['image-workshop', 'tasks'],
+      })
+    },
+    onError: (error, _task, context) => {
+      context?.previousTasks.forEach(([queryKey, data]) => {
+        queryClient.setQueryData(queryKey, data)
+      })
+      toast.error(
+        error instanceof Error ? error.message : '重新生成失败，请稍后重试'
+      )
+    },
+  })
+
   const deleteWorksMutation = useMutation({
     mutationFn: async (request: ImageWorkshopDeletionRequest) => {
       if ('scope' in request) {
@@ -452,6 +524,10 @@ export function ImageWorkshop() {
   }
 
   function regenerate(task: ImageWorkshopTask) {
+    if (task.status === 'failed') {
+      retryMutation.mutate(task)
+      return
+    }
     if (!form.tokenId || !task.prompt?.trim() || !task.model) return
     createMutation.mutate({
       token_id: form.tokenId,
