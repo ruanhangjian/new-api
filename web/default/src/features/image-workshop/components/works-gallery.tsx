@@ -41,6 +41,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
+import { hasAllTaskImagesLocally } from '../lib/gallery-state'
 import { aspectRatioForSize } from '../lib/image-size'
 import type {
   ImageWorkshopDeleteScope,
@@ -509,6 +510,13 @@ export function WorksGallery({
         return
       }
 
+      if (
+        task.status === 'completed' &&
+        hasAllTaskImagesLocally(task, localImageKeys)
+      ) {
+        return
+      }
+
       items.push({
         kind: 'state',
         id: task.task_id,
@@ -552,6 +560,12 @@ export function WorksGallery({
             localKeys: [],
           })
         })
+        return
+      }
+      if (
+        task.status === 'completed' &&
+        hasAllTaskImagesLocally(task, localImageKeys)
+      ) {
         return
       }
       items.push({
