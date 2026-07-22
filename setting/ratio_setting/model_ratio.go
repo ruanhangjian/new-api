@@ -3,6 +3,7 @@ package ratio_setting
 import (
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -325,6 +326,7 @@ var defaultAudioCompletionRatio = map[string]float64{
 
 var modelPriceMap = types.NewRWMap[string, float64]()
 var imageResolutionPriceMap = types.NewRWMap[string, map[string]float64]()
+var imageResolutionChannelPriceMap = types.NewRWMap[string, map[string]map[string]float64]()
 var modelRatioMap = types.NewRWMap[string, float64]()
 var completionRatioMap = types.NewRWMap[string, float64]()
 
@@ -394,12 +396,73 @@ func UpdateImageResolutionPriceByJSONString(jsonStr string) error {
 	return types.LoadFromJsonStringWithCallback(imageResolutionPriceMap, string(normalizedJSON), InvalidateExposedDataCache)
 }
 
+func ImageResolutionChannelPrice2JSONString() string {
+	return imageResolutionChannelPriceMap.MarshalJSONString()
+}
+
+func UpdateImageResolutionChannelPriceByJSONString(jsonStr string) error {
+	parsed := make(map[string]map[string]map[string]float64)
+	if err := common.Unmarshal([]byte(jsonStr), &parsed); err != nil {
+		return err
+	}
+
+	for modelName, channelPrices := range parsed {
+		if strings.TrimSpace(modelName) == "" {
+			return fmt.Errorf("image resolution channel price contains an empty model name")
+		}
+		for channelID, prices := range channelPrices {
+			id, err := strconv.Atoi(strings.TrimSpace(channelID))
+			if err != nil || id <= 0 {
+				return fmt.Errorf("image resolution channel price for model %s contains invalid channel id %s", modelName, channelID)
+			}
+			canonical := make(map[string]float64, 3)
+			for _, tier := range []string{"1K", "2K", "4K"} {
+				price, ok := prices[tier]
+				if !ok || price < 0 || math.IsNaN(price) || math.IsInf(price, 0) {
+					return fmt.Errorf("image resolution channel price for model %s channel %s requires a valid non-negative %s price", modelName, channelID, tier)
+				}
+				canonical[tier] = price
+			}
+			if len(prices) != len(canonical) {
+				return fmt.Errorf("image resolution channel price for model %s channel %s only supports 1K, 2K and 4K", modelName, channelID)
+			}
+			channelPrices[channelID] = canonical
+		}
+	}
+
+	normalizedJSON, err := common.Marshal(parsed)
+	if err != nil {
+		return err
+	}
+	return types.LoadFromJsonStringWithCallback(imageResolutionChannelPriceMap, string(normalizedJSON), InvalidateExposedDataCache)
+}
+
 func GetImageResolutionPrice(name string, tier string) (float64, bool) {
 	name = FormatMatchingModelName(name)
 	prices, ok := imageResolutionPriceMap.Get(name)
 	if !ok && strings.HasSuffix(name, CompactModelSuffix) {
 		prices, ok = imageResolutionPriceMap.Get(CompactWildcardModelKey)
 	}
+	if !ok {
+		return 0, false
+	}
+	price, ok := prices[strings.ToUpper(strings.TrimSpace(tier))]
+	return price, ok
+}
+
+func GetImageResolutionChannelPrice(name string, channelID int, tier string) (float64, bool) {
+	if channelID <= 0 {
+		return 0, false
+	}
+	name = FormatMatchingModelName(name)
+	pricesByChannel, ok := imageResolutionChannelPriceMap.Get(name)
+	if !ok && strings.HasSuffix(name, CompactModelSuffix) {
+		pricesByChannel, ok = imageResolutionChannelPriceMap.Get(CompactWildcardModelKey)
+	}
+	if !ok {
+		return 0, false
+	}
+	prices, ok := pricesByChannel[strconv.Itoa(channelID)]
 	if !ok {
 		return 0, false
 	}
@@ -752,6 +815,10 @@ func GetModelPriceCopy() map[string]float64 {
 
 func GetImageResolutionPriceCopy() map[string]map[string]float64 {
 	return imageResolutionPriceMap.ReadAll()
+}
+
+func GetImageResolutionChannelPriceCopy() map[string]map[string]map[string]float64 {
+	return imageResolutionChannelPriceMap.ReadAll()
 }
 
 func GetCompletionRatioCopy() map[string]float64 {

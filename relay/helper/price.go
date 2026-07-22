@@ -74,9 +74,13 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 	modelPrice, usePrice := ratio_setting.GetModelPrice(info.OriginModelName, false)
 	if !usePrice && c.GetBool(string(constant.ContextKeyImageWorkshopRequest)) {
 		// Resolution pricing is only active for native image workshop requests.
-		// Use 1K as a temporary fixed-price base; the selected tier replaces it
-		// before pre-consumption and final settlement.
-		modelPrice, usePrice = ratio_setting.GetImageResolutionPrice(info.OriginModelName, "1K")
+		// The selected channel price is preferred when the channel has already
+		// been selected; the selected tier replaces this 1K base below.
+		channelID := common.GetContextKeyInt(c, constant.ContextKeyChannelId)
+		modelPrice, usePrice = ratio_setting.GetImageResolutionChannelPrice(info.OriginModelName, channelID, "1K")
+		if !usePrice {
+			modelPrice, usePrice = ratio_setting.GetImageResolutionPrice(info.OriginModelName, "1K")
+		}
 	}
 
 	groupRatioInfo := HandleGroupRatio(c, info)

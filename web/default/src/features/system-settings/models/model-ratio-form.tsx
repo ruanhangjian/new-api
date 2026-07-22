@@ -43,6 +43,7 @@ import {
 type ModelFormValues = {
   ModelPrice: string
   ImageResolutionPrice: string
+  ImageResolutionChannelPrice: string
   ModelRatio: string
   CacheRatio: string
   CreateCacheRatio: string
@@ -67,6 +68,7 @@ type ModelRatioFormProps = {
 type ModelJsonFieldName =
   | 'ModelPrice'
   | 'ImageResolutionPrice'
+  | 'ImageResolutionChannelPrice'
   | 'ModelRatio'
   | 'CacheRatio'
   | 'CreateCacheRatio'
@@ -90,6 +92,12 @@ const modelJsonFields: Array<{
     name: 'ImageResolutionPrice',
     labelKey: 'Image resolution pricing',
     descriptionKey: 'JSON map of model to 1K, 2K and 4K image workshop prices.',
+  },
+  {
+    name: 'ImageResolutionChannelPrice',
+    labelKey: 'Image resolution channel overrides',
+    descriptionKey:
+      'JSON map of model → channel ID → 1K, 2K and 4K prices. Channel prices override the model default; use channel IDs from the channel list.',
   },
   {
     name: 'ModelRatio',
@@ -272,6 +280,15 @@ export const ModelRatioForm = memo(function ModelRatioForm({
                   fieldMap[field] || (field as keyof ModelFormValues)
                 handleFieldChange(formField, value)
               }}
+            />
+
+            <ModelJsonTextareaField
+              form={form}
+              name='ImageResolutionChannelPrice'
+              label={t('Image resolution channel overrides')}
+              description={t(
+                'Example: {"gpt-image-2":{"101":{"1K":0.03,"2K":0.06,"4K":0.12}}}. Unconfigured channels use the model default resolution price.'
+              )}
             />
 
             <FormField

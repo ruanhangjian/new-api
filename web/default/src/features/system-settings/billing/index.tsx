@@ -43,6 +43,7 @@ const defaultBillingSettings: BillingSettings = {
   DisplayTokenStatEnabled: true,
   ModelPrice: '',
   ImageResolutionPrice: '{}',
+  ImageResolutionChannelPrice: '{}',
   ModelRatio: '',
   CacheRatio: '',
   CreateCacheRatio: '',

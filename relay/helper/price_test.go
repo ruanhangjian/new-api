@@ -43,6 +43,35 @@ func TestModelPriceHelperUsesResolutionPriceForImageWorkshop(t *testing.T) {
 	require.Equal(t, 0.06, priceData.ModelPrice)
 }
 
+func TestModelPriceHelperUsesChannelResolutionPriceForImageWorkshop(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	require.NoError(t, ratio_setting.UpdateImageResolutionChannelPriceByJSONString(`{
+		"channel-resolution-only-test-model": {
+			"101": {"1K": 0.03, "2K": 0.06, "4K": 0.12}
+		}
+	}`))
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateImageResolutionChannelPriceByJSONString(`{}`))
+	})
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", nil)
+	ctx.Set("group", "default")
+	ctx.Set(string(constant.ContextKeyImageWorkshopRequest), true)
+	ctx.Set(string(constant.ContextKeyChannelId), 101)
+
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "channel-resolution-only-test-model",
+		UserGroup:       "default",
+		UsingGroup:      "default",
+	}
+	priceData, err := ModelPriceHelper(ctx, info, 0, &types.TokenCountMeta{})
+	require.NoError(t, err)
+	require.True(t, priceData.UsePrice)
+	require.Equal(t, 0.03, priceData.ModelPrice)
+}
+
 func TestModelPriceHelperTieredUsesPreloadedRequestInput(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

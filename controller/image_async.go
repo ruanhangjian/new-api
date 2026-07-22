@@ -572,10 +572,16 @@ func imageAsyncTaskMetadata(c *gin.Context, request *dto.ImageRequest) map[strin
 		metadata := map[string]interface{}{"source": "image_workshop"}
 		if request != nil {
 			billing := service.ResolveImageWorkshopResolutionBilling(request.Size)
+			channelID := common.GetContextKeyInt(c, constant.ContextKeyChannelId)
 			metadata["request_size"] = request.Size
 			metadata["billing_tier"] = billing.Tier
 			metadata["billing_source"] = billing.Source
-			if price, ok := ratio_setting.GetImageResolutionPrice(request.Model, billing.Tier); ok {
+			metadata["billing_channel_id"] = channelID
+			if price, ok := ratio_setting.GetImageResolutionChannelPrice(request.Model, channelID, billing.Tier); ok {
+				metadata["billing_strategy"] = "channel_resolution_price"
+				metadata["billing_unit_price"] = price
+				metadata["billing_multiplier"] = 1.0
+			} else if price, ok := ratio_setting.GetImageResolutionPrice(request.Model, billing.Tier); ok {
 				metadata["billing_strategy"] = "resolution_price"
 				metadata["billing_unit_price"] = price
 				metadata["billing_multiplier"] = 1.0
@@ -599,6 +605,9 @@ func buildAsyncImageRelayContextForChannel(
 	idempotencyKey string,
 	preferredChannelID int,
 ) (*gin.Context, *httptest.ResponseRecorder, error) {
+	if preferredChannelID <= 0 && isImageWorkshopTask(data) && task.ChannelId > 0 {
+		preferredChannelID = task.ChannelId
+	}
 	token, err := model.GetTokenByIds(task.PrivateData.TokenId, task.UserId)
 	if err != nil {
 		return nil, nil, err

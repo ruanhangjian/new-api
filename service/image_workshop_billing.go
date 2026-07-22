@@ -20,6 +20,10 @@ const (
 	ImageWorkshopResolutionRatio1K       = 1.0
 	ImageWorkshopResolutionRatio2K       = 1.5
 	ImageWorkshopResolutionRatio4K       = 2.0
+
+	ImageWorkshopPriceSourceChannelOverride = "channel_override"
+	ImageWorkshopPriceSourceModelDefault    = "model_default"
+	ImageWorkshopPriceSourceFixedMultiplier = "fixed_price_multiplier"
 )
 
 // ImageWorkshopResolutionBilling describes the tier inferred from the size
@@ -75,11 +79,26 @@ func ResolveImageWorkshopResolutionBilling(size string) ImageWorkshopResolutionB
 // exists, otherwise it applies the fallback multiplier to fixed-price billing.
 // Token-based image billing already receives upstream usage, so multiplying it
 // again would count resolution twice.
-func ApplyImageWorkshopResolutionBilling(priceData *types.PriceData, billing ImageWorkshopResolutionBilling, modelName string) {
+func ApplyImageWorkshopResolutionBilling(priceData *types.PriceData, billing ImageWorkshopResolutionBilling, modelName string, channelIDs ...int) {
 	if priceData == nil {
 		return
 	}
+	channelID := 0
+	if len(channelIDs) > 0 {
+		channelID = channelIDs[0]
+	}
+	priceData.ImageResolutionTier = billing.Tier
+	priceData.ImagePriceChannelID = channelID
+	if price, ok := ratio_setting.GetImageResolutionChannelPrice(modelName, channelID, billing.Tier); ok {
+		priceData.ImagePriceSource = ImageWorkshopPriceSourceChannelOverride
+		priceData.UsePrice = true
+		priceData.ModelPrice = price
+		priceData.QuotaToPreConsume = common.QuotaFromFloat(price * common.QuotaPerUnit * priceData.GroupRatioInfo.GroupRatio)
+		priceData.FreeModel = price == 0 || priceData.GroupRatioInfo.GroupRatio == 0
+		return
+	}
 	if price, ok := ratio_setting.GetImageResolutionPrice(modelName, billing.Tier); ok {
+		priceData.ImagePriceSource = ImageWorkshopPriceSourceModelDefault
 		priceData.UsePrice = true
 		priceData.ModelPrice = price
 		priceData.QuotaToPreConsume = common.QuotaFromFloat(price * common.QuotaPerUnit * priceData.GroupRatioInfo.GroupRatio)
@@ -89,6 +108,7 @@ func ApplyImageWorkshopResolutionBilling(priceData *types.PriceData, billing Ima
 	if !priceData.UsePrice || billing.Multiplier == 1 {
 		return
 	}
+	priceData.ImagePriceSource = ImageWorkshopPriceSourceFixedMultiplier
 	priceData.AddOtherRatio(ImageWorkshopResolutionRatioKey, billing.Multiplier)
 	priceData.QuotaToPreConsume = common.QuotaFromFloat(float64(priceData.QuotaToPreConsume) * billing.Multiplier)
 }

@@ -375,6 +375,14 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	if summary.ImageGenerationCallPrice > 0 {
 		extraContent = append(extraContent, fmt.Sprintf("Image Generation Call 花费 %s", decimal.NewFromFloat(summary.ImageGenerationCallPrice).Mul(decimal.NewFromFloat(summary.GroupRatio)).Mul(decimal.NewFromFloat(common.QuotaPerUnit)).String()))
 	}
+	if relayInfo.PriceData.ImageResolutionTier != "" {
+		extraContent = append(extraContent, fmt.Sprintf(
+			"图工坊分辨率档位 %s，单价 $%.4f，价格来源 %s",
+			relayInfo.PriceData.ImageResolutionTier,
+			relayInfo.PriceData.ModelPrice,
+			relayInfo.PriceData.ImagePriceSource,
+		))
+	}
 
 	if summary.TotalTokens == 0 {
 		extraContent = append(extraContent, "上游没有返回计费信息，无法扣费（可能是上游超时）")
@@ -442,6 +450,14 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	if summary.ImageGenerationCallPrice > 0 {
 		other["image_generation_call"] = true
 		other["image_generation_call_price"] = summary.ImageGenerationCallPrice
+	}
+	if relayInfo.PriceData.ImageResolutionTier != "" {
+		other["image_resolution_tier"] = relayInfo.PriceData.ImageResolutionTier
+		other["image_resolution_unit_price"] = relayInfo.PriceData.ModelPrice
+		other["image_price_source"] = relayInfo.PriceData.ImagePriceSource
+		if relayInfo.PriceData.ImagePriceChannelID > 0 {
+			other["image_price_channel_id"] = relayInfo.PriceData.ImagePriceChannelID
+		}
 	}
 	if summary.CacheCreationTokens > 0 {
 		other["cache_creation_tokens"] = summary.CacheCreationTokens

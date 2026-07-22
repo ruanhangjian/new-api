@@ -41,6 +41,8 @@ export default function ModelRatioSettings(props) {
   const [loading, setLoading] = useState(false);
   const [inputs, setInputs] = useState({
     ModelPrice: '',
+    ImageResolutionPrice: '',
+    ImageResolutionChannelPrice: '',
     ModelRatio: '',
     CacheRatio: '',
     CreateCacheRatio: '',
@@ -160,6 +162,56 @@ export default function ModelRatioSettings(props) {
                 },
               ]}
               onChange={(value) => setInputs({ ...inputs, ModelPrice: value })}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col xs={24} sm={16}>
+            <Form.TextArea
+              label={t('图片分辨率价格')}
+              extraText={t('图工坊默认的 1K、2K、4K 单次价格')}
+              placeholder={t(
+                '例如：{"gpt-image-2":{"1K":0.06,"2K":0.09,"4K":0.15}}',
+              )}
+              field={'ImageResolutionPrice'}
+              autosize={{ minRows: 6, maxRows: 12 }}
+              trigger='blur'
+              stopValidateWithError
+              rules={[
+                {
+                  validator: (rule, value) => verifyJSON(value),
+                  message: '不是合法的 JSON 字符串',
+                },
+              ]}
+              onChange={(value) =>
+                setInputs({ ...inputs, ImageResolutionPrice: value })
+              }
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col xs={24} sm={16}>
+            <Form.TextArea
+              label={t('图工坊渠道分辨率价格覆盖')}
+              extraText={t(
+                '按模型和渠道 ID 配置 1K、2K、4K 单次价格；未配置渠道回退默认价格',
+              )}
+              placeholder={t(
+                '例如：{"gpt-image-2":{"101":{"1K":0.03,"2K":0.06,"4K":0.12}}}',
+              )}
+              field={'ImageResolutionChannelPrice'}
+              autosize={{ minRows: 6, maxRows: 12 }}
+              trigger='blur'
+              stopValidateWithError
+              rules={[
+                {
+                  validator: (rule, value) => verifyJSON(value),
+                  message: '不是合法的 JSON 字符串',
+                },
+              ]}
+              onChange={(value) =>
+                setInputs({ ...inputs, ImageResolutionChannelPrice: value })
+              }
             />
           </Col>
         </Row>

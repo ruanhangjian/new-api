@@ -61,6 +61,9 @@ type imageWorkshopTaskResponse struct {
 	OutputFormat      string                       `json:"output_format,omitempty"`
 	BillingTier       string                       `json:"billing_tier,omitempty"`
 	BillingMultiplier float64                      `json:"billing_multiplier,omitempty"`
+	BillingUnitPrice  float64                      `json:"billing_unit_price,omitempty"`
+	BillingStrategy   string                       `json:"billing_strategy,omitempty"`
+	BillingChannelID  int                          `json:"billing_channel_id,omitempty"`
 	OutputSizes       []string                     `json:"output_sizes,omitempty"`
 	SubmitTime        int64                        `json:"submit_time"`
 	StartTime         int64                        `json:"start_time,omitempty"`
@@ -550,6 +553,18 @@ func buildImageWorkshopTaskResponse(task *model.Task, now time.Time) (imageWorks
 			response.BillingMultiplier = float64(multiplier)
 		case int:
 			response.BillingMultiplier = float64(multiplier)
+		}
+		if price, ok := data.Metadata["billing_unit_price"].(float64); ok {
+			response.BillingUnitPrice = price
+		}
+		if strategy, ok := data.Metadata["billing_strategy"].(string); ok {
+			response.BillingStrategy = strategy
+		}
+		switch channelID := data.Metadata["billing_channel_id"].(type) {
+		case float64:
+			response.BillingChannelID = int(channelID)
+		case int:
+			response.BillingChannelID = channelID
 		}
 	}
 	for _, file := range data.Files {

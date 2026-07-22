@@ -102,6 +102,9 @@ export type ImageWorkshopTask = {
   output_format?: string
   billing_tier?: '1K' | '2K' | '4K'
   billing_multiplier?: number
+  billing_unit_price?: number
+  billing_strategy?: string
+  billing_channel_id?: number
   output_sizes?: string[]
   submit_time: number
   start_time?: number

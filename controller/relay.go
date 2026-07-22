@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -123,6 +124,28 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		return
 	}
 
+	retryParam := &service.RetryParam{
+		Ctx:         c,
+		TokenGroup:  relayInfo.TokenGroup,
+		ModelName:   relayInfo.OriginModelName,
+		RequestPath: c.Request.URL.Path,
+		Retry:       common.GetPointer(0),
+	}
+	if c.GetBool(string(constant.ContextKeyImageWorkshopRequest)) {
+		channel, channelErr := getChannel(c, relayInfo, retryParam)
+		if channelErr != nil {
+			newAPIError = channelErr
+			return
+		}
+		// Image workshop pricing can be channel-specific. Pin the channel before
+		// pre-consumption so retries cannot silently change the billed price.
+		if relayInfo.TaskRelayInfo == nil {
+			relayInfo.TaskRelayInfo = &relaycommon.TaskRelayInfo{}
+		}
+		relayInfo.LockedChannel = channel
+		common.SetContextKey(c, constant.ContextKeyTokenSpecificChannelId, strconv.Itoa(channel.Id))
+	}
+
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
 	needCountToken := constant.CountToken
 	// Avoid building huge CombineText (strings.Join) when token counting and sensitive check are both disabled.
@@ -158,7 +181,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	if c.GetBool(string(constant.ContextKeyImageWorkshopRequest)) {
 		if imageRequest, ok := request.(*dto.ImageRequest); ok {
 			billing := service.ResolveImageWorkshopResolutionBilling(imageRequest.Size)
-			service.ApplyImageWorkshopResolutionBilling(&priceData, billing, relayInfo.OriginModelName)
+			service.ApplyImageWorkshopResolutionBilling(&priceData, billing, relayInfo.OriginModelName, common.GetContextKeyInt(c, constant.ContextKeyChannelId))
 			relayInfo.PriceData = priceData
 		}
 	}
@@ -185,13 +208,6 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 	}()
 
-	retryParam := &service.RetryParam{
-		Ctx:         c,
-		TokenGroup:  relayInfo.TokenGroup,
-		ModelName:   relayInfo.OriginModelName,
-		RequestPath: c.Request.URL.Path,
-		Retry:       common.GetPointer(0),
-	}
 	relayInfo.RetryIndex = 0
 	relayInfo.LastError = nil
 

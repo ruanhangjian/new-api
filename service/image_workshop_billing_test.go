@@ -59,6 +59,40 @@ func TestApplyImageWorkshopResolutionBillingUsesConfiguredTierPrice(t *testing.T
 	assert.Empty(t, priceData.OtherRatios())
 }
 
+func TestApplyImageWorkshopResolutionBillingPrefersChannelPrice(t *testing.T) {
+	const modelName = "channel-resolution-priced-test-model"
+	require.NoError(t, ratio_setting.UpdateImageResolutionPriceByJSONString(`{
+		"channel-resolution-priced-test-model": {"1K": 0.06, "2K": 0.09, "4K": 0.15}
+	}`))
+	require.NoError(t, ratio_setting.UpdateImageResolutionChannelPriceByJSONString(`{
+		"channel-resolution-priced-test-model": {
+			"101": {"1K": 0.03, "2K": 0.06, "4K": 0.12}
+		}
+	}`))
+	t.Cleanup(func() {
+		require.NoError(t, ratio_setting.UpdateImageResolutionPriceByJSONString(`{}`))
+		require.NoError(t, ratio_setting.UpdateImageResolutionChannelPriceByJSONString(`{}`))
+	})
+
+	priceData := &types.PriceData{
+		UsePrice:          true,
+		ModelPrice:        0.06,
+		QuotaToPreConsume: 1,
+		GroupRatioInfo:    types.GroupRatioInfo{GroupRatio: 1},
+	}
+	ApplyImageWorkshopResolutionBilling(
+		priceData,
+		ResolveImageWorkshopResolutionBilling("1K"),
+		modelName,
+		101,
+	)
+
+	assert.Equal(t, 0.03, priceData.ModelPrice)
+	assert.Equal(t, ImageWorkshopPriceSourceChannelOverride, priceData.ImagePriceSource)
+	assert.Equal(t, 101, priceData.ImagePriceChannelID)
+	assert.Equal(t, common.QuotaFromFloat(0.03*common.QuotaPerUnit), priceData.QuotaToPreConsume)
+}
+
 func TestApplyImageWorkshopResolutionBillingOnlyChangesFixedPrice(t *testing.T) {
 	billing := ResolveImageWorkshopResolutionBilling("2304x3456")
 	fixed := &types.PriceData{UsePrice: true, QuotaToPreConsume: 100}
