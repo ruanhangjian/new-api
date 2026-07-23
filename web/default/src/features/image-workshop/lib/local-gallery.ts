@@ -108,16 +108,17 @@ export async function listLocalWorks(
 }
 
 export async function deleteLocalWork(key: string): Promise<void> {
-  return deleteLocalWorks([key])
+  await deleteLocalWorks([key])
 }
 
-export async function deleteLocalWorks(keys: string[]): Promise<void> {
-  if (!keys.length) return
+export async function deleteLocalWorks(keys: string[]): Promise<number> {
+  const uniqueKeys = [...new Set(keys)]
+  if (!uniqueKeys.length) return 0
   const database = await openDatabase()
   try {
     const transaction = database.transaction(WORKS_STORE, 'readwrite')
     const store = transaction.objectStore(WORKS_STORE)
-    keys.forEach((key) => store.delete(key))
+    uniqueKeys.forEach((key) => store.delete(key))
     await new Promise<void>((resolve, reject) => {
       transaction.addEventListener('complete', () => resolve(), { once: true })
       transaction.addEventListener('error', () => reject(transaction.error), {
@@ -130,33 +131,34 @@ export async function deleteLocalWorks(keys: string[]): Promise<void> {
   } finally {
     database.close()
   }
+  return uniqueKeys.length
 }
 
 export async function deleteLocalWorksForTasks(
   userId: number,
   taskIds: string[]
-): Promise<void> {
-  if (!taskIds.length) return
+): Promise<number> {
+  if (!taskIds.length) return 0
   const taskIDSet = new Set(taskIds)
   const works = (await listLocalWorks(userId)).filter((work) =>
     taskIDSet.has(work.taskId)
   )
-  await deleteLocalWorks(works.map((work) => work.key))
+  return deleteLocalWorks(works.map((work) => work.key))
 }
 
 export async function deleteLocalWorksBefore(
   userId: number,
   beforeUnix: number
-): Promise<void> {
+): Promise<number> {
   const works = (await listLocalWorks(userId)).filter(
     (work) => work.createdAt < beforeUnix
   )
-  await deleteLocalWorks(works.map((work) => work.key))
+  return deleteLocalWorks(works.map((work) => work.key))
 }
 
-export async function deleteAllLocalWorks(userId: number): Promise<void> {
+export async function deleteAllLocalWorks(userId: number): Promise<number> {
   const works = await listLocalWorks(userId)
-  await deleteLocalWorks(works.map((work) => work.key))
+  return deleteLocalWorks(works.map((work) => work.key))
 }
 
 export async function saveTaskImagesLocally(

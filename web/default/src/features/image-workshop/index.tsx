@@ -483,34 +483,51 @@ export function ImageWorkshop() {
 
   const deleteWorksMutation = useMutation({
     mutationFn: async (request: ImageWorkshopDeletionRequest) => {
+      let localDeleted = 0
       if ('scope' in request) {
         const response = await deleteImageWorkshopTasksByScope(request.scope)
         if (request.scope === 'all') {
-          await deleteAllLocalWorks(userId)
+          localDeleted += await deleteAllLocalWorks(userId)
         } else {
           const days = request.scope === 'before_3d' ? 3 : 7
           const cutoff = new Date()
           cutoff.setDate(cutoff.getDate() - days)
-          await deleteLocalWorksBefore(
+          localDeleted += await deleteLocalWorksBefore(
             userId,
             Math.floor(cutoff.getTime() / 1000)
           )
         }
-        await deleteLocalWorksForTasks(userId, response.task_ids)
-        return response
+        localDeleted += await deleteLocalWorksForTasks(
+          userId,
+          response.task_ids
+        )
+        return { ...response, localDeleted }
       }
 
       const response = await deleteImageWorkshopTasks(request.taskIds)
-      await deleteLocalWorks(request.localKeys)
-      await deleteLocalWorksForTasks(userId, response.task_ids)
-      return response
+      localDeleted += await deleteLocalWorks(request.localKeys)
+      localDeleted += await deleteLocalWorksForTasks(
+        userId,
+        response.task_ids
+      )
+      return { ...response, localDeleted }
     },
     onSuccess: async (response) => {
       setLocalWorks(await listLocalWorks(userId))
       await queryClient.invalidateQueries({
         queryKey: ['image-workshop', 'tasks'],
       })
-      toast.success(`已删除 ${response.deleted} 条服务器作品记录`)
+      if (response.localDeleted > 0 && response.deleted > 0) {
+        toast.success(
+          `已删除 ${response.localDeleted} 张本地作品，并清理 ${response.deleted} 条服务器记录`
+        )
+      } else if (response.localDeleted > 0) {
+        toast.success(`已删除 ${response.localDeleted} 张本地作品`)
+      } else if (response.deleted > 0) {
+        toast.success(`已清理 ${response.deleted} 条服务器作品记录`)
+      } else {
+        toast.info('没有找到符合条件的作品')
+      }
     },
     onError: (error) => {
       toast.error(
