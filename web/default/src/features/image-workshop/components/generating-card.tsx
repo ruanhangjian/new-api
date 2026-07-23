@@ -73,6 +73,7 @@ export function GeneratingCard({
   )
 }
 
+// eslint-disable-next-line react/only-export-components
 export function formatGeneratingElapsedTime(
   submittedAt: number | undefined,
   nowMilliseconds: number
@@ -84,7 +85,8 @@ export function formatGeneratingElapsedTime(
   )
   if (elapsedSeconds < 60) return '刚刚'
   if (elapsedSeconds < 3600) return `${Math.floor(elapsedSeconds / 60)} 分钟前`
-  if (elapsedSeconds < 86400)
+  if (elapsedSeconds < 86400) {
     return `${Math.floor(elapsedSeconds / 3600)} 小时前`
+  }
   return `${Math.floor(elapsedSeconds / 86400)} 天前`
 }

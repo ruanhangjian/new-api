@@ -185,14 +185,14 @@ function loadImage(blob: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(blob)
     const image = new Image()
-    image.onload = () => {
+    image.addEventListener('load', () => {
       URL.revokeObjectURL(url)
       resolve(image)
-    }
-    image.onerror = () => {
+    })
+    image.addEventListener('error', () => {
       URL.revokeObjectURL(url)
       reject(new Error('无法读取生成图片'))
-    }
+    })
     image.src = url
   })
 }
