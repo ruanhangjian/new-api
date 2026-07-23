@@ -59,6 +59,10 @@ import {
   listLocalWorks,
   saveTaskImagesLocally,
 } from './lib/local-gallery'
+import {
+  getImageWorkshopPollingInterval,
+  getNextImageWorkshopRateLimitFailureCount,
+} from './lib/polling'
 import type {
   ImageWorkshopGenerationRequest,
   ImageWorkshopTask,
@@ -141,6 +145,7 @@ export function ImageWorkshop() {
   const localSaveAttempts = useRef(new Map<string, number>())
   const localSaveInProgress = useRef(new Set<string>())
   const localSaveRetryTimers = useRef(new Map<string, number>())
+  const pollingRateLimitFailures = useRef(0)
 
   const tokensQuery = useQuery({
     queryKey: ['image-workshop', 'tokens'],
@@ -206,12 +211,30 @@ export function ImageWorkshop() {
 
   const tasksQuery = useQuery({
     queryKey: ['image-workshop', 'tasks', workLimit],
-    queryFn: () => getImageWorkshopTasks(workLimit),
+    queryFn: async () => {
+      try {
+        const data = await getImageWorkshopTasks(workLimit)
+        pollingRateLimitFailures.current = 0
+        return data
+      } catch (error) {
+        pollingRateLimitFailures.current =
+          getNextImageWorkshopRateLimitFailureCount(
+            pollingRateLimitFailures.current,
+            error
+          )
+        throw error
+      }
+    },
+    retry: false,
     refetchInterval: (query) => {
       const hasActiveTasks = query.state.data?.items.some(
         (task) => task.status === 'queued' || task.status === 'running'
       )
-      return hasActiveTasks ? 2500 : 15000
+      return getImageWorkshopPollingInterval({
+        hasActiveTasks: Boolean(hasActiveTasks),
+        error: query.state.error,
+        failureCount: pollingRateLimitFailures.current,
+      })
     },
     refetchIntervalInBackground: false,
   })
