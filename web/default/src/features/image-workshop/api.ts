@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
 
+import { IMAGE_WORKSHOP_POLLING_REQUEST_CONFIG } from './lib/polling'
 import type {
   ApiResponse,
   ImageWorkshopGenerationRequest,
@@ -122,9 +123,7 @@ export async function createImageWorkshopGeneration(
 export async function getImageWorkshopTasks(pageSize = 50) {
   const response = await api.get('/api/image-workshop/tasks', {
     params: { page: 1, page_size: pageSize },
-    disableDuplicate: true,
-    skipBusinessError: true,
-    skipErrorHandler: true,
+    ...IMAGE_WORKSHOP_POLLING_REQUEST_CONFIG,
   } as Record<string, unknown>)
   return unwrap(response.data as ApiResponse<ImageWorkshopTaskPage>)
 }
