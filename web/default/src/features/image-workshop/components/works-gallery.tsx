@@ -347,15 +347,16 @@ function CompletedWorkCard({
       `image-workshop-${timestamp || 'original'}-original.png`
     )
   }
-  const typeLabel = transparentProcessingFailed
-    ? '透明失败 · 原图'
-    : transparentOutput
-      ? local
-        ? '透明 · 本机'
-        : '透明处理中'
-      : local
-        ? '本机'
-        : '临时'
+  let typeLabel = '临时'
+  if (transparentProcessingFailed) {
+    typeLabel = '透明失败 · 原图'
+  } else if (transparentOutput && local) {
+    typeLabel = '透明 · 本机'
+  } else if (transparentOutput) {
+    typeLabel = '透明处理中'
+  } else if (local) {
+    typeLabel = '本机'
+  }
   const imageElement = <img src={image.url} alt={imageAlt} loading='lazy' />
   return (
     <article
