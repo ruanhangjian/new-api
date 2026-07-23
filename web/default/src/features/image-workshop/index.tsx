@@ -529,10 +529,7 @@ export function ImageWorkshop() {
 
       const response = await deleteImageWorkshopTasks(request.taskIds)
       localDeleted += await deleteLocalWorks(request.localKeys)
-      localDeleted += await deleteLocalWorksForTasks(
-        userId,
-        response.task_ids
-      )
+      localDeleted += await deleteLocalWorksForTasks(userId, response.task_ids)
       return { ...response, localDeleted }
     },
     onSuccess: async (response) => {
