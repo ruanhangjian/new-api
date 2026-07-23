@@ -91,6 +91,12 @@ var imageWorkshopGenerationFields = map[string]struct{}{
 
 const imageWorkshopPromptSuffix = "不需要反问我任何问题，直接按照我提示词的要求生成图片。"
 
+const imageWorkshopTransparentPrompt = `[背景指令]
+背景色选择规则：如果主体包含绿色系（绿、青绿、黄绿、草绿等）颜色，使用纯洋红色(#FF00FF)背景；否则一律使用纯绿色(#00FF00)背景。
+背景要求：整张画布仅由所选纯色填充，无任何渐变、纹理、阴影、光照变化、地面或环境元素。
+主体要求：单主体、完整呈现、轮廓清晰锐利。主体与背景之间保持干净的边缘分离，不要有颜色溢出或混合。
+禁止：主体本身、描边、光晕、投影或反射中不能出现所选背景色。`
+
 const (
 	imageWorkshopMaxReferenceImages          = 9
 	imageWorkshopMaxReferenceFileBytes       = 20 << 20
@@ -972,7 +978,11 @@ func finalizeImageWorkshopRequestForSelectedChannel(c *gin.Context) error {
 	_ = common.Unmarshal(payload["prompt"], &prompt)
 	var size string
 	_ = common.Unmarshal(payload["size"], &size)
-	payload["prompt"], err = common.Marshal(enhanceImageWorkshopPrompt(prompt, size))
+	payload["prompt"], err = common.Marshal(enhanceImageWorkshopPrompt(
+		prompt,
+		size,
+		c.GetBool(imageWorkshopTransparentOutputContextKey),
+	))
 	if err != nil {
 		return err
 	}
@@ -1001,6 +1011,7 @@ func finalizeImageWorkshopMultipartRequest(c *gin.Context) error {
 	form.Value["prompt"] = []string{enhanceImageWorkshopPrompt(
 		firstImageWorkshopFormValue(form, "prompt"),
 		firstImageWorkshopFormValue(form, "size"),
+		c.GetBool(imageWorkshopTransparentOutputContextKey),
 	)}
 	modelName := firstImageWorkshopFormValue(form, "model")
 	lowerModel := strings.ToLower(modelName)
@@ -1066,14 +1077,17 @@ func resetImageWorkshopMultipartRequest(c *gin.Context, contentType string) {
 	c.Set("_original_multipart_ct", contentType)
 }
 
-func enhanceImageWorkshopPrompt(prompt, size string) string {
+func enhanceImageWorkshopPrompt(prompt, size string, transparentOutput bool) string {
 	prompt = strings.TrimSpace(prompt)
-	parts := make([]string, 0, 3)
+	parts := make([]string, 0, 4)
 	if prompt != "" {
 		parts = append(parts, prompt)
 	}
 	if ratio := imageWorkshopAspectRatio(size); ratio != "" && ratio != "1:1" {
 		parts = append(parts, "将宽高比设为 "+ratio)
+	}
+	if transparentOutput {
+		parts = append(parts, imageWorkshopTransparentPrompt)
 	}
 	parts = append(parts, imageWorkshopPromptSuffix)
 	return strings.Join(parts, "\n\n")

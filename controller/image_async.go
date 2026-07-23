@@ -723,6 +723,9 @@ func buildAsyncImageRelayContextForChannel(
 	c.Request = req
 	if isImageWorkshopTask(data) {
 		c.Set(string(constant.ContextKeyImageWorkshopRequest), true)
+		if transparentOutput, ok := data.Metadata["transparent_output"].(bool); ok && transparentOutput {
+			c.Set(imageWorkshopTransparentOutputContextKey, true)
+		}
 	}
 
 	middleware.TokenAuth()(c)

@@ -22,6 +22,7 @@ import { removeKeyedBackgroundFromBlob } from './transparent-image'
 const DATABASE_NAME = 'newapi-image-workshop'
 const DATABASE_VERSION = 1
 const WORKS_STORE = 'works'
+const TRANSPARENT_PROCESSING_VERSION = 2
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -59,9 +60,47 @@ export async function listLocalWorks(
 ): Promise<LocalImageWorkshopWork[]> {
   const database = await openDatabase()
   try {
-    const transaction = database.transaction(WORKS_STORE, 'readonly')
+    let transaction = database.transaction(WORKS_STORE, 'readonly')
     const index = transaction.objectStore(WORKS_STORE).index('userId')
-    const works = await requestResult(index.getAll(IDBKeyRange.only(userId)))
+    const works = (await requestResult(
+      index.getAll(IDBKeyRange.only(userId))
+    )) as LocalImageWorkshopWork[]
+    const staleTransparentWorks = works.filter(
+      (work) =>
+        work.transparentOutput &&
+        !work.transparentProcessingFailed &&
+        (work.transparentProcessingVersion || 0) <
+          TRANSPARENT_PROCESSING_VERSION
+    )
+    if (staleTransparentWorks.length) {
+      for (const work of staleTransparentWorks) {
+        const originalBlob = work.originalBlob || work.blob
+        try {
+          work.blob = await removeKeyedBackgroundFromBlob(originalBlob)
+          work.transparentProcessingFailed = false
+        } catch {
+          work.blob = originalBlob
+          work.transparentProcessingFailed = true
+        }
+        work.transparentProcessingVersion = TRANSPARENT_PROCESSING_VERSION
+      }
+      transaction = database.transaction(WORKS_STORE, 'readwrite')
+      const store = transaction.objectStore(WORKS_STORE)
+      staleTransparentWorks.forEach((work) => {
+        store.put(work)
+      })
+      await new Promise<void>((resolve, reject) => {
+        transaction.addEventListener('complete', () => resolve(), {
+          once: true,
+        })
+        transaction.addEventListener('error', () => reject(transaction.error), {
+          once: true,
+        })
+        transaction.addEventListener('abort', () => reject(transaction.error), {
+          once: true,
+        })
+      })
+    }
     return works.sort((a, b) => b.createdAt - a.createdAt)
   } finally {
     database.close()
@@ -176,6 +215,9 @@ export async function saveTaskImagesLocally(
           outputFormat: task.output_format || blob.type.split('/')[1] || 'png',
           transparentOutput: Boolean(task.transparent_output),
           transparentProcessingFailed,
+          transparentProcessingVersion: task.transparent_output
+            ? TRANSPARENT_PROCESSING_VERSION
+            : undefined,
           originalBlob: task.transparent_output ? originalBlob : undefined,
           createdAt:
             task.finish_time ||

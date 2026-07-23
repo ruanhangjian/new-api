@@ -6,6 +6,7 @@ import {
   GREEN_KEY_COLOR,
   MAGENTA_KEY_COLOR,
   removeKeyedBackgroundFromPixels,
+  transparentPixelRatio,
 } from './transparent-image'
 
 function pixels(
@@ -37,6 +38,7 @@ describe('transparent image post-processing', () => {
 
     assert.equal(data[3], 0)
     assert.equal(data[center + 3], 255)
+    assert.ok(transparentPixelRatio(data) > 0.8)
   })
 
   test('detects and removes a magenta background', () => {
@@ -51,5 +53,13 @@ describe('transparent image post-processing', () => {
 
     assert.equal(data[3], 0)
     assert.equal(data[center + 3], 255)
+  })
+
+  test('reports no transparent output for an ordinary opaque image', () => {
+    const data = pixels(3, 3, [180, 170, 150])
+
+    removeKeyedBackgroundFromPixels(data, 3, 3, GREEN_KEY_COLOR)
+
+    assert.equal(transparentPixelRatio(data), 0)
   })
 })

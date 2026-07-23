@@ -148,6 +148,7 @@ export type LocalImageWorkshopWork = {
   outputFormat: string
   transparentOutput?: boolean
   transparentProcessingFailed?: boolean
+  transparentProcessingVersion?: number
   originalBlob?: Blob
   createdAt: number
   submittedAt?: number

@@ -565,9 +565,33 @@ func TestEnhanceImageWorkshopPromptAddsRatioAndInstruction(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.want, enhanceImageWorkshopPrompt("draw", test.size))
+			assert.Equal(t, test.want, enhanceImageWorkshopPrompt("draw", test.size, false))
 		})
 	}
+
+	transparentPrompt := enhanceImageWorkshopPrompt("draw", "1024x1024", true)
+	assert.Contains(t, transparentPrompt, "#00FF00")
+	assert.Contains(t, transparentPrompt, "#FF00FF")
+	assert.Contains(t, transparentPrompt, "整张画布仅由所选纯色填充")
+	assert.Contains(t, transparentPrompt, imageWorkshopPromptSuffix)
+}
+
+func TestFinalizeImageWorkshopRequestAddsTransparentBackgroundInstructions(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", nil)
+	require.NoError(t, replaceImageWorkshopRequestBody(c, []byte(`{"model":"gpt-image-2","prompt":"draw","size":"1024x1024","output_format":"png"}`)))
+	common.SetContextKey(c, constant.ContextKeyChannelBaseUrl, "https://images.example.com/v1")
+	c.Set(imageWorkshopTransparentOutputContextKey, true)
+
+	require.NoError(t, finalizeImageWorkshopRequestForSelectedChannel(c))
+	storage, err := common.GetBodyStorage(c)
+	require.NoError(t, err)
+	body, err := storage.Bytes()
+	require.NoError(t, err)
+	assert.Contains(t, string(body), "#00FF00")
+	assert.Contains(t, string(body), "#FF00FF")
+	assert.NotContains(t, string(body), "transparent_output")
 }
 
 func TestFinalizeImageWorkshopRequestRemovesModerationForCompatibleUpstream(t *testing.T) {

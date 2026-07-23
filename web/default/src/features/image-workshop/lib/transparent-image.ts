@@ -18,6 +18,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 export const GREEN_KEY_COLOR = '#00FF00'
 export const MAGENTA_KEY_COLOR = '#FF00FF'
 
+const MIN_TRANSPARENT_PIXEL_RATIO = 0.01
+
 type RGB = { r: number; g: number; b: number }
 
 const KEY_COLORS: Record<string, RGB> = {
@@ -168,6 +170,17 @@ export function removeKeyedBackgroundFromPixels(
   return data
 }
 
+export function transparentPixelRatio(data: Uint8ClampedArray) {
+  const pixelCount = Math.floor(data.length / 4)
+  if (!pixelCount) return 0
+
+  let transparentPixels = 0
+  for (let offset = 3; offset < pixelCount * 4; offset += 4) {
+    if (data[offset] < 250) transparentPixels += 1
+  }
+  return transparentPixels / pixelCount
+}
+
 function loadImage(blob: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(blob)
@@ -205,6 +218,9 @@ export async function removeKeyedBackgroundFromBlob(blob: Blob): Promise<Blob> {
     canvas.height,
     keyColor
   )
+  if (transparentPixelRatio(pixels.data) < MIN_TRANSPARENT_PIXEL_RATIO) {
+    throw new Error('生成图片没有可识别的纯色背景')
+  }
   context.putImageData(pixels, 0, 0)
 
   return new Promise((resolve, reject) => {
