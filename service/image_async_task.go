@@ -14,6 +14,7 @@ import (
 const (
 	ImageAsyncActionGeneration = "images.generations"
 	ImageAsyncActionEdit       = "images.edits"
+	ImageTaskTimeoutMessage    = "生成任务已超时或因服务重启中断，请再次生成"
 )
 
 type ImageTaskPollResponse struct {
@@ -95,29 +96,31 @@ func GetUserImageTask(userID int, taskID string) (*model.Task, bool, error) {
 	return task, true, nil
 }
 
-func MarkStaleImageTasksFailed(timeout time.Duration, limit int) {
+func MarkStaleImageTasksFailed(now time.Time, timeout time.Duration, limit int) int {
 	if timeout <= 0 {
-		return
+		return 0
 	}
-	tasks := model.GetTimedOutUnfinishedTasks(time.Now().Add(-timeout).Unix(), limit)
+	tasks := model.GetTimedOutUnfinishedImageTasks(now.Add(-timeout).Unix(), limit)
+	failed := 0
 	for _, task := range tasks {
-		if !IsImageAsyncTask(task) {
-			continue
-		}
 		if task.Status != model.TaskStatusInProgress && task.Status != model.TaskStatusQueued && task.Status != model.TaskStatusSubmitted && task.Status != model.TaskStatusNotStart {
 			continue
 		}
 		preStatus := task.Status
 		task.Status = model.TaskStatusFailure
 		task.Progress = "100%"
-		task.FailReason = "image task timed out"
-		task.FinishTime = time.Now().Unix()
+		task.FailReason = ImageTaskTimeoutMessage
+		task.FinishTime = now.Unix()
+		task.UpdatedAt = task.FinishTime
 		var data ImageAsyncTaskData
 		_ = task.GetData(&data)
 		data.Error = &ImageAsyncTaskError{Message: task.FailReason}
 		task.SetData(data)
-		_, _ = task.UpdateWithStatus(preStatus)
+		if won, err := task.UpdateWithStatus(preStatus); err == nil && won {
+			failed++
+		}
 	}
+	return failed
 }
 
 func CleanupImageTaskRecords(now time.Time) (int64, error) {

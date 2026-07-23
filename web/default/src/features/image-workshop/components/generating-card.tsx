@@ -30,19 +30,27 @@ const PHRASES = [
 export function GeneratingCard({
   model,
   size,
+  submittedAt,
   phraseOffset = 0,
 }: {
   model: string
   size?: string
+  submittedAt?: number
   phraseOffset?: number
 }) {
   const [phraseIndex, setPhraseIndex] = useState(phraseOffset % PHRASES.length)
+  const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
     const timer = window.setInterval(
       () => setPhraseIndex((current) => (current + 1) % PHRASES.length),
       1800
     )
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000)
     return () => window.clearInterval(timer)
   }, [])
 
@@ -58,9 +66,25 @@ export function GeneratingCard({
         </div>
       </div>
       <div className='image-workshop-work-caption'>
-        <time>刚刚</time>
+        <time>{formatGeneratingElapsedTime(submittedAt, now)}</time>
         <span>正在生成 · {model || '图片模型'}</span>
       </div>
     </article>
   )
+}
+
+export function formatGeneratingElapsedTime(
+  submittedAt: number | undefined,
+  nowMilliseconds: number
+) {
+  if (!submittedAt) return '刚刚'
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor(nowMilliseconds / 1000) - submittedAt
+  )
+  if (elapsedSeconds < 60) return '刚刚'
+  if (elapsedSeconds < 3600) return `${Math.floor(elapsedSeconds / 60)} 分钟前`
+  if (elapsedSeconds < 86400)
+    return `${Math.floor(elapsedSeconds / 3600)} 小时前`
+  return `${Math.floor(elapsedSeconds / 86400)} 天前`
 }

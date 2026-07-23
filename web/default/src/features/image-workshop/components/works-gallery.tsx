@@ -837,6 +837,7 @@ export function WorksGallery({
                   key={item.id}
                   model={item.task.model || ''}
                   size={item.task.size}
+                  submittedAt={item.task.submit_time || item.task.start_time}
                   phraseOffset={item.imageIndex}
                 />
               )

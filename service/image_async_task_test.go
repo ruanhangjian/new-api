@@ -54,12 +54,17 @@ func TestMarkStaleImageTasksFailedMarksOldQueuedAndRunningOnly(t *testing.T) {
 		require.NoError(t, model.DB.Create(task).Error)
 	}
 
-	MarkStaleImageTasksFailed(30*time.Minute, 100)
+	failed := MarkStaleImageTasksFailed(time.Unix(now, 0), 30*time.Minute, 100)
+	assert.Equal(t, 2, failed)
 
 	var reloaded model.Task
 	require.NoError(t, model.DB.Where("task_id = ?", "task_old_queued").First(&reloaded).Error)
 	assert.EqualValues(t, model.TaskStatusFailure, reloaded.Status)
-	assert.Contains(t, reloaded.FailReason, "timed out")
+	assert.Equal(t, ImageTaskTimeoutMessage, reloaded.FailReason)
+	var data ImageAsyncTaskData
+	require.NoError(t, reloaded.GetData(&data))
+	require.NotNil(t, data.Error)
+	assert.Equal(t, ImageTaskTimeoutMessage, data.Error.Message)
 
 	reloaded = model.Task{}
 	require.NoError(t, model.DB.Where("task_id = ?", "task_old_running").First(&reloaded).Error)

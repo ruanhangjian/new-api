@@ -569,6 +569,7 @@ func TestImageTaskDataDoesNotPersistLargeBase64(t *testing.T) {
 func TestImageWorkshopFailureMessageHidesTruncatedUpstreamJSONError(t *testing.T) {
 	assert.Equal(t, "上游服务暂时不可用，请稍后重试", imageWorkshopFailureMessage("unexpected end of JSON input"))
 	assert.Equal(t, "上游服务暂时不可用，请稍后重试", imageWorkshopFailureMessage("Upstream request failed"))
+	assert.Equal(t, service.ImageTaskTimeoutMessage, imageWorkshopFailureMessage("context deadline exceeded"))
 	assert.Equal(t, "quota exceeded", imageWorkshopFailureMessage(" quota exceeded "))
 }
 

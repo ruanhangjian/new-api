@@ -2,6 +2,7 @@ package controller
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"encoding/json"
 	"errors"
@@ -46,9 +47,9 @@ var (
 func StartImageWorkshopMaintenanceTask() {
 	go func() {
 		runImageAsyncMaintenance(time.Now())
-		minutes := common.GetEnvOrDefault("IMAGE_WORKSHOP_MAINTENANCE_INTERVAL_MINUTES", 10)
+		minutes := common.GetEnvOrDefault("IMAGE_WORKSHOP_MAINTENANCE_INTERVAL_MINUTES", 1)
 		if minutes <= 0 {
-			minutes = 10
+			minutes = 1
 		}
 		ticker := time.NewTicker(time.Duration(minutes) * time.Minute)
 		defer ticker.Stop()
@@ -65,8 +66,8 @@ func runImageAsyncMaintenance(now time.Time) {
 	defer imageAsyncMaintenanceMu.Unlock()
 	imageAsyncResultLifecycleMu.Lock()
 	defer imageAsyncResultLifecycleMu.Unlock()
-	if constant.TaskTimeoutMinutes > 0 {
-		service.MarkStaleImageTasksFailed(time.Duration(constant.TaskTimeoutMinutes)*time.Minute, 100)
+	if failed := service.MarkStaleImageTasksFailed(now, imageWorkshopTaskTimeout(), 100); failed > 0 {
+		logger.LogInfo(nil, fmt.Sprintf("marked %d stale image workshop tasks as failed", failed))
 	}
 	if _, err := service.CleanupImageTaskRecords(now); err != nil {
 		logger.LogError(nil, fmt.Sprintf("cleanup image workshop task records failed: %v", err))
@@ -77,6 +78,14 @@ func runImageAsyncMaintenance(now time.Time) {
 	if err := imageRequestStore.CleanExpired(now); err != nil {
 		logger.LogError(nil, fmt.Sprintf("cleanup image workshop reference files failed: %v", err))
 	}
+}
+
+func imageWorkshopTaskTimeout() time.Duration {
+	minutes := common.GetEnvOrDefault("IMAGE_WORKSHOP_TASK_TIMEOUT_MINUTES", 15)
+	if minutes <= 0 {
+		minutes = 15
+	}
+	return time.Duration(minutes) * time.Minute
 }
 
 func ImageGenerations(c *gin.Context) {
@@ -493,6 +502,13 @@ func executeImageAsyncRelayAttempt(
 		return nil, newImageAsyncRelayError(c, recorder)
 	}
 	if isImageWorkshopTask(data) {
+		deadline := time.Now().Add(imageWorkshopTaskTimeout())
+		if task.SubmitTime > 0 {
+			deadline = time.Unix(task.SubmitTime, 0).Add(imageWorkshopTaskTimeout())
+		}
+		requestContext, cancel := context.WithDeadline(c.Request.Context(), deadline)
+		defer cancel()
+		c.Request = c.Request.WithContext(requestContext)
 		if err := finalizeImageWorkshopRequestForSelectedChannel(c); err != nil {
 			return nil, err
 		}
@@ -762,6 +778,9 @@ func failAsyncImageTask(taskID string, message string) {
 
 func imageWorkshopFailureMessage(message string) string {
 	normalized := strings.ToLower(strings.TrimSpace(message))
+	if strings.Contains(normalized, "context deadline exceeded") {
+		return service.ImageTaskTimeoutMessage
+	}
 	if normalized == "" ||
 		strings.Contains(normalized, "unexpected end of json input") ||
 		strings.Contains(normalized, "unexpected eof") ||

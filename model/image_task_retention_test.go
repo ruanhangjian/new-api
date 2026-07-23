@@ -122,3 +122,25 @@ func TestDeleteUserImageTasksBeforeAndAllKeepActiveTasks(t *testing.T) {
 	require.NoError(t, DB.Model(&Task{}).Order("id ASC").Pluck("task_id", &remaining).Error)
 	assert.ElementsMatch(t, []string{"old_running", "other_old"}, remaining)
 }
+
+func TestSyncTaskQueriesExcludeImageTasks(t *testing.T) {
+	truncateTables(t)
+	now := time.Now().Unix()
+	for _, task := range []*Task{
+		{TaskID: "pending_image", UserId: 1, Platform: constant.TaskPlatformImage, Status: TaskStatusInProgress, Progress: "10%"},
+		{TaskID: "pending_video", UserId: 1, Platform: constant.TaskPlatformSuno, Status: TaskStatusInProgress, Progress: "10%"},
+	} {
+		task.CreatedAt = now
+		task.UpdatedAt = now
+		task.SubmitTime = now
+		require.NoError(t, DB.Create(task).Error)
+	}
+
+	tasks := GetAllUnFinishSyncTasks(100)
+	require.Len(t, tasks, 1)
+	assert.Equal(t, "pending_video", tasks[0].TaskID)
+	assert.True(t, HasUnfinishedSyncTasks())
+
+	require.NoError(t, DB.Where("task_id = ?", "pending_video").Delete(&Task{}).Error)
+	assert.False(t, HasUnfinishedSyncTasks())
+}
