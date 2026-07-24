@@ -68,7 +68,7 @@ export function SidebarModulesCard() {
           },
           {
             key: 'image_workshop',
-            title: '图工坊',
+            title: '生图工坊',
             description: '创建图片并管理当前浏览器中的作品',
           },
           {

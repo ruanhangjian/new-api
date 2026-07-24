@@ -377,7 +377,7 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 	}
 	if relayInfo.PriceData.ImageResolutionTier != "" {
 		extraContent = append(extraContent, fmt.Sprintf(
-			"图工坊分辨率档位 %s，单价 $%.4f，价格来源 %s",
+			"生图工坊分辨率档位 %s，单价 $%.4f，价格来源 %s",
 			relayInfo.PriceData.ImageResolutionTier,
 			relayInfo.PriceData.ModelPrice,
 			relayInfo.PriceData.ImagePriceSource,

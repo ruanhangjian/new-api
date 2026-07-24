@@ -108,7 +108,7 @@ export function useSidebarData(): SidebarData {
             icon: FlaskConical,
           },
           {
-            title: '图工坊',
+            title: '生图工坊',
             url: '/image-workshop',
             activeUrls: ['/image-workshop/library'],
             icon: Images,
