@@ -87,7 +87,7 @@ export function SidebarModulesSection({
         description: t('Experiment with prompts and models in real time.'),
       },
       image_workshop: {
-        title: '图工坊',
+        title: '生图工坊',
         description: '允许用户创建图片并使用本机作品画廊。',
       },
       chat: {

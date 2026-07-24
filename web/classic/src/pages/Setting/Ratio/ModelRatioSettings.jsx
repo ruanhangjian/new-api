@@ -169,7 +169,7 @@ export default function ModelRatioSettings(props) {
           <Col xs={24} sm={16}>
             <Form.TextArea
               label={t('图片分辨率价格')}
-              extraText={t('图工坊默认的 1K、2K、4K 单次价格')}
+              extraText={t('生图工坊默认的 1K、2K、4K 单次价格')}
               placeholder={t(
                 '例如：{"gpt-image-2":{"1K":0.06,"2K":0.09,"4K":0.15}}',
               )}
@@ -192,7 +192,7 @@ export default function ModelRatioSettings(props) {
         <Row gutter={16}>
           <Col xs={24} sm={16}>
             <Form.TextArea
-              label={t('图工坊渠道分辨率价格覆盖')}
+              label={t('生图工坊渠道分辨率价格覆盖')}
               extraText={t(
                 '按模型和渠道 ID 配置 1K、2K、4K 单次价格；未配置渠道回退默认价格',
               )}

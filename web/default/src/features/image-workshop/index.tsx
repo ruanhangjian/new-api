@@ -656,7 +656,7 @@ export function ImageWorkshop() {
             aria-live='polite'
           >
             <KeyRound aria-hidden='true' />
-            <span>图工坊服务接口暂不可用，请确认后端已更新并重新加载。</span>
+            <span>生图工坊服务接口暂不可用，请确认后端已更新并重新加载。</span>
             <button
               type='button'
               disabled={isRetryingService}
