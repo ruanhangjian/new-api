@@ -157,6 +157,44 @@ func TestImageWorkshopOptionsReturnsFullCapabilityForGptImage2L(t *testing.T) {
 	assert.True(t, capability.SupportsTransparentBackground)
 }
 
+func TestImageWorkshopOptionsReturnsFullCapabilityForNanoBanana(t *testing.T) {
+	setupImageAsyncControllerTestDB(t)
+	seedImageAsyncControllerUserAndToken(t, 1, 11)
+	seedImageAsyncControllerChannel(t, "Nano-Banana-2")
+	require.NoError(t, model.DB.Model(&model.Token{}).Where("id = ?", 11).Updates(map[string]any{
+		"model_limits_enabled": true,
+		"model_limits":         "Nano-Banana-2",
+	}).Error)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/image-workshop/options?token_id=11", nil)
+	c.Set("id", 1)
+	GetImageWorkshopOptions(c)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var response struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Models []service.ImageWorkshopModelCapability `json:"models"`
+		} `json:"data"`
+	}
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+	require.True(t, response.Success)
+	require.Len(t, response.Data.Models, 1)
+	capability := response.Data.Models[0]
+	assert.Equal(t, "Nano-Banana-2", capability.Model)
+	assert.Equal(t, []string{"1K", "2K", "4K"}, capability.SizeTiers)
+	assert.Contains(t, capability.AspectRatios, "21:9")
+	assert.Equal(t, []string{"auto", "low", "medium", "high"}, capability.Qualities)
+	assert.Equal(t, []string{"png", "jpeg", "webp"}, capability.OutputFormats)
+	assert.Equal(t, 6, capability.MaxImages)
+	assert.True(t, capability.SupportsCustomSize)
+	assert.True(t, capability.SupportsReferenceImages)
+	assert.Equal(t, 9, capability.MaxReferenceImages)
+	assert.True(t, capability.SupportsTransparentBackground)
+}
+
 func TestImageWorkshopGenerationQueuesGptImage2ThroughCompatibleChannel(t *testing.T) {
 	db := setupImageAsyncControllerTestDB(t)
 	seedImageAsyncControllerUserAndToken(t, 1, 11)
