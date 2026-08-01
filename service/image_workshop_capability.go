@@ -227,7 +227,7 @@ func imageWorkshopCapabilityForModel(modelName string, fullCapability bool) (Ima
 	}
 
 	switch {
-	case isGPTImage2WorkshopModel(lowerName):
+	case isGPTImage2WorkshopModel(lowerName) || isNanoBananaWorkshopModel(lowerName):
 		return gptImage2WorkshopCapability(capability), true
 	case strings.HasPrefix(lowerName, "gpt-image-") || lowerName == "chatgpt-image-latest":
 		if !fullCapability {
@@ -266,6 +266,10 @@ func imageWorkshopCapabilityForModel(modelName string, fullCapability bool) (Ima
 
 func isGPTImage2WorkshopModel(lowerName string) bool {
 	return lowerName == "gpt-image-2" || lowerName == "gpt-image-2l"
+}
+
+func isNanoBananaWorkshopModel(lowerName string) bool {
+	return strings.HasPrefix(lowerName, "nano-banana-")
 }
 
 func gptImage2WorkshopCapability(capability ImageWorkshopModelCapability) ImageWorkshopModelCapability {
